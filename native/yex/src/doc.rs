@@ -17,6 +17,9 @@ pub struct DocInner {
 
 pub type DocResource = NifWrap<DocInner>;
 
+#[rustler::resource_impl]
+impl rustler::Resource for DocResource {}
+
 #[derive(NifUnitEnum)]
 pub enum NifOffsetKind {
     Bytes,
@@ -91,18 +94,24 @@ pub(crate) struct NifDoc {
 impl NifDoc {
     pub fn with_options(option: NifOptions) -> Self {
         NifDoc {
-            reference: DocResource::resource(DocInner {
-                doc: Doc::with_options(option.into()),
-                current_transaction: RefCell::new(None),
-            }),
+            reference: ResourceArc::new(
+                DocInner {
+                    doc: Doc::with_options(option.into()),
+                    current_transaction: RefCell::new(None),
+                }
+                .into(),
+            ),
         }
     }
     pub fn from_native(doc: Doc) -> Self {
         NifDoc {
-            reference: DocResource::resource(DocInner {
-                doc: doc,
-                current_transaction: RefCell::new(None),
-            }),
+            reference: ResourceArc::new(
+                DocInner {
+                    doc: doc,
+                    current_transaction: RefCell::new(None),
+                }
+                .into(),
+            ),
         }
     }
 
@@ -206,7 +215,7 @@ impl NifDoc {
                 );
             })
         })
-        .map(|sub| SubscriptionResource::resource(RefCell::new(Some(sub))))
+        .map(|sub| ResourceArc::new(RefCell::new(Some(sub)).into()))
         .map_err(|e| NifError {
             reason: atoms::encoding_exception(),
             message: e.to_string(),
@@ -233,7 +242,7 @@ impl NifDoc {
                 );
             })
         })
-        .map(|sub| SubscriptionResource::resource(RefCell::new(Some(sub))))
+        .map(|sub| ResourceArc::new(RefCell::new(Some(sub)).into()))
         .map_err(|e| NifError {
             reason: atoms::encoding_exception(),
             message: e.to_string(),
@@ -244,10 +253,13 @@ impl NifDoc {
 impl Default for NifDoc {
     fn default() -> Self {
         NifDoc {
-            reference: DocResource::resource(DocInner {
-                doc: Doc::new(),
-                current_transaction: RefCell::new(None),
-            }),
+            reference: ResourceArc::new(
+                DocInner {
+                    doc: Doc::new(),
+                    current_transaction: RefCell::new(None),
+                }
+                .into(),
+            ),
         }
     }
 }

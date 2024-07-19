@@ -1,17 +1,8 @@
 use std::ops::Deref;
 
-use rustler::{Env, ResourceArc, Term};
+use rustler::{Env, Term};
 
 pub struct NifWrap<T>(pub T);
-
-impl<T> NifWrap<T>
-where
-    NifWrap<T>: rustler::resource::ResourceTypeProvider,
-{
-    pub fn resource(value: T) -> ResourceArc<Self> {
-        ResourceArc::new(Self(value))
-    }
-}
 
 unsafe impl<T> Send for NifWrap<T> {}
 unsafe impl<T> Sync for NifWrap<T> {}

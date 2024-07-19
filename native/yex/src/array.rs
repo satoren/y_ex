@@ -10,6 +10,8 @@ use crate::{
 };
 
 pub type ArrayRefResource = NifWrap<ArrayRef>;
+#[rustler::resource_impl]
+impl rustler::Resource for ArrayRefResource {}
 
 #[derive(NifStruct)]
 #[module = "Yex.Array"]
@@ -19,10 +21,10 @@ pub struct NifArray {
 }
 
 impl NifArray {
-    pub fn new(doc: ResourceArc<DocResource>, text: ArrayRef) -> Self {
+    pub fn new(doc: ResourceArc<DocResource>, array: ArrayRef) -> Self {
         NifArray {
             doc: doc,
-            reference: ArrayRefResource::resource(text),
+            reference: ResourceArc::new(array.into()),
         }
     }
 

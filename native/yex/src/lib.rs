@@ -13,14 +13,14 @@ mod youtput;
 use std::collections::HashMap;
 
 use any::{NifAny, NifAttr};
-use array::{ArrayRefResource, NifArray};
+use array::NifArray;
 use doc::{DocResource, NifDoc, NifOptions};
 use error::NifError;
-use map::{MapRefResource, NifMap};
+use map::NifMap;
 use rustler::{Binary, Env, LocalPid, NifStruct, NifUnitEnum, ResourceArc, Term};
 use scoped_thread_local::scoped_thread_local;
 use subscription::SubscriptionResource;
-use text::{NifText, TextReResource};
+use text::NifText;
 use wrap::encode_binary_slice_to_term;
 use yinput::NifYInput;
 use youtput::NifValue;
@@ -242,7 +242,7 @@ fn sub_unsubscribe<'a>(
 }
 
 #[rustler::nif]
-fn encode_state_vector<'a>(env: Env<'a>, doc: NifDoc) -> Result<Term<'a>, NifError> {
+fn encode_state_vector(env: Env<'_>, doc: NifDoc) -> Result<Term<'_>, NifError> {
     ENV.set(&mut env.clone(), || {
         doc.encode_state_vector()
             .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
@@ -265,50 +265,4 @@ fn apply_update<'a>(env: Env<'a>, doc: NifDoc, update: Binary) -> Result<(), Nif
     ENV.set(&mut env.clone(), || doc.apply_update(update.as_slice()))
 }
 
-fn on_load<'a>(env: Env<'a>, _load_info: Term<'a>) -> bool {
-    // This macro will take care of defining and initializing a new resource
-    // object type.
-    rustler::resource!(DocResource, env);
-    rustler::resource!(TextReResource, env);
-    rustler::resource!(ArrayRefResource, env);
-    rustler::resource!(MapRefResource, env);
-    rustler::resource!(SubscriptionResource, env);
-
-    true
-}
-rustler::init!(
-    "Elixir.Yex.Nif",
-    [
-        doc_new,
-        doc_with_options,
-        doc_get_or_insert_text,
-        doc_get_or_insert_array,
-        doc_get_or_insert_map,
-        doc_begin_transaction,
-        doc_commit_transaction,
-        doc_monitor_update_v1,
-        doc_monitor_update_v2,
-        sub_unsubscribe,
-        text_insert,
-        text_insert_with_attributes,
-        text_format,
-        text_to_string,
-        text_length,
-        array_insert,
-        array_length,
-        array_to_list,
-        array_to_json,
-        array_get,
-        array_delete_range,
-        map_set,
-        map_size,
-        map_get,
-        map_delete,
-        map_to_map,
-        map_to_json,
-        encode_state_vector,
-        encode_state_as_update,
-        apply_update,
-    ],
-    load = on_load
-);
+rustler::init!("Elixir.Yex.Nif");

@@ -8,6 +8,9 @@ use yrs::types::ToJson;
 use yrs::*;
 
 pub type MapRefResource = NifWrap<MapRef>;
+#[rustler::resource_impl]
+impl rustler::Resource for MapRefResource {}
+
 #[derive(NifStruct)]
 #[module = "Yex.Map"]
 pub struct NifMap {
@@ -15,10 +18,10 @@ pub struct NifMap {
     reference: ResourceArc<MapRefResource>,
 }
 impl NifMap {
-    pub fn new(doc: ResourceArc<DocResource>, text: MapRef) -> Self {
+    pub fn new(doc: ResourceArc<DocResource>, map: MapRef) -> Self {
         NifMap {
             doc: doc,
-            reference: MapRefResource::resource(text),
+            reference: ResourceArc::new(map.into()),
         }
     }
 

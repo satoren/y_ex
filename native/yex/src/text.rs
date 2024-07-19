@@ -4,6 +4,8 @@ use yrs::*;
 use crate::{any::NifAttr, doc::DocResource, error::NifError, wrap::NifWrap};
 
 pub type TextReResource = NifWrap<TextRef>;
+#[rustler::resource_impl]
+impl rustler::Resource for TextReResource {}
 
 #[derive(NifStruct)]
 #[module = "Yex.Text"]
@@ -15,7 +17,7 @@ impl NifText {
     pub fn new(doc: ResourceArc<DocResource>, text: TextRef) -> Self {
         NifText {
             doc: doc,
-            reference: TextReResource::resource(text),
+            reference: ResourceArc::new(text.into()),
         }
     }
 
