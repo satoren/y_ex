@@ -20,7 +20,7 @@ pub struct NifMap {
 impl NifMap {
     pub fn new(doc: ResourceArc<DocResource>, map: MapRef) -> Self {
         NifMap {
-            doc: doc,
+            doc,
             reference: ResourceArc::new(map.into()),
         }
     }
@@ -36,8 +36,8 @@ impl NifMap {
     }
 
     pub fn set(&self, key: &str, input: NifYInput) -> Result<(), NifError> {
-        if let Some(mut txn) = self.doc.current_transaction.borrow_mut().as_mut() {
-            self.reference.insert(&mut txn, key, input);
+        if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
+            self.reference.insert(txn, key, input);
             Ok(())
         } else {
             let mut txn = self.doc.0.doc.transact_mut();

@@ -1,7 +1,7 @@
 defmodule Yex.TextTest do
   use ExUnit.Case
   alias Yex.{Doc, Text}
-  doctest Doc
+  doctest Text
 
   test "transaction" do
     doc = Doc.new()

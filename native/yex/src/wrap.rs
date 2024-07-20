@@ -9,7 +9,7 @@ unsafe impl<T> Sync for NifWrap<T> {}
 
 impl<T> From<T> for NifWrap<T> {
     fn from(w: T) -> NifWrap<T> {
-        return NifWrap::<T>(w);
+        NifWrap::<T>(w)
     }
 }
 

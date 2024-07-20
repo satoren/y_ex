@@ -63,7 +63,7 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
         return Ok(Any::from(a));
     }
 
-    return Err(rustler::Error::BadArg);
+    Err(rustler::Error::BadArg)
 }
 
 pub type NifAny = NifWrap<Any>;

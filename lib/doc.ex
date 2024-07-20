@@ -1,5 +1,8 @@
 defmodule Yex.Doc do
   defmodule Options do
+    @moduledoc """
+    Document options.
+    """
     defstruct client_id: 0,
               guid: nil,
               collection_id: nil,

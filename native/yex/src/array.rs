@@ -23,14 +23,14 @@ pub struct NifArray {
 impl NifArray {
     pub fn new(doc: ResourceArc<DocResource>, array: ArrayRef) -> Self {
         NifArray {
-            doc: doc,
+            doc,
             reference: ResourceArc::new(array.into()),
         }
     }
 
     pub fn insert(&self, index: u32, input: NifYInput) -> Result<(), NifError> {
-        if let Some(mut txn) = self.doc.current_transaction.borrow_mut().as_mut() {
-            self.reference.insert(&mut txn, index, input);
+        if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
+            self.reference.insert(txn, index, input);
             Ok(())
         } else {
             let mut txn = self.doc.0.doc.transact_mut();

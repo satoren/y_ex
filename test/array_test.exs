@@ -1,7 +1,8 @@
 defmodule Yex.ArrayTest do
   use ExUnit.Case
   alias Yex.{Doc, Array, ArrayPrelim}
-  doctest Doc
+  doctest Array
+  doctest ArrayPrelim
 
   test "insert" do
     doc = Doc.new()

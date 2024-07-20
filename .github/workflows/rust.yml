@@ -1,0 +1,25 @@
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'native/**'
+  pull_request:
+    paths:
+      - 'native/**'
+  workflow_dispatch:
+
+
+jobs:
+  lint:
+    name: Rust linter
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run clippy
+      run: cargo clippy
+      working-directory: native/yex
+    - name: format check
+      run: cargo fmt --check
+      working-directory: native/yex

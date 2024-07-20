@@ -1,7 +1,8 @@
 defmodule Yex.MapTest do
   use ExUnit.Case
   alias Yex.{Doc, Map, MapPrelim}
-  doctest Doc
+  doctest Map
+  doctest MapPrelim
 
   test "set" do
     doc = Doc.new()
