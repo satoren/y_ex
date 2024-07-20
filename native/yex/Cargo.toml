@@ -13,3 +13,9 @@ crate-type = ["cdylib"]
 rustler = "0.34.0"
 scoped_thread_local = "0.5.1"
 yrs = "0.18.8"
+
+[features]
+default = ["nif_version_2_15"]
+nif_version_2_15 = ["rustler/nif_version_2_15"]
+nif_version_2_16 = ["rustler/nif_version_2_16"]
+nif_version_2_17 = ["rustler/nif_version_2_17"]
