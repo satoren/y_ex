@@ -1,4 +1,7 @@
 defmodule Yex.Map do
+  @moduledoc """
+  A shareable Map type.
+  """
   defstruct [
     :reference
   ]
@@ -33,6 +36,17 @@ defmodule Yex.Map do
 end
 
 defmodule Yex.MapPrelim do
+  @moduledoc """
+  A preliminary map. It can be used to early initialize the contents of a Map.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.insert(array, 0, Yex.MapPrelim.from(%{ "key" => "value" }))
+      iex> {:ok, %Yex.Map{} = map} = Yex.Array.get(array, 0)
+      iex> Yex.Map.get(map, "key")
+      {:ok, "value"}
+  """
   defstruct [
     :map
   ]

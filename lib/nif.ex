@@ -1,4 +1,7 @@
 defmodule Yex.Nif do
+  @moduledoc false
+  # Do not use directly
+
   version = Mix.Project.config()[:version]
 
   use RustlerPrecompiled,

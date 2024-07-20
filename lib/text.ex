@@ -1,4 +1,7 @@
 defmodule Yex.Text do
+  @moduledoc """
+  A shareable type that is optimized for shared editing on text.
+  """
   defstruct [
     :reference
   ]
@@ -37,7 +40,6 @@ defmodule Yex.Text do
   end
 
   def to_json(%__MODULE__{} = _text) do
-    # todo: need to implement
     raise "Not implemented"
   end
 end

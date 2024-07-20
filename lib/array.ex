@@ -1,4 +1,7 @@
 defmodule Yex.Array do
+  @moduledoc """
+  A shareable Array-like type that supports efficient insert/delete of elements at any position.
+  """
   defstruct [
     :reference
   ]
@@ -45,6 +48,18 @@ defmodule Yex.Array do
 end
 
 defmodule Yex.ArrayPrelim do
+  @moduledoc """
+  A preliminary array. It can be used to early initialize the contents of a Array.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "key", Yex.ArrayPrelim.from(["Hello", "World"]))
+      iex> {:ok, %Yex.Array{} = array} = Yex.Map.get(map, "key")
+      iex> Yex.Array.get(array, 1)
+      {:ok, "World"}
+
+  """
   defstruct [
     :list
   ]
