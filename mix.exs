@@ -1,7 +1,7 @@
 defmodule Yex.MixProject do
   use Mix.Project
 
-  @version "0.0.1"
+  @version "0.0.2"
   @repo "https://github.com/satoren/y_ex"
 
   @description """
@@ -17,7 +17,9 @@ defmodule Yex.MixProject do
       package: package(),
       name: "y_ex",
       description: @description,
-      deps: deps()
+      deps: deps(),
+      source_url: @repo,
+      homepage_url: @repo
     ]
   end
 
@@ -38,6 +40,7 @@ defmodule Yex.MixProject do
         "priv",
         "native",
         "README.md",
+        "checksum-*.exs",
         "mix.exs"
       ],
       exclude_files: ["test", "native/target", "native/*.so"]
@@ -46,7 +49,8 @@ defmodule Yex.MixProject do
 
   defp deps do
     [
-      {:rustler, "~> 0.33.0"},
+      {:rustler, ">= 0.0.0", optional: true},
+      {:rustler_precompiled, "~> 0.7"},
       {:ex_doc, "~> 0.29", only: :dev, runtime: false}
     ]
   end

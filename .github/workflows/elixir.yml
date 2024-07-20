@@ -5,6 +5,10 @@
 
 name: Elixir CI
 
+env:
+  MIX_ENV: test
+  RUSTLER_PRECOMPILATION_YEX_BUILD: "true"
+
 on:
   push:
     branches: [ "main" ]
