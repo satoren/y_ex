@@ -87,8 +87,9 @@ jobs:
           mix deps.get
 
       - name: download checksum files
-        run: mix rustler_precompiled.download Yex.Nif --all
-
+        run: mix rustler_precompiled.download Yex.Nif --all --print
+        env:
+          RUSTLER_PRECOMPILATION_YEX_BUILD: "true"
       - name: publish to hex
         run: mix hex.publish --yes
         env:
