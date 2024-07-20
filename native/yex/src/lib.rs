@@ -23,7 +23,7 @@ use subscription::SubscriptionResource;
 use text::NifText;
 use wrap::encode_binary_slice_to_term;
 use yinput::NifYInput;
-use youtput::NifValue;
+use youtput::NifYOut;
 
 scoped_thread_local!(
   pub static ENV: for<'a> Env<'a>
@@ -184,7 +184,7 @@ fn array_length(array: NifArray) -> u32 {
     array.length()
 }
 #[rustler::nif]
-fn array_get(array: NifArray, index: u32) -> Result<NifValue, NifError> {
+fn array_get(array: NifArray, index: u32) -> Result<NifYOut, NifError> {
     array.get(index)
 }
 #[rustler::nif]
@@ -197,7 +197,7 @@ fn array_delete_range(
     ENV.set(&mut env.clone(), || array.delete_range(index, length))
 }
 #[rustler::nif]
-fn array_to_list(array: NifArray) -> Vec<NifValue> {
+fn array_to_list(array: NifArray) -> Vec<NifYOut> {
     array.to_list()
 }
 #[rustler::nif]
@@ -214,7 +214,7 @@ fn map_size(map: NifMap) -> u32 {
     map.size()
 }
 #[rustler::nif]
-fn map_get(map: NifMap, key: &str) -> Result<NifValue, NifError> {
+fn map_get(map: NifMap, key: &str) -> Result<NifYOut, NifError> {
     map.get(key)
 }
 #[rustler::nif]
@@ -222,7 +222,7 @@ fn map_delete(env: Env<'_>, map: NifMap, key: &str) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || map.delete(key))
 }
 #[rustler::nif]
-fn map_to_map(map: NifMap) -> HashMap<String, NifValue> {
+fn map_to_map(map: NifMap) -> HashMap<String, NifYOut> {
     map.to_map()
 }
 #[rustler::nif]

@@ -1,6 +1,6 @@
 use crate::atoms;
 use crate::{
-    doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifValue, NifAny,
+    doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
 };
 use rustler::{NifStruct, ResourceArc};
 use std::{collections::HashMap, ops::Deref};
@@ -54,12 +54,12 @@ impl NifMap {
         }
         Ok(())
     }
-    pub fn get(&self, key: &str) -> Result<NifValue, NifError> {
+    pub fn get(&self, key: &str) -> Result<NifYOut, NifError> {
         if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
             let doc = self.doc.clone();
             self.reference
                 .get(txn, key)
-                .map(|b| NifValue::from_native(b, doc.clone()))
+                .map(|b| NifYOut::from_native(b, doc.clone()))
                 .ok_or(NifError {
                     reason: atoms::error(),
                     message: "can not get".into(),
@@ -70,7 +70,7 @@ impl NifMap {
             let doc = self.doc.clone();
             self.reference
                 .get(&txn, key)
-                .map(|b| NifValue::from_native(b, doc.clone()))
+                .map(|b| NifYOut::from_native(b, doc.clone()))
                 .ok_or(NifError {
                     reason: atoms::error(),
                     message: "can not get".into(),
@@ -78,19 +78,19 @@ impl NifMap {
         }
     }
 
-    pub fn to_map(&self) -> HashMap<String, NifValue> {
+    pub fn to_map(&self) -> HashMap<String, NifYOut> {
         if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
             let doc = self.doc.clone();
             self.reference
                 .iter(txn)
-                .map(|(key, value)| (key.into(), NifValue::from_native(value, doc.clone())))
+                .map(|(key, value)| (key.into(), NifYOut::from_native(value, doc.clone())))
                 .collect()
         } else {
             let txn = self.doc.0.doc.transact();
             let doc = self.doc.clone();
             self.reference
                 .iter(&txn)
-                .map(|(key, value)| (key.into(), NifValue::from_native(value, doc.clone())))
+                .map(|(key, value)| (key.into(), NifYOut::from_native(value, doc.clone())))
                 .collect()
         }
     }
