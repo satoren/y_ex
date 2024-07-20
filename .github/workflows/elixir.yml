@@ -41,3 +41,7 @@ jobs:
       run: mix deps.get
     - name: Run tests
       run: mix test
+    - name: format check
+      run: mix format --check-formatted
+    - name: Run credo
+      run: mix credo

@@ -1,15 +1,12 @@
 defmodule Yex.Nif do
-
   version = Mix.Project.config()[:version]
 
   use RustlerPrecompiled,
     otp_app: :y_ex,
     crate: "yex",
-    base_url:
-      "https://github.com/satoren/y_ex/releases/download/v#{version}",
+    base_url: "https://github.com/satoren/y_ex/releases/download/v#{version}",
     force_build: System.get_env("RUSTLER_PRECOMPILATION_YEX_BUILD") in ["1", "true"],
     version: version
-
 
   def doc_new(), do: :erlang.nif_error(:nif_not_loaded)
   def doc_with_options(_option), do: :erlang.nif_error(:nif_not_loaded)

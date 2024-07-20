@@ -9,9 +9,9 @@ pub struct NifError {
 
 impl From<yrs::doc::TransactionAcqError> for NifError {
     fn from(w: yrs::doc::TransactionAcqError) -> NifError {
-        return NifError {
+        NifError {
             reason: atoms::transaction_acq_error(),
             message: w.to_string(),
-        };
+        }
     }
 }

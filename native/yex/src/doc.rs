@@ -74,15 +74,15 @@ impl From<NifOptions> for Options {
         } else {
             uuid_v4()
         };
-        return Options {
+        Options {
             client_id: w.client_id,
-            guid: guid,
+            guid,
             collection_id: w.collection_id,
-            offset_kind: offset_kind,
+            offset_kind,
             skip_gc: w.skip_gc,
             auto_load: w.auto_load,
             should_load: w.should_load,
-        };
+        }
     }
 }
 
@@ -107,7 +107,7 @@ impl NifDoc {
         NifDoc {
             reference: ResourceArc::new(
                 DocInner {
-                    doc: doc,
+                    doc,
                     current_transaction: RefCell::new(None),
                 }
                 .into(),
@@ -148,7 +148,7 @@ impl NifDoc {
         Ok(())
     }
 
-    pub fn commit_transaction(&self) -> () {
+    pub fn commit_transaction(&self) {
         *self.reference.current_transaction.borrow_mut() = None;
     }
 

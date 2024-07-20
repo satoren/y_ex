@@ -26,11 +26,11 @@ impl NifValue {
             yrs::Value::YText(text) => NifValue::YText(NifText::new(doc, text)),
             yrs::Value::YArray(array) => NifValue::YArray(NifArray::new(doc, array)),
             yrs::Value::YMap(map) => NifValue::YMap(NifMap::new(doc, map)),
-            yrs::Value::YXmlElement(_) => NifValue::YXmlElement(NifXmlElement { doc: doc }),
+            yrs::Value::YXmlElement(_) => NifValue::YXmlElement(NifXmlElement { doc }),
             yrs::Value::YXmlFragment(_) => NifValue::YXmlFragment(NifXmlFragment {}),
-            yrs::Value::YXmlText(_) => NifValue::YXmlText(NifXmlText { doc: doc }),
+            yrs::Value::YXmlText(_) => NifValue::YXmlText(NifXmlText { doc }),
             yrs::Value::YDoc(doc) => NifValue::YDoc(NifDoc::from_native(doc)),
-            yrs::Value::UndefinedRef(_) => NifValue::UndefinedRef(NifUndefinedRef { doc: doc }),
+            yrs::Value::UndefinedRef(_) => NifValue::UndefinedRef(NifUndefinedRef { doc }),
         }
     }
 }

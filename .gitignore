@@ -26,3 +26,5 @@ y_ex-*.tar
 /tmp/
 
 priv/native/*.so
+
+checksum-*.exs

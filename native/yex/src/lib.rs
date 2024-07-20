@@ -84,17 +84,17 @@ fn doc_with_options(option: NifOptions) -> NifDoc {
 }
 
 #[rustler::nif]
-fn doc_get_or_insert_text<'a>(env: Env<'a>, doc: NifDoc, name: &str) -> NifText {
+fn doc_get_or_insert_text(env: Env<'_>, doc: NifDoc, name: &str) -> NifText {
     ENV.set(&mut env.clone(), || doc.get_or_insert_text(name))
 }
 
 #[rustler::nif]
-fn doc_get_or_insert_array<'a>(env: Env<'a>, doc: NifDoc, name: &str) -> NifArray {
+fn doc_get_or_insert_array(env: Env<'_>, doc: NifDoc, name: &str) -> NifArray {
     ENV.set(&mut env.clone(), || doc.get_or_insert_array(name))
 }
 
 #[rustler::nif]
-fn doc_get_or_insert_map<'a>(env: Env<'a>, doc: NifDoc, name: &str) -> NifMap {
+fn doc_get_or_insert_map(env: Env<'_>, doc: NifDoc, name: &str) -> NifMap {
     ENV.set(&mut env.clone(), || doc.get_or_insert_map(name))
 }
 
@@ -108,7 +108,7 @@ fn doc_begin_transaction(doc: NifDoc, origin: Option<&str>) -> Result<(), NifErr
 }
 
 #[rustler::nif]
-fn doc_commit_transaction<'a>(env: Env<'a>, doc: NifDoc) -> () {
+fn doc_commit_transaction(env: Env<'_>, doc: NifDoc) {
     ENV.set(&mut env.clone(), || doc.commit_transaction())
 }
 
@@ -128,13 +128,13 @@ fn doc_monitor_update_v2(
 }
 
 #[rustler::nif]
-fn text_insert<'a>(env: Env<'a>, text: NifText, index: u32, chunk: &str) -> Result<(), NifError> {
+fn text_insert(env: Env<'_>, text: NifText, index: u32, chunk: &str) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || text.insert(index, chunk))
 }
 
 #[rustler::nif]
-fn text_insert_with_attributes<'a>(
-    env: Env<'a>,
+fn text_insert_with_attributes(
+    env: Env<'_>,
     text: NifText,
     index: u32,
     chunk: &str,
@@ -146,13 +146,13 @@ fn text_insert_with_attributes<'a>(
 }
 
 #[rustler::nif]
-fn text_delete<'a>(env: Env<'a>, text: NifText, index: u32, len: u32) -> Result<(), NifError> {
+fn text_delete(env: Env<'_>, text: NifText, index: u32, len: u32) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || text.delete(index, len))
 }
 
 #[rustler::nif]
-fn text_format<'a>(
-    env: Env<'a>,
+fn text_format(
+    env: Env<'_>,
     text: NifText,
     index: u32,
     len: u32,
@@ -171,8 +171,8 @@ fn text_length(text: NifText) -> u32 {
 }
 
 #[rustler::nif]
-fn array_insert<'a>(
-    env: Env<'a>,
+fn array_insert(
+    env: Env<'_>,
     array: NifArray,
     index: u32,
     value: NifYInput,
@@ -188,8 +188,8 @@ fn array_get(array: NifArray, index: u32) -> Result<NifValue, NifError> {
     array.get(index)
 }
 #[rustler::nif]
-fn array_delete_range<'a>(
-    env: Env<'a>,
+fn array_delete_range(
+    env: Env<'_>,
     array: NifArray,
     index: u32,
     length: u32,
@@ -206,7 +206,7 @@ fn array_to_json(array: NifArray) -> NifAny {
 }
 
 #[rustler::nif]
-fn map_set<'a>(env: Env<'a>, map: NifMap, key: &str, value: NifYInput) -> Result<(), NifError> {
+fn map_set(env: Env<'_>, map: NifMap, key: &str, value: NifYInput) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || map.set(key, value))
 }
 #[rustler::nif]
@@ -218,7 +218,7 @@ fn map_get(map: NifMap, key: &str) -> Result<NifValue, NifError> {
     map.get(key)
 }
 #[rustler::nif]
-fn map_delete<'a>(env: Env<'a>, map: NifMap, key: &str) -> Result<(), NifError> {
+fn map_delete(env: Env<'_>, map: NifMap, key: &str) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || map.delete(key))
 }
 #[rustler::nif]
@@ -231,10 +231,7 @@ fn map_to_json(map: NifMap) -> NifAny {
 }
 
 #[rustler::nif]
-fn sub_unsubscribe<'a>(
-    env: Env<'a>,
-    sub: ResourceArc<SubscriptionResource>,
-) -> Result<(), NifError> {
+fn sub_unsubscribe(env: Env<'_>, sub: ResourceArc<SubscriptionResource>) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         *sub.borrow_mut() = None;
         Ok(())
@@ -261,7 +258,7 @@ fn encode_state_as_update<'a>(
     })
 }
 #[rustler::nif]
-fn apply_update<'a>(env: Env<'a>, doc: NifDoc, update: Binary) -> Result<(), NifError> {
+fn apply_update(env: Env<'_>, doc: NifDoc, update: Binary) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || doc.apply_update(update.as_slice()))
 }
 
