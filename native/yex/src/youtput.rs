@@ -3,10 +3,9 @@ use crate::{
     NifXmlElement, NifXmlFragment, NifXmlText,
 };
 use rustler::{NifUntaggedEnum, ResourceArc};
-use yrs::Value;
 
 #[derive(NifUntaggedEnum)]
-pub enum NifValue {
+pub enum NifYOut {
     Any(NifAny),
     YText(NifText),
     YArray(NifArray),
@@ -19,18 +18,18 @@ pub enum NifValue {
     UndefinedRef(NifUndefinedRef),
 }
 
-impl NifValue {
-    pub fn from_native(v: Value, doc: ResourceArc<DocResource>) -> Self {
+impl NifYOut {
+    pub fn from_native(v: yrs::Out, doc: ResourceArc<DocResource>) -> Self {
         match v {
-            yrs::Value::Any(any) => NifValue::Any(any.into()),
-            yrs::Value::YText(text) => NifValue::YText(NifText::new(doc, text)),
-            yrs::Value::YArray(array) => NifValue::YArray(NifArray::new(doc, array)),
-            yrs::Value::YMap(map) => NifValue::YMap(NifMap::new(doc, map)),
-            yrs::Value::YXmlElement(_) => NifValue::YXmlElement(NifXmlElement { doc }),
-            yrs::Value::YXmlFragment(_) => NifValue::YXmlFragment(NifXmlFragment {}),
-            yrs::Value::YXmlText(_) => NifValue::YXmlText(NifXmlText { doc }),
-            yrs::Value::YDoc(doc) => NifValue::YDoc(NifDoc::from_native(doc)),
-            yrs::Value::UndefinedRef(_) => NifValue::UndefinedRef(NifUndefinedRef { doc }),
+            yrs::Out::Any(any) => NifYOut::Any(any.into()),
+            yrs::Out::YText(text) => NifYOut::YText(NifText::new(doc, text)),
+            yrs::Out::YArray(array) => NifYOut::YArray(NifArray::new(doc, array)),
+            yrs::Out::YMap(map) => NifYOut::YMap(NifMap::new(doc, map)),
+            yrs::Out::YXmlElement(_) => NifYOut::YXmlElement(NifXmlElement { doc }),
+            yrs::Out::YXmlFragment(_) => NifYOut::YXmlFragment(NifXmlFragment {}),
+            yrs::Out::YXmlText(_) => NifYOut::YXmlText(NifXmlText { doc }),
+            yrs::Out::YDoc(doc) => NifYOut::YDoc(NifDoc::from_native(doc)),
+            yrs::Out::UndefinedRef(_) => NifYOut::UndefinedRef(NifUndefinedRef { doc }),
         }
     }
 }

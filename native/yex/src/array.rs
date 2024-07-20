@@ -6,7 +6,7 @@ use yrs::*;
 
 use crate::atoms;
 use crate::{
-    doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifValue, NifAny,
+    doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
 };
 
 pub type ArrayRefResource = NifWrap<ArrayRef>;
@@ -56,12 +56,12 @@ impl NifArray {
         }
         Ok(())
     }
-    pub fn get(&self, index: u32) -> Result<NifValue, NifError> {
+    pub fn get(&self, index: u32) -> Result<NifYOut, NifError> {
         if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
             let doc = self.doc.clone();
             self.reference
                 .get(txn, index)
-                .map(|b| NifValue::from_native(b, doc.clone()))
+                .map(|b| NifYOut::from_native(b, doc.clone()))
                 .ok_or(NifError {
                     reason: atoms::error(),
                     message: "can not get".into(),
@@ -72,26 +72,26 @@ impl NifArray {
             let doc = self.doc.clone();
             self.reference
                 .get(&txn, index)
-                .map(|b| NifValue::from_native(b, doc.clone()))
+                .map(|b| NifYOut::from_native(b, doc.clone()))
                 .ok_or(NifError {
                     reason: atoms::error(),
                     message: "can not get".into(),
                 })
         }
     }
-    pub fn to_list(&self) -> Vec<NifValue> {
+    pub fn to_list(&self) -> Vec<NifYOut> {
         if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
             let doc = self.doc.clone();
             self.reference
                 .iter(txn)
-                .map(|b| NifValue::from_native(b, doc.clone()))
+                .map(|b| NifYOut::from_native(b, doc.clone()))
                 .collect()
         } else {
             let txn = self.doc.0.doc.transact();
             let doc = self.doc.clone();
             self.reference
                 .iter(&txn)
-                .map(|b| NifValue::from_native(b, doc.clone()))
+                .map(|b| NifYOut::from_native(b, doc.clone()))
                 .collect()
         }
     }
