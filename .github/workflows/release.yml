@@ -85,11 +85,9 @@ jobs:
       - name: Install dependencies
         run: |
           mix deps.get
-          # workaround error for metadata about current target for the module Mediasoup.Nif is not available.
-          mix compile --force  || true
 
       - name: download checksum files
-        run: mix rustler_precompiled.download Mediasoup.Nif --all
+        run: mix rustler_precompiled.download Yex.Nif --all
 
       - name: publish to hex
         run: mix hex.publish --yes
