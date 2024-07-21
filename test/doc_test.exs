@@ -55,7 +55,7 @@ defmodule Yex.DocTest do
     Text.insert(text1, 0, "HelloWorld")
 
     assert Text.to_string(text1) == "HelloWorld"
-    assert_receive {:update_v2, _update, nil, ^doc}
+    assert_receive {:update_v1, _update, nil, ^doc}
     Doc.demonitor_update(monitor_ref)
   end
 
@@ -71,7 +71,7 @@ defmodule Yex.DocTest do
     end)
 
     assert Text.to_string(text1) == "HelloWorld"
-    assert_receive {:update_v2, _update, nil, ^doc}
+    assert_receive {:update_v1, _update, nil, ^doc}
     Doc.demonitor_update(monitor_ref)
   end
 
@@ -83,7 +83,7 @@ defmodule Yex.DocTest do
     Text.insert(text1, 0, "HelloWorld")
 
     assert Text.to_string(text1) == "HelloWorld"
-    assert_receive {:update_v2, update, nil, ^doc}
+    assert_receive {:update_v1, update, nil, ^doc}
 
     doc2 = Doc.new()
     :ok = Yex.apply_update(doc2, update)
@@ -91,5 +91,11 @@ defmodule Yex.DocTest do
     assert Text.to_string(text2) == "HelloWorld"
 
     Doc.demonitor_update(monitor_ref)
+  end
+
+  test "state vector?" do
+    doc = Doc.new()
+
+    {:ok, _} = Yex.encode_state_as_update_v1(doc, <<1, 183, 134, 217, 236, 10, 2>>)
   end
 end
