@@ -70,7 +70,7 @@ defmodule Yex.Doc do
   end
 
   def monitor_update(%__MODULE__{} = doc) do
-    monitor_update_v2(doc)
+    monitor_update_v1(doc)
   end
 
   def monitor_update_v1(%__MODULE__{} = doc) do

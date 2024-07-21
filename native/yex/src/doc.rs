@@ -195,6 +195,32 @@ impl NifDoc {
         }
         Ok(())
     }
+    pub fn monitor_update_v1(
+        &self,
+        pid: LocalPid,
+    ) -> Result<ResourceArc<SubscriptionResource>, NifError> {
+        let doc_ref = self.reference.clone();
+        self.observe_update_v1(move |txn, event| {
+            let doc_ref = doc_ref.clone();
+            ENV.with(|env| {
+                let origin: Option<_> = txn.origin().map(|s| s.to_string());
+                let _ = env.send(
+                    &pid,
+                    (
+                        atoms::update_v1(),
+                        encode_binary_slice_to_term(*env, event.update.as_slice()),
+                        origin,
+                        NifDoc { reference: doc_ref },
+                    ),
+                );
+            })
+        })
+        .map(|sub| ResourceArc::new(RefCell::new(Some(sub)).into()))
+        .map_err(|e| NifError {
+            reason: atoms::encoding_exception(),
+            message: e.to_string(),
+        })
+    }
     pub fn encode_state_vector_v2(&self) -> Result<Vec<u8>, NifError> {
         if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
             Ok(txn.state_vector().encode_v2())
@@ -237,32 +263,6 @@ impl NifDoc {
             txn.apply_update(update);
         }
         Ok(())
-    }
-    pub fn monitor_update_v1(
-        &self,
-        pid: LocalPid,
-    ) -> Result<ResourceArc<SubscriptionResource>, NifError> {
-        let doc_ref = self.reference.clone();
-        self.observe_update_v1(move |txn, event| {
-            let doc_ref = doc_ref.clone();
-            ENV.with(|env| {
-                let origin: Option<_> = txn.origin().map(|s| s.to_string());
-                let _ = env.send(
-                    &pid,
-                    (
-                        atoms::update_v1(),
-                        encode_binary_slice_to_term(*env, event.update.as_slice()),
-                        origin,
-                        NifDoc { reference: doc_ref },
-                    ),
-                );
-            })
-        })
-        .map(|sub| ResourceArc::new(RefCell::new(Some(sub)).into()))
-        .map_err(|e| NifError {
-            reason: atoms::encoding_exception(),
-            message: e.to_string(),
-        })
     }
     pub fn monitor_update_v2(
         &self,
