@@ -8,12 +8,11 @@ defmodule Yex do
 
   ## Examples
       iex> doc = Yex.Doc.new()
-      iex> Yex.encode_state_vector(doc)
-      {:ok, <<0>>}
+      iex> {:ok, _binary} = Yex.encode_state_vector(doc)
   """
   @spec encode_state_vector(Yex.Doc.t()) :: {:ok, binary()} | {:error, term()}
   def encode_state_vector(%Yex.Doc{} = doc) do
-    Yex.Nif.encode_state_vector(doc)
+    encode_state_vector_v2(doc)
   end
 
   @spec encode_state_vector!(Yex.Doc.t()) :: {:ok, binary()} | {:error, term()}
@@ -24,17 +23,24 @@ defmodule Yex do
     end
   end
 
+  def encode_state_vector_v1(%Yex.Doc{} = doc) do
+    Yex.Nif.encode_state_vector_v1(doc)
+  end
+
+  def encode_state_vector_v2(%Yex.Doc{} = doc) do
+    Yex.Nif.encode_state_vector_v2(doc)
+  end
+
   @doc """
   Encode the document state as a single update message that can be applied on the remote document. Optionally, specify the target state vector to only write the missing differences to the update message.
 
   ## Examples
       iex> doc = Yex.Doc.new()
-      iex> Yex.encode_state_as_update(doc)
-      {:ok, <<0, 0>>}
+      iex> {:ok, _binary} = Yex.encode_state_as_update(doc)
   """
   @spec encode_state_as_update(Yex.Doc.t(), binary()) :: {:ok, binary()} | {:error, term()}
   def encode_state_as_update(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
-    Yex.Nif.encode_state_as_update(doc, encoded_state_vector)
+    encode_state_as_update_v2(doc, encoded_state_vector)
   end
 
   @spec encode_state_as_update!(Yex.Doc.t(), binary()) :: binary()
@@ -43,6 +49,14 @@ defmodule Yex do
       {:ok, binary} -> binary
       {:error, reason} -> raise reason
     end
+  end
+
+  def encode_state_as_update_v1(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
+    Yex.Nif.encode_state_as_update_v1(doc, encoded_state_vector)
+  end
+
+  def encode_state_as_update_v2(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
+    Yex.Nif.encode_state_as_update_v2(doc, encoded_state_vector)
   end
 
   @doc """
@@ -60,7 +74,15 @@ defmodule Yex do
   """
   @spec apply_update(Yex.Doc.t(), binary()) :: :ok
   def apply_update(%Yex.Doc{} = doc, update) do
-    Yex.Nif.apply_update(doc, update) |> unwrap_ok_tuple()
+    apply_update_v2(doc, update)
+  end
+
+  def apply_update_v1(%Yex.Doc{} = doc, update) do
+    Yex.Nif.apply_update_v1(doc, update) |> unwrap_ok_tuple()
+  end
+
+  def apply_update_v2(%Yex.Doc{} = doc, update) do
+    Yex.Nif.apply_update_v2(doc, update) |> unwrap_ok_tuple()
   end
 
   defp unwrap_ok_tuple({:ok, {}}), do: :ok

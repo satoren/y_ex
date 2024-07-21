@@ -5,8 +5,8 @@ use crate::subscription::SubscriptionResource;
 use crate::wrap::encode_binary_slice_to_term;
 use crate::{atoms, ENV};
 use rustler::{LocalPid, NifStruct, NifUnitEnum, ResourceArc};
-use yrs::updates::decoder::{Decode, DecoderV1};
-use yrs::updates::encoder::{Encode, Encoder, EncoderV1};
+use yrs::updates::decoder::Decode;
+use yrs::updates::encoder::Encode;
 use yrs::*;
 
 use crate::{wrap::NifWrap, NifArray, NifError, NifMap, NifText};
@@ -152,7 +152,7 @@ impl NifDoc {
         *self.reference.current_transaction.borrow_mut() = None;
     }
 
-    pub fn encode_state_vector(&self) -> Result<Vec<u8>, NifError> {
+    pub fn encode_state_vector_v1(&self) -> Result<Vec<u8>, NifError> {
         if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
             Ok(txn.state_vector().encode_v1())
         } else {
@@ -161,10 +161,12 @@ impl NifDoc {
             Ok(txn.state_vector().encode_v1())
         }
     }
-    pub fn encode_state_as_update(&self, state_vector: Option<&[u8]>) -> Result<Vec<u8>, NifError> {
-        let mut encoder = EncoderV1::new();
+    pub fn encode_state_as_update_v1(
+        &self,
+        state_vector: Option<&[u8]>,
+    ) -> Result<Vec<u8>, NifError> {
         let sv = if let Some(vector) = state_vector {
-            StateVector::decode_v1(vector.to_vec().as_slice()).map_err(|e| NifError {
+            StateVector::decode_v1(vector).map_err(|e| NifError {
                 reason: atoms::encoding_exception(),
                 message: e.to_string(),
             })?
@@ -173,17 +175,58 @@ impl NifDoc {
         };
 
         if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
-            txn.encode_diff(&sv, &mut encoder)
+            Ok(txn.encode_diff_v1(&sv))
         } else {
             let txn = self.reference.doc.transact();
 
-            txn.encode_diff(&sv, &mut encoder)
+            Ok(txn.encode_diff_v1(&sv))
         }
-        Ok(encoder.to_vec())
     }
-    pub fn apply_update(&self, update: &[u8]) -> Result<(), NifError> {
-        let mut decoder = DecoderV1::from(update);
-        let update = Update::decode(&mut decoder).map_err(|e| NifError {
+    pub fn apply_update_v1(&self, update: &[u8]) -> Result<(), NifError> {
+        let update = Update::decode_v1(update).map_err(|e| NifError {
+            reason: atoms::encoding_exception(),
+            message: e.to_string(),
+        })?;
+        if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
+            txn.apply_update(update);
+        } else {
+            let mut txn = self.reference.doc.transact_mut();
+            txn.apply_update(update);
+        }
+        Ok(())
+    }
+    pub fn encode_state_vector_v2(&self) -> Result<Vec<u8>, NifError> {
+        if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
+            Ok(txn.state_vector().encode_v2())
+        } else {
+            let txn = self.reference.doc.transact();
+
+            Ok(txn.state_vector().encode_v2())
+        }
+    }
+    pub fn encode_state_as_update_v2(
+        &self,
+        state_vector: Option<&[u8]>,
+    ) -> Result<Vec<u8>, NifError> {
+        let sv = if let Some(vector) = state_vector {
+            StateVector::decode_v2(vector).map_err(|e| NifError {
+                reason: atoms::encoding_exception(),
+                message: e.to_string(),
+            })?
+        } else {
+            StateVector::default()
+        };
+
+        if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
+            Ok(txn.encode_diff_v2(&sv))
+        } else {
+            let txn = self.reference.doc.transact();
+
+            Ok(txn.encode_diff_v2(&sv))
+        }
+    }
+    pub fn apply_update_v2(&self, update: &[u8]) -> Result<(), NifError> {
+        let update = Update::decode_v2(update).map_err(|e| NifError {
             reason: atoms::encoding_exception(),
             message: e.to_string(),
         })?;

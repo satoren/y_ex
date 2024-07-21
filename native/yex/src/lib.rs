@@ -239,27 +239,51 @@ fn sub_unsubscribe(env: Env<'_>, sub: ResourceArc<SubscriptionResource>) -> Resu
 }
 
 #[rustler::nif]
-fn encode_state_vector(env: Env<'_>, doc: NifDoc) -> Result<Term<'_>, NifError> {
+fn encode_state_vector_v1(env: Env<'_>, doc: NifDoc) -> Result<Term<'_>, NifError> {
     ENV.set(&mut env.clone(), || {
-        doc.encode_state_vector()
+        doc.encode_state_vector_v1()
             .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
     })
 }
 
 #[rustler::nif]
-fn encode_state_as_update<'a>(
+fn encode_state_as_update_v1<'a>(
     env: Env<'a>,
     doc: NifDoc,
     state_vector: Option<Binary>,
 ) -> Result<Term<'a>, NifError> {
     ENV.set(&mut env.clone(), || {
-        doc.encode_state_as_update(state_vector.map(|b| b.as_slice()))
+        doc.encode_state_as_update_v1(state_vector.map(|b| b.as_slice()))
             .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
     })
 }
 #[rustler::nif]
-fn apply_update(env: Env<'_>, doc: NifDoc, update: Binary) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || doc.apply_update(update.as_slice()))
+fn apply_update_v1(env: Env<'_>, doc: NifDoc, update: Binary) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || doc.apply_update_v1(update.as_slice()))
+}
+
+#[rustler::nif]
+fn encode_state_vector_v2(env: Env<'_>, doc: NifDoc) -> Result<Term<'_>, NifError> {
+    ENV.set(&mut env.clone(), || {
+        doc.encode_state_vector_v2()
+            .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
+    })
+}
+
+#[rustler::nif]
+fn encode_state_as_update_v2<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    state_vector: Option<Binary>,
+) -> Result<Term<'a>, NifError> {
+    ENV.set(&mut env.clone(), || {
+        doc.encode_state_as_update_v2(state_vector.map(|b| b.as_slice()))
+            .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
+    })
+}
+#[rustler::nif]
+fn apply_update_v2(env: Env<'_>, doc: NifDoc, update: Binary) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || doc.apply_update_v2(update.as_slice()))
 }
 
 rustler::init!("Elixir.Yex.Nif");

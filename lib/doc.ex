@@ -69,6 +69,10 @@ defmodule Yex.Doc do
     end
   end
 
+  def monitor_update(%__MODULE__{} = doc) do
+    monitor_update_v2(doc)
+  end
+
   def monitor_update_v1(%__MODULE__{} = doc) do
     case Yex.Nif.doc_monitor_update_v1(doc, self()) do
       {:ok, ref} ->
@@ -81,23 +85,28 @@ defmodule Yex.Doc do
     end
   end
 
-  #  def monitor_update_v2(%__MODULE__{} = doc) do
-  #    case Yex.Nif.doc_monitor_update_v2(doc, self()) do
-  #      {:ok, ref} ->
-  #        # Subscription should not be automatically released by gc, so put it in the process dictionary
-  #        Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
-  #        {:ok, ref}
-  #      error ->
-  #        error
-  #    end
-  #  end
+  def monitor_update_v2(%__MODULE__{} = doc) do
+    case Yex.Nif.doc_monitor_update_v2(doc, self()) do
+      {:ok, ref} ->
+        # Subscription should not be automatically released by gc, so put it in the process dictionary
+        Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
+        {:ok, ref}
+
+      error ->
+        error
+    end
+  end
+
+  def demonitor_update(sub) do
+    demonitor_update_v2(sub)
+  end
 
   def demonitor_update_v1(sub) do
     Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
     Yex.Nif.sub_unsubscribe(sub)
   end
 
-  #  def demonitor_update_v2(sub) do
-  #    Yex.Nif.sub_unsubscribe(sub)
-  #  end
+  def demonitor_update_v2(sub) do
+    Yex.Nif.sub_unsubscribe(sub)
+  end
 end

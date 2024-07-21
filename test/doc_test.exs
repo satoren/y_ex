@@ -47,21 +47,21 @@ defmodule Yex.DocTest do
     assert Text.to_string(text2) == "Hello"
   end
 
-  test "monitor_update_v1" do
+  test "monitor_update" do
     doc = Doc.new()
-    {:ok, monitor_ref} = Doc.monitor_update_v1(doc)
+    {:ok, monitor_ref} = Doc.monitor_update(doc)
 
     text1 = Doc.get_text(doc, "text")
     Text.insert(text1, 0, "HelloWorld")
 
     assert Text.to_string(text1) == "HelloWorld"
-    assert_receive {:update_v1, _update, nil, ^doc}
-    Doc.demonitor_update_v1(monitor_ref)
+    assert_receive {:update_v2, _update, nil, ^doc}
+    Doc.demonitor_update(monitor_ref)
   end
 
-  test "monitor_update_v1 with transaction" do
+  test "monitor_update with transaction" do
     doc = Doc.new()
-    {:ok, monitor_ref} = Doc.monitor_update_v1(doc)
+    {:ok, monitor_ref} = Doc.monitor_update(doc)
 
     text1 = Doc.get_text(doc, "text")
 
@@ -71,25 +71,25 @@ defmodule Yex.DocTest do
     end)
 
     assert Text.to_string(text1) == "HelloWorld"
-    assert_receive {:update_v1, _update, nil, ^doc}
-    Doc.demonitor_update_v1(monitor_ref)
+    assert_receive {:update_v2, _update, nil, ^doc}
+    Doc.demonitor_update(monitor_ref)
   end
 
   test "apply_update from update event" do
     doc = Doc.new()
-    {:ok, monitor_ref} = Doc.monitor_update_v1(doc)
+    {:ok, monitor_ref} = Doc.monitor_update(doc)
 
     text1 = Doc.get_text(doc, "text")
     Text.insert(text1, 0, "HelloWorld")
 
     assert Text.to_string(text1) == "HelloWorld"
-    assert_receive {:update_v1, update, nil, ^doc}
+    assert_receive {:update_v2, update, nil, ^doc}
 
     doc2 = Doc.new()
     :ok = Yex.apply_update(doc2, update)
     text2 = Doc.get_text(doc2, "text")
     assert Text.to_string(text2) == "HelloWorld"
 
-    Doc.demonitor_update_v1(monitor_ref)
+    Doc.demonitor_update(monitor_ref)
   end
 end
