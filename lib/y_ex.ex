@@ -15,7 +15,7 @@ defmodule Yex do
     encode_state_vector_v1(doc)
   end
 
-  @spec encode_state_vector!(Yex.Doc.t()) :: {:ok, binary()} | {:error, term()}
+  @spec encode_state_vector!(Yex.Doc.t()) :: binary()
   def encode_state_vector!(%Yex.Doc{} = doc) do
     case encode_state_vector(doc) do
       {:ok, binary} -> binary
@@ -38,12 +38,12 @@ defmodule Yex do
       iex> doc = Yex.Doc.new()
       iex> {:ok, _binary} = Yex.encode_state_as_update(doc)
   """
-  @spec encode_state_as_update(Yex.Doc.t(), binary()) :: {:ok, binary()} | {:error, term()}
+  @spec encode_state_as_update(Yex.Doc.t(), binary() | nil) :: {:ok, binary()} | {:error, term()}
   def encode_state_as_update(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
     encode_state_as_update_v1(doc, encoded_state_vector)
   end
 
-  @spec encode_state_as_update!(Yex.Doc.t(), binary()) :: binary()
+  @spec encode_state_as_update!(Yex.Doc.t(), binary() | nil) :: binary()
   def encode_state_as_update!(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
     case encode_state_as_update(doc, encoded_state_vector) do
       {:ok, binary} -> binary
