@@ -96,6 +96,10 @@ defmodule Yex.DocTest do
   test "state vector?" do
     doc = Doc.new()
 
-    {:ok, _} = Yex.encode_state_as_update_v1(doc, <<1, 183, 134, 217, 236, 10, 2>>)
+    {:ok, _} =
+      Yex.encode_state_as_update_v1(
+        doc,
+        <<0>>
+      )
   end
 end

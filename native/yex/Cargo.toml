@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 rustler = "0.34.0"
 scoped_thread_local = "1.0.0"
+serde_json = "1.0.120"
 yrs = "0.19.2"
 
 [features]

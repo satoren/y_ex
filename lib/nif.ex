@@ -56,4 +56,33 @@ defmodule Yex.Nif do
   def encode_state_vector_v2(_doc), do: :erlang.nif_error(:nif_not_loaded)
   def encode_state_as_update_v2(_doc, _diff), do: :erlang.nif_error(:nif_not_loaded)
   def apply_update_v2(_doc, _update), do: :erlang.nif_error(:nif_not_loaded)
+
+  def sync_message_decode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)
+  def sync_message_encode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)
+  def sync_message_decode_v2(_message), do: :erlang.nif_error(:nif_not_loaded)
+  def sync_message_encode_v2(_message), do: :erlang.nif_error(:nif_not_loaded)
+
+  def awareness_new(_doc), do: :erlang.nif_error(:nif_not_loaded)
+  def awareness_client_id(_awareness), do: :erlang.nif_error(:nif_not_loaded)
+  def awareness_get_client_ids(_awareness), do: :erlang.nif_error(:nif_not_loaded)
+  def awareness_get_states(_awareness), do: :erlang.nif_error(:nif_not_loaded)
+
+  def awareness_get_local_state(_awareness), do: :erlang.nif_error(:nif_not_loaded)
+  def awareness_set_local_state(_awareness, _map), do: :erlang.nif_error(:nif_not_loaded)
+  def awareness_clean_local_state(_awareness), do: :erlang.nif_error(:nif_not_loaded)
+  def awareness_monitor_update(_awareness, _pid), do: :erlang.nif_error(:nif_not_loaded)
+  def awareness_monitor_change(_awareness, _pid), do: :erlang.nif_error(:nif_not_loaded)
+
+  def awareness_encode_update_v1(_awareness, _clients), do: :erlang.nif_error(:nif_not_loaded)
+
+  def awareness_apply_update_v1(_awareness, _update, _origin),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def awareness_remove_states(_awareness, _clients), do: :erlang.nif_error(:nif_not_loaded)
+end
+
+defmodule Yex.Nif.Util do
+  @moduledoc false
+  def unwrap_ok_tuple({:ok, {}}), do: :ok
+  def unwrap_ok_tuple(other), do: other
 end

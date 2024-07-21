@@ -40,7 +40,7 @@ defmodule Yex.Doc do
     Yex.Nif.doc_get_or_insert_map(doc, name)
   end
 
-  def get_xml_fragment(%__MODULE__{} = doc, _name) do
+  def get_xml_fragment(%__MODULE__{} = _doc, _name) do
     raise "Not implemented"
   end
 
@@ -106,6 +106,7 @@ defmodule Yex.Doc do
   end
 
   def demonitor_update_v2(sub) do
+    Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
     Yex.Nif.sub_unsubscribe(sub)
   end
 end
