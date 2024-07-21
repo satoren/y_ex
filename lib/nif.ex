@@ -49,7 +49,11 @@ defmodule Yex.Nif do
   def map_to_map(_map), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_json(_map), do: :erlang.nif_error(:nif_not_loaded)
 
-  def encode_state_vector(_doc), do: :erlang.nif_error(:nif_not_loaded)
-  def encode_state_as_update(_doc, _diff), do: :erlang.nif_error(:nif_not_loaded)
-  def apply_update(_doc, _update), do: :erlang.nif_error(:nif_not_loaded)
+  def encode_state_vector_v1(_doc), do: :erlang.nif_error(:nif_not_loaded)
+  def encode_state_as_update_v1(_doc, _diff), do: :erlang.nif_error(:nif_not_loaded)
+  def apply_update_v1(_doc, _update), do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_state_vector_v2(_doc), do: :erlang.nif_error(:nif_not_loaded)
+  def encode_state_as_update_v2(_doc, _diff), do: :erlang.nif_error(:nif_not_loaded)
+  def apply_update_v2(_doc, _update), do: :erlang.nif_error(:nif_not_loaded)
 end
