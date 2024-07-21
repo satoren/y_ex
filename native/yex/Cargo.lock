@@ -197,9 +197,9 @@ checksum = "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f"
 
 [[package]]
 name = "scoped_thread_local"
-version = "0.5.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2691044c7b46fd9d05f8efe0801732346a332eb358962489bed7598c3decd41"
+checksum = "c76c4638c2dad66721cd690056210784eac1090fa646bc35c2f439cfd24feb57"
 
 [[package]]
 name = "serde"
