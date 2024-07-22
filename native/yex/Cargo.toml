@@ -11,7 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rustler = "0.34.0"
-scoped_thread_local = "0.5.1"
+scoped_thread_local = "1.0.0"
 yrs = "0.19.2"
 
 [features]
