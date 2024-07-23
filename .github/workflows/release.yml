@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - nif_build_check
     tags:
       - '*'
 
@@ -55,6 +56,7 @@ jobs:
         target: ${{ matrix.job.target }}
         nif-version: ${{ matrix.nif }}
         use-cross: ${{ matrix.job.use-cross }}
+        project-dir: "native/yex"
 
     - name: Artifact upload
       uses: actions/upload-artifact@v4
