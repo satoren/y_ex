@@ -1,10 +1,12 @@
 mod any;
 mod array;
 mod atoms;
+mod awareness;
 mod doc;
 mod error;
 mod map;
 mod subscription;
+mod sync;
 mod text;
 mod wrap;
 mod yinput;

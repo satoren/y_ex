@@ -1,0 +1,3 @@
+[workspace]
+members = ["native/yex"]
+resolver = "2"

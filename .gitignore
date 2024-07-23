@@ -28,3 +28,5 @@ y_ex-*.tar
 priv/native/*.so
 
 checksum-*.exs
+
+target/

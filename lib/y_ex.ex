@@ -72,19 +72,18 @@ defmodule Yex do
       iex> Yex.apply_update(doc2, state1)
       :ok
   """
-  @spec apply_update(Yex.Doc.t(), binary()) :: :ok
+  @spec apply_update(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update(%Yex.Doc{} = doc, update) do
     apply_update_v1(doc, update)
   end
 
+  @spec apply_update_v1(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v1(%Yex.Doc{} = doc, update) do
-    Yex.Nif.apply_update_v1(doc, update) |> unwrap_ok_tuple()
+    Yex.Nif.apply_update_v1(doc, update) |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
+  @spec apply_update_v2(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v2(%Yex.Doc{} = doc, update) do
-    Yex.Nif.apply_update_v2(doc, update) |> unwrap_ok_tuple()
+    Yex.Nif.apply_update_v2(doc, update) |> Yex.Nif.Util.unwrap_ok_tuple()
   end
-
-  defp unwrap_ok_tuple({:ok, {}}), do: :ok
-  defp unwrap_ok_tuple(other), do: other
 end
