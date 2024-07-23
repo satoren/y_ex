@@ -1,7 +1,7 @@
 defmodule Yex.MixProject do
   use Mix.Project
 
-  @version "0.3.1-dev"
+  @version "0.3.3"
   @repo "https://github.com/satoren/y_ex"
 
   @description """
