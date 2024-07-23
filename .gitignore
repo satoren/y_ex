@@ -36,3 +36,5 @@ target/
 # This will cause the rustler precompiled job to fail
 /Cargo.toml
 /Cargo.lock
+
+test_output_file

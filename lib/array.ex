@@ -34,14 +34,49 @@ defmodule Yex.Array do
     Yex.Nif.array_get(array, index)
   end
 
+  @doc """
+  Returns as list
+
+  ## Examples Sync two clients by exchanging the complete document structure
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "Hello")
+      iex> Yex.Array.push(array, "World")
+      iex> Yex.Array.push(array, Yex.ArrayPrelim.from([1, 2]))
+      iex> ["Hello", "World", %Yex.Array{}] = Yex.Array.to_list(array)
+
+  """
   def to_list(%__MODULE__{} = array) do
     Yex.Nif.array_to_list(array)
   end
 
+  @doc """
+  Returns the length of the array
+
+  ## Examples Sync two clients by exchanging the complete document structure
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "Hello")
+      iex> Yex.Array.push(array, "World")
+      iex> Yex.Array.length(array)
+      2
+  """
   def length(%__MODULE__{} = array) do
     Yex.Nif.array_length(array)
   end
 
+  @doc """
+  Convert to json-compatible format.
+
+  ## Examples Sync two clients by exchanging the complete document structure
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "Hello")
+      iex> Yex.Array.push(array, "World")
+      iex> Yex.Array.to_json(array)
+      ["Hello", "World"]
+  """
+  @spec to_json(t) :: term()
   def to_json(%__MODULE__{} = array) do
     Yex.Nif.array_to_json(array)
   end

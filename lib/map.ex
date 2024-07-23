@@ -30,6 +30,16 @@ defmodule Yex.Map do
     Yex.Nif.map_size(map)
   end
 
+  @doc """
+  Convert to json-compatible format.
+
+  ## Examples Sync two clients by exchanging the complete document structure
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "key", ["Hello", "World"])
+      iex> Yex.Map.to_json(map)
+      %{"key" => ["Hello", "World"]}
+  """
   def to_json(%__MODULE__{} = map) do
     Yex.Nif.map_to_json(map)
   end

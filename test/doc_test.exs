@@ -102,4 +102,15 @@ defmodule Yex.DocTest do
         <<0>>
       )
   end
+
+  test "raise error" do
+    doc = Doc.new()
+
+    assert_raise ArgumentError, fn ->
+      Yex.encode_state_as_update!(
+        doc,
+        <<100>>
+      )
+    end
+  end
 end
