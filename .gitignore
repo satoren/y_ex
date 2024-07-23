@@ -27,6 +27,12 @@ y_ex-*.tar
 
 priv/native/*.so
 
+.DS_Store
+
 checksum-*.exs
 
 target/
+
+# This will cause the rustler precompiled job to fail
+/Cargo.toml
+/Cargo.lock
