@@ -19,7 +19,8 @@ defmodule Yex.MixProject do
       description: @description,
       deps: deps(),
       source_url: @repo,
-      homepage_url: @repo
+      homepage_url: @repo,
+      test_coverage: [ignore_modules: [Yex.Nif]]
     ]
   end
 
