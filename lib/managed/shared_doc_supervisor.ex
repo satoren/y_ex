@@ -41,7 +41,7 @@ defmodule Yex.Managed.SharedDocSupervisor do
   @dynamic_supervisor Yex.Managed.SharedDocSupervisor.DynamicSupervisor
 
   @type launch_param ::
-          {:persistence, module()}
+          {:persistence, {module() | {module(), init_arg :: term()}}}
           | {:idle_timeout, integer()}
           | {:pg_scope, atom()}
           | {:local_pubsub, module()}
@@ -71,17 +71,18 @@ defmodule Yex.Managed.SharedDocSupervisor do
     Supervisor.init(children, strategy: :one_for_one)
   end
 
-  def start_child(doc_name) do
+  def start_child(doc_name, start_arg \\ []) do
     name = via_name(doc_name)
 
-    @dynamic_supervisor.start_child(doc_name: doc_name, name: name)
+    option = [doc_name: doc_name, name: name] ++ start_arg
+    @dynamic_supervisor.start_child(option)
 
     try do
       # check started
       SharedDoc.doc_name(name)
     catch
       _ ->
-        @dynamic_supervisor.start_child(doc_name: doc_name, name: name)
+        @dynamic_supervisor.start_child(option)
     end
 
     {:ok, name}
