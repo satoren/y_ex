@@ -159,7 +159,7 @@ defmodule Yex.Managed.SharedDocTest do
       defmodule PersistenceTest do
         @behaviour Yex.Managed.SharedDoc.PersistenceBehaviour
 
-        def bind(_doc_name, doc) do
+        def bind(_arg, _doc_name, doc) do
           Doc.get_array(doc, "array")
           |> Array.insert(0, "initial_data")
 
@@ -203,7 +203,7 @@ defmodule Yex.Managed.SharedDocTest do
       defmodule PersistenceFileWriteTest do
         @behaviour Yex.Managed.SharedDoc.PersistenceBehaviour
 
-        def bind(_doc_name, doc) do
+        def bind(_state, _doc_name, doc) do
           Doc.get_array(doc, "array")
           |> Array.insert(0, "initial_data")
 
@@ -220,10 +220,6 @@ defmodule Yex.Managed.SharedDocTest do
           end
 
           :ok
-        end
-
-        def update_v1(state, update, _doc_name, _doc) do
-          [update | state]
         end
       end
 

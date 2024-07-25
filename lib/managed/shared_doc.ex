@@ -14,7 +14,7 @@ defmodule Yex.Managed.SharedDoc do
 
   @type launch_param ::
           {:doc_name, String.t()}
-          | {:persistence, module()}
+          | {:persistence, {module() | {module(), init_arg :: term()}}}
           | {:idle_timeout, integer()}
           | {:pg_scope, atom()}
           | {:local_pubsub, module()}
@@ -44,7 +44,13 @@ defmodule Yex.Managed.SharedDoc do
   @impl true
   def init(option) do
     doc_name = Keyword.fetch!(option, :doc_name)
-    persistence = Keyword.get(option, :persistence)
+
+    {persistence, persistence_init_arg} =
+      case Keyword.get(option, :persistence) do
+        {module, init_arg} -> {module, init_arg}
+        module -> {module, nil}
+      end
+
     timeout = Keyword.get(option, :idle_timeout, @default_idle_timeout)
     pg_scope = Keyword.get(option, :pg_scope, nil)
     local_pubsub = Keyword.get(option, :local_pubsub, nil)
@@ -54,8 +60,10 @@ defmodule Yex.Managed.SharedDoc do
     Awareness.clean_local_state(awareness)
 
     persistence_state =
-      if function_exported?(persistence, :bind, 2) do
-        persistence.bind(doc_name, doc)
+      if function_exported?(persistence, :bind, 3) do
+        persistence.bind(persistence_init_arg, doc_name, doc)
+      else
+        persistence_init_arg
       end
 
     {:ok, step1_data} = Sync.get_sync_step1(doc)
@@ -99,7 +107,7 @@ defmodule Yex.Managed.SharedDoc do
 
   @impl true
   def handle_call(:doc_name, _from, state) do
-    {:reply, state.doc_name, state}
+    {:reply, state.doc_name, state, state.timeout}
   end
 
   @impl true
@@ -281,10 +289,10 @@ defmodule Yex.Managed.SharedDoc do
     Persistence behavior for SharedDoc
     """
 
-    @callback bind(doc_name :: String.t(), doc :: Doc.t()) :: term()
-    @callback unbind(term :: term(), doc_name :: String.t(), doc :: Doc.t()) :: :ok
+    @callback bind(state :: term(), doc_name :: String.t(), doc :: Doc.t()) :: term()
+    @callback unbind(state :: term(), doc_name :: String.t(), doc :: Doc.t()) :: :ok
     @callback update_v1(
-                term :: term(),
+                state :: term(),
                 update :: binary(),
                 doc_name :: String.t(),
                 doc :: Doc.t()
