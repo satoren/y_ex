@@ -1,7 +1,8 @@
 defmodule Yex.Managed.SharedDocSupervisor do
   @moduledoc """
-  Supervisor for SharedDoc
+  This module is experimental
 
+  Supervisor for SharedDoc
   """
 
   alias Yex.Managed.SharedDoc
