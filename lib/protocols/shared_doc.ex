@@ -1,29 +1,22 @@
-defmodule Yex.Managed.SharedDoc do
+defmodule Yex.Sync.SharedDoc do
   @moduledoc """
-  This module is experimental
+  This process handles messages for yjs protocol sync and awareness.
+  https://github.com/yjs/y-protocols
 
-  Automatically synchronized document processes within the same process group.
-  This is synchronized cluster-wide.
+  Persistence is supported by passing persistence module.
+  see Yex.Sync.SharedDoc.PersistenceBehaviour
 
-  Note: this uses :pg.monitor and requires OTP 25.1 or higher.
-
-  vs Yex.Sync.SharedDoc
-  Because a copy is maintained for each cluster, the amount of communication between clusters may be reduced, but memory usage will increase.
-
+  If the observer process does not exist, it will automatically terminate.
   """
   use GenServer
 
   require Logger
   alias Yex.{Sync, Doc, Awareness}
 
-  @default_idle_timeout 15_000
-
   @type launch_param ::
           {:doc_name, String.t()}
           | {:persistence, {module() | {module(), init_arg :: term()}}}
-          | {:idle_timeout, integer()}
-          | {:pg_scope, atom()}
-          | {:local_pubsub, module()}
+          | {:auto_exit, boolean()}
 
   @spec start_link(param :: [launch_param], option :: GenServer.options()) :: GenServer.on_start()
   def start_link(param, option \\ []) do
@@ -43,13 +36,18 @@ defmodule Yex.Managed.SharedDoc do
     send(GenServer.whereis(server), {:start_sync, step1_message, self()})
   end
 
-  def doc_name(server) do
-    GenServer.call(server, :doc_name)
+  def observe(server) do
+    GenServer.call(server, {:observe, self()})
+  end
+
+  def unobserve(server) do
+    GenServer.call(server, {:unobserve, self()})
   end
 
   @impl true
   def init(option) do
     doc_name = Keyword.fetch!(option, :doc_name)
+    auto_exit = Keyword.get(option, :auto_exit, true)
 
     {persistence, persistence_init_arg} =
       case Keyword.get(option, :persistence) do
@@ -57,9 +55,6 @@ defmodule Yex.Managed.SharedDoc do
         module -> {module, nil}
       end
 
-    timeout = Keyword.get(option, :idle_timeout, @default_idle_timeout)
-    pg_scope = Keyword.get(option, :pg_scope, nil)
-    local_pubsub = Keyword.get(option, :local_pubsub, nil)
     doc = Doc.new()
     {:ok, awareness} = Awareness.new(doc)
 
@@ -72,29 +67,6 @@ defmodule Yex.Managed.SharedDoc do
         persistence_init_arg
       end
 
-    {:ok, step1_data} = Sync.get_sync_step1(doc)
-    message = Sync.message_encode!({:sync, step1_data})
-    step1 = {:yjs, message, self()}
-
-    if local_pubsub != nil do
-      local_pubsub.broadcast(
-        doc_name,
-        step1,
-        ""
-      )
-    end
-
-    if pg_scope != nil do
-      :pg.join(pg_scope, doc_name, self())
-      {_group_monitor_ref, pids} = :pg.monitor(pg_scope, doc_name)
-
-      pids
-      |> Enum.reject(&(&1 == self()))
-      |> Enum.each(fn pid ->
-        send(pid, step1)
-      end)
-    end
-
     Doc.monitor_update_v1(doc)
     Awareness.monitor_change(awareness)
 
@@ -105,15 +77,34 @@ defmodule Yex.Managed.SharedDoc do
        doc_name: doc_name,
        persistence: persistence,
        persistence_state: persistence_state,
-       timeout: timeout,
-       pg_scope: pg_scope,
-       local_pubsub: local_pubsub
-     }, timeout}
+       auto_exit: auto_exit,
+       observer_process: %{}
+     }}
   end
 
   @impl true
-  def handle_call(:doc_name, _from, state) do
-    {:reply, state.doc_name, state, state.timeout}
+  def handle_call({:observe, client}, _from, state) do
+    observer_process =
+      Map.put_new_lazy(state.observer_process, client, fn -> Process.monitor(client) end)
+
+    {:reply, :ok, put_in(state.observer_process, observer_process)}
+  end
+
+  @impl true
+  def handle_call({:unobserve, client}, _from, state) do
+    state = do_remove_observer_process(client, state)
+
+    {:reply, :ok, state, 0}
+  end
+
+  defp do_remove_observer_process(client, state) do
+    {ref, observer_process} = Map.pop(state.observer_process, client)
+
+    if ref != nil do
+      Process.demonitor(ref)
+    end
+
+    put_in(state.observer_process, observer_process)
   end
 
   @impl true
@@ -146,7 +137,7 @@ defmodule Yex.Managed.SharedDoc do
         error
     end
 
-    {:noreply, state, state.timeout}
+    {:noreply, state}
   end
 
   @impl true
@@ -156,8 +147,8 @@ defmodule Yex.Managed.SharedDoc do
         handle_yjs_message(message, from, state)
 
       error ->
-        Logger.error(error)
-        {:noreply, state, state.timeout}
+        Logger.warning(error)
+        {:noreply, state}
     end
   end
 
@@ -175,15 +166,13 @@ defmodule Yex.Managed.SharedDoc do
 
     with {:ok, s} <- Sync.get_update(update),
          {:ok, message} <- Sync.message_encode({:sync, s}) do
-      broadcast_to_group_process(message, origin, state)
-
       broadcast_to_users(message, origin, state)
     else
       error ->
         error
     end
 
-    {:noreply, state, state.timeout}
+    {:noreply, state}
   end
 
   @impl true
@@ -196,42 +185,31 @@ defmodule Yex.Managed.SharedDoc do
 
     with {:ok, update} <- Awareness.encode_update(awareness, changed_clients),
          {:ok, message} <- Sync.message_encode({:awareness, update}) do
-      broadcast_to_group_process(message, origin, state)
       broadcast_to_users(message, origin, state)
     else
       error ->
-        Logger.error(error)
+        Logger.warning(error)
         error
     end
 
-    {:noreply, state, state.timeout}
+    {:noreply, state}
   end
 
-  def handle_info({_ref, :join, _group, pids}, %{doc: doc} = state) do
-    with {:ok, s} <- Sync.get_sync_step1(doc),
-         {:ok, step1} <- Sync.message_encode({:sync, s}) do
-      pids
-      |> Enum.each(fn pid ->
-        send(pid, {:yjs, step1, self()})
-      end)
+  def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
+    state = do_remove_observer_process(pid, state)
+
+    if state.auto_exit and state.observer_process === %{} do
+      {:stop, :normal, state}
     else
-      error ->
-        Logger.error(error)
-        error
+      {:noreply, state}
     end
-
-    {:noreply, state, state.timeout}
-  end
-
-  def handle_info({_ref, :leave, _group, _pids}, state) do
-    {:noreply, state, state.timeout}
   end
 
   def handle_info(:timeout, state) do
-    if should_exit?(state) do
+    if state.auto_exit and state.observer_process === %{} do
       {:stop, :normal, state}
     else
-      {:noreply, state, state.timeout}
+      {:noreply, state}
     end
   end
 
@@ -253,41 +231,24 @@ defmodule Yex.Managed.SharedDoc do
         error
     end
 
-    {:noreply, state, state.timeout}
+    {:noreply, state}
   end
 
   defp handle_yjs_message({:awareness, message}, _from, state) do
     Awareness.apply_update(state.awareness, message)
-    {:noreply, state, state.timeout}
+    {:noreply, state}
   end
 
   defp handle_yjs_message(_, _from, state) do
     # unsupported_message
-    {:noreply, state, state.timeout}
+    {:noreply, state}
   end
 
-  defp should_exit?(state) do
-    state.local_pubsub && state.local_pubsub.monitor_count(state.doc_name) === 0
-  end
-
-  defp broadcast_to_users(message, origin, state) do
-    if state.local_pubsub != nil do
-      state.local_pubsub.broadcast(
-        state.doc_name,
-        {:yjs, message, self()},
-        origin
-      )
-    end
-  end
-
-  defp broadcast_to_group_process(message, _origin, state) do
-    if state.pg_scope != nil do
-      :pg.get_members(state.pg_scope, state.doc_name)
-      |> Enum.reject(&(&1 == self()))
-      |> Enum.each(fn pid ->
-        send(pid, {:yjs, message, self()})
-      end)
-    end
+  defp broadcast_to_users(message, _origin, state) do
+    state.observer_process
+    |> Enum.each(fn {pid, _} ->
+      send(pid, {:yjs, message, self()})
+    end)
   end
 
   defmodule PersistenceBehaviour do
@@ -305,21 +266,5 @@ defmodule Yex.Managed.SharedDoc do
               ) :: term()
 
     @optional_callbacks update_v1: 4, unbind: 3
-  end
-
-  defmodule LocalPubSubBehaviour do
-    @moduledoc """
-    LocalPubSub behavior for SharedDoc
-    Used to notify SharedDoc users of updates.
-
-    see Yex.Managed.SharedDocSupervisor.LocalPubsub for an example implementation
-    """
-
-    @callback monitor_count(doc_name :: String.t()) :: integer()
-    @callback broadcast(doc_name :: String.t(), message :: term(), exclude_origin :: term()) ::
-                :ok
-
-    @callback monitor(doc_name :: String.t()) :: :ok
-    @callback demonitor(doc_name :: String.t()) :: :ok
   end
 end
