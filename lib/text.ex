@@ -26,9 +26,20 @@ defmodule Yex.Text do
     Yex.Nif.text_format(text, index, length, attr)
   end
 
-  def apply_delta(%__MODULE__{} = _text, _delta) do
-    # Yex.Nif.text_apply_delta(text, delta)
-    raise "Not implemented"
+  @doc """
+  Transforms this type to a Quill Delta
+
+  ## Examples Sync two clients by exchanging the complete document structure
+      iex> doc = Yex.Doc.new()
+      iex> text = Yex.Doc.get_text(doc, "text")
+      iex> delta = [%{ "retain" => 1}, %{ "delete" => 3}]
+      iex> Yex.Text.insert(text,0, "12345")
+      iex> Yex.Text.apply_delta(text,delta)
+      iex> Yex.Text.to_delta(text)
+      [%{"insert" => "15"}]
+  """
+  def apply_delta(%__MODULE__{} = text, delta) do
+    Yex.Nif.text_apply_delta(text, delta)
   end
 
   def to_string(%__MODULE__{} = text) do
@@ -41,5 +52,20 @@ defmodule Yex.Text do
 
   def to_json(%__MODULE__{} = _text) do
     raise "Not implemented"
+  end
+
+  @doc """
+  Transforms this type to a Quill Delta
+
+  ## Examples Sync two clients by exchanging the complete document structure
+      iex> doc = Yex.Doc.new()
+      iex> text = Yex.Doc.get_text(doc, "text")
+      iex> Yex.Text.insert(text, 0, "12345")
+      iex> Yex.Text.insert(text, 0, "0", %{"bold" => true})
+      iex> Yex.Text.to_delta(text)
+      [%{"insert" => "0", "attributes" => %{"bold" => true}}, %{"insert" => "12345"}]
+  """
+  def to_delta(%__MODULE__{} = text) do
+    Yex.Nif.text_to_delta(text)
   end
 end
