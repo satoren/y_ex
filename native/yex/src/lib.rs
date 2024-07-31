@@ -14,7 +14,7 @@ mod youtput;
 
 use std::collections::HashMap;
 
-use any::{NifAny, NifAttr};
+use any::NifAny;
 use array::NifArray;
 use doc::{DocResource, NifDoc, NifOptions};
 use error::NifError;
@@ -127,49 +127,6 @@ fn doc_monitor_update_v2(
     pid: LocalPid,
 ) -> Result<ResourceArc<SubscriptionResource>, NifError> {
     doc.monitor_update_v2(pid)
-}
-
-#[rustler::nif]
-fn text_insert(env: Env<'_>, text: NifText, index: u32, chunk: &str) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || text.insert(index, chunk))
-}
-
-#[rustler::nif]
-fn text_insert_with_attributes(
-    env: Env<'_>,
-    text: NifText,
-    index: u32,
-    chunk: &str,
-    attr: NifAttr,
-) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || {
-        text.insert_with_attributes(index, chunk, attr)
-    })
-}
-
-#[rustler::nif]
-fn text_delete(env: Env<'_>, text: NifText, index: u32, len: u32) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || text.delete(index, len))
-}
-
-#[rustler::nif]
-fn text_format(
-    env: Env<'_>,
-    text: NifText,
-    index: u32,
-    len: u32,
-    attr: NifAttr,
-) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || text.format(index, len, attr))
-}
-
-#[rustler::nif]
-fn text_to_string(text: NifText) -> String {
-    text.to_string()
-}
-#[rustler::nif]
-fn text_length(text: NifText) -> u32 {
-    text.length()
 }
 
 #[rustler::nif]

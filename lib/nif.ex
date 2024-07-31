@@ -30,6 +30,11 @@ defmodule Yex.Nif do
   def text_insert_with_attributes(_text, _index, _content, _attr),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def text_apply_delta(_text, _delta),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def text_to_delta(_text), do: :erlang.nif_error(:nif_not_loaded)
+
   def text_delete(_text, _index, _len), do: :erlang.nif_error(:nif_not_loaded)
   def text_format(_text, _index, _len, _attr), do: :erlang.nif_error(:nif_not_loaded)
   def text_to_string(_text), do: :erlang.nif_error(:nif_not_loaded)
