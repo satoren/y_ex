@@ -1,6 +1,9 @@
 # Yex
 
-**TODO: Add description**
+[Yjs](https://yjs.dev/) port for Elixir using [y-crdt](https://github.com/y-crdt/y-crdt)
+
+
+A demo using the phoenix framework can be found [here](https://github.com/satoren/y-phoenix-channel).
 
 ## Installation
 
