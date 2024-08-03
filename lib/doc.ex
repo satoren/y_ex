@@ -10,6 +10,16 @@ defmodule Yex.Doc do
               skip_gc: false,
               auto_load: false,
               should_load: true
+
+    @type t :: %__MODULE__{
+            client_id: integer(),
+            guid: String.t() | nil,
+            collection_id: String.t(),
+            offset_kind: :bytes | :utf16,
+            skip_gc: boolean(),
+            auto_load: boolean(),
+            should_load: boolean()
+          }
   end
 
   defstruct [
@@ -20,30 +30,60 @@ defmodule Yex.Doc do
           reference: any()
         }
 
+  @doc """
+  Create a new document.
+  """
   def new() do
     Yex.Nif.doc_new()
   end
 
+  @doc """
+  Create a new document with options.
+  """
   def with_options(%Options{} = option) do
     Yex.Nif.doc_with_options(option)
   end
 
+  @doc """
+  Get or insert the text type.
+  """
   def get_text(%__MODULE__{} = doc, name) do
     Yex.Nif.doc_get_or_insert_text(doc, name)
   end
 
+  @doc """
+  Get or insert the array type.
+  """
   def get_array(%__MODULE__{} = doc, name) do
     Yex.Nif.doc_get_or_insert_array(doc, name)
   end
 
+  @doc """
+  Get or insert the map type.
+  """
   def get_map(%__MODULE__{} = doc, name) do
     Yex.Nif.doc_get_or_insert_map(doc, name)
   end
 
-  def get_xml_fragment(%__MODULE__{} = _doc, _name) do
-    raise "Not implemented"
-  end
+  #  def get_xml_fragment(%__MODULE__{} = _doc, _name) do
+  #    raise "Not implemented"
+  #  end
 
+  @doc """
+  Start a transaction.
+
+  ## Examples
+      iex> doc = Doc.new()
+      iex> text = Doc.get_text(doc, "text")
+      iex> Yex.Doc.monitor_update(doc)
+      iex> Doc.transaction(doc, fn ->
+      iex>   Text.insert(text, 0, "Hello")
+      iex>   Text.insert(text, 0, "Hello", %{"bold" => true})
+      iex> end)
+      iex> assert_receive {:update_v1, _, nil, _}
+      iex> refute_receive {:update_v1, _, nil, _} # only one update message
+
+  """
   def transaction(%__MODULE__{} = doc, exec) do
     case Yex.Nif.doc_begin_transaction(doc, nil) do
       {:ok, _} ->
@@ -68,6 +108,9 @@ defmodule Yex.Doc do
     end
   end
 
+  @doc """
+  Monitor document updates.
+  """
   def monitor_update(%__MODULE__{} = doc) do
     monitor_update_v1(doc)
   end
@@ -96,6 +139,9 @@ defmodule Yex.Doc do
     end
   end
 
+  @doc """
+  Stop monitoring document updates.
+  """
   def demonitor_update(sub) do
     demonitor_update_v2(sub)
   end

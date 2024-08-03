@@ -1,10 +1,12 @@
 defmodule Yex do
   @moduledoc """
-  Documentation for `Yex`.
+  Yex is wrapper library for the Yjs CRDT library.
   """
 
   @doc """
-  Computes the state vector and encodes it into an Uint8Array. A state vector describes the state of the local client. The remote client can use this to exchange only the missing differences.
+  Computes the state vector and encodes it into an Binary.
+  A state vector describes the state of the local client.
+  The remote client can use this to exchange only the missing differences.
 
   ## Examples
       iex> doc = Yex.Doc.new()
@@ -15,6 +17,9 @@ defmodule Yex do
     encode_state_vector_v1(doc)
   end
 
+  @doc """
+  @see encode_state_vector/1
+  """
   @spec encode_state_vector!(Yex.Doc.t()) :: binary()
   def encode_state_vector!(%Yex.Doc{} = doc) do
     case encode_state_vector(doc) do
@@ -43,6 +48,9 @@ defmodule Yex do
     encode_state_as_update_v1(doc, encoded_state_vector)
   end
 
+  @doc """
+  @see encode_state_as_update/2
+  """
   @spec encode_state_as_update!(Yex.Doc.t(), binary() | nil) :: binary()
   def encode_state_as_update!(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
     case encode_state_as_update(doc, encoded_state_vector) do

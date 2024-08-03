@@ -10,18 +10,37 @@ defmodule Yex.Map do
           reference: any()
         }
 
+  @doc """
+  set a key-value pair in the map.
+  """
   def set(%__MODULE__{} = map, key, content) do
     Yex.Nif.map_set(map, key, content)
   end
 
+  @doc """
+  delete a key from the map.
+  """
   def delete(%__MODULE__{} = map, key) do
     Yex.Nif.map_delete(map, key)
   end
 
+  @doc """
+  get a key from the map.
+  """
   def get(%__MODULE__{} = map, key) do
     Yex.Nif.map_get(map, key)
   end
 
+  @doc """
+  Convert to elixir map.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "array", Yex.ArrayPrelim.from(["Hello", "World"]))
+      iex> Yex.Map.set(map, "plane", ["Hello", "World"])
+      iex> assert %{"plane" => ["Hello", "World"], "array" => %Yex.Array{}} = Yex.Map.to_map(map)
+  """
   def to_map(%__MODULE__{} = map) do
     Yex.Nif.map_to_map(map)
   end
@@ -36,9 +55,9 @@ defmodule Yex.Map do
   ## Examples Sync two clients by exchanging the complete document structure
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
-      iex> Yex.Map.set(map, "key", ["Hello", "World"])
-      iex> Yex.Map.to_json(map)
-      %{"key" => ["Hello", "World"]}
+      iex> Yex.Map.set(map, "array", Yex.ArrayPrelim.from(["Hello", "World"]))
+      iex> Yex.Map.set(map, "plane", ["Hello", "World"])
+      iex> assert %{"plane" => ["Hello", "World"], "array" => ["Hello", "World"]} = Yex.Map.to_json(map)
   """
   def to_json(%__MODULE__{} = map) do
     Yex.Nif.map_to_json(map)

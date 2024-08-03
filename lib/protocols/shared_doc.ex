@@ -13,33 +13,67 @@ defmodule Yex.Sync.SharedDoc do
   require Logger
   alias Yex.{Sync, Doc, Awareness}
 
+  @typedoc """
+  Launch Parameters
+
+    * `:doc_name` - The name of the document.
+    * `:persistence` - Persistence module that implements PersistenceBehaviour.
+    * `:auto_exit` - Automatically terminate the SharedDoc process when there is no longer a process to receive update notifications.
+    * `:doc_option` - Options for the document.
+
+  """
   @type launch_param ::
           {:doc_name, String.t()}
           | {:persistence, {module() | {module(), init_arg :: term()}}}
           | {:auto_exit, boolean()}
+          | {:doc_option, Yex.Doc.Options.t()}
 
+  @doc """
+  Start the SharedDoc process with a link.
+
+  """
   @spec start_link(param :: [launch_param], option :: GenServer.options()) :: GenServer.on_start()
   def start_link(param, option \\ []) do
     GenServer.start_link(__MODULE__, param, option)
   end
 
+  @doc """
+  Start the SharedDoc process.
+  """
   @spec start(param :: [launch_param], option :: GenServer.options()) :: GenServer.on_start()
   def start(param, option \\ []) do
     GenServer.start(__MODULE__, param, option)
   end
 
+  @doc """
+  Send a message to the SharedDoc process.
+  message mus be represented in the Yjs protocol default format.
+  type supports sync and awareness.
+  """
   def send_yjs_message(server, message) when is_binary(message) do
     send(GenServer.whereis(server), {:yjs, message, self()})
   end
 
+  @doc """
+  Start the initial state exchange.
+
+  """
   def start_sync(server, step1_message) do
     send(GenServer.whereis(server), {:start_sync, step1_message, self()})
   end
 
+  @doc """
+  Receive doc update notifications in the calling process.
+  """
   def observe(server) do
     GenServer.call(server, {:observe, self()})
   end
 
+  @doc """
+  Stop receiving doc update notifications in the calling process.
+
+  If auto_exit is started with true(default), the SharedDoc process will automatically stop when there is no longer a process to receive update notifications.
+  """
   def unobserve(server) do
     GenServer.call(server, {:unobserve, self()})
   end
@@ -48,6 +82,7 @@ defmodule Yex.Sync.SharedDoc do
   def init(option) do
     doc_name = Keyword.fetch!(option, :doc_name)
     auto_exit = Keyword.get(option, :auto_exit, true)
+    doc_option = Keyword.get(option, :doc_option, %Yex.Doc.Options{})
 
     {persistence, persistence_init_arg} =
       case Keyword.get(option, :persistence) do
@@ -55,7 +90,9 @@ defmodule Yex.Sync.SharedDoc do
         module -> {module, nil}
       end
 
-    doc = Doc.new()
+    Code.ensure_loaded(persistence)
+
+    doc = Doc.with_options(doc_option)
     {:ok, awareness} = Awareness.new(doc)
 
     Awareness.clean_local_state(awareness)
@@ -256,8 +293,46 @@ defmodule Yex.Sync.SharedDoc do
     Persistence behavior for SharedDoc
     """
 
+    @doc """
+    Invoked to handle SharedDoc bind.
+    Mainly used to read and set the initial values of SharedDoc
+
+
+    ## Examples save the state to the filesystem
+      def bind(state, doc_name, doc) do
+        case File.read("path/to/" <> doc_name, [:read, :binary]) do
+          {:ok, data} ->
+            Yex.apply_update(doc, data)
+
+          {:error, _} ->
+            :ok
+        end
+      end
+    """
     @callback bind(state :: term(), doc_name :: String.t(), doc :: Doc.t()) :: term()
+
+    @doc """
+    Invoked to handle SharedDoc terminate.
+
+    This is only executed when SharedDoc exits successfully.
+
+    ## Examples save the state to the filesystem
+        def unbind(state, doc_name, doc) do
+          case Yex.encode_state_as_update(doc) do
+            {:ok, update} ->
+              File.write!("path/to/" <> doc_name, update, [:write, :binary])
+            error ->
+              error
+          end
+
+          :ok
+        end
+    """
     @callback unbind(state :: term(), doc_name :: String.t(), doc :: Doc.t()) :: :ok
+
+    @doc """
+    Invoked to handle all doc updates.
+    """
     @callback update_v1(
                 state :: term(),
                 update :: binary(),
