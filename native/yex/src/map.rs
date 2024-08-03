@@ -1,8 +1,8 @@
-use crate::atoms;
+use crate::{atoms, ENV};
 use crate::{
     doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
 };
-use rustler::{NifStruct, ResourceArc};
+use rustler::{Env, NifStruct, ResourceArc};
 use std::{collections::HashMap, ops::Deref};
 use yrs::types::ToJson;
 use yrs::*;
@@ -70,4 +70,29 @@ impl Deref for NifMap {
     fn deref(&self) -> &Self::Target {
         &self.reference.0
     }
+}
+
+#[rustler::nif]
+fn map_set(env: Env<'_>, map: NifMap, key: &str, value: NifYInput) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || map.set(key, value))
+}
+#[rustler::nif]
+fn map_size(map: NifMap) -> u32 {
+    map.size()
+}
+#[rustler::nif]
+fn map_get(map: NifMap, key: &str) -> Result<NifYOut, NifError> {
+    map.get(key)
+}
+#[rustler::nif]
+fn map_delete(env: Env<'_>, map: NifMap, key: &str) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || map.delete(key))
+}
+#[rustler::nif]
+fn map_to_map(map: NifMap) -> HashMap<String, NifYOut> {
+    map.to_map()
+}
+#[rustler::nif]
+fn map_to_json(map: NifMap) -> NifAny {
+    map.to_json()
 }

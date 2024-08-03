@@ -1,10 +1,10 @@
 use std::ops::Deref;
 
-use rustler::{NifStruct, ResourceArc};
+use rustler::{Env, NifStruct, ResourceArc};
 use yrs::types::ToJson;
 use yrs::*;
 
-use crate::atoms;
+use crate::{atoms, ENV};
 use crate::{
     doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
 };
@@ -72,4 +72,39 @@ impl Deref for NifArray {
     fn deref(&self) -> &Self::Target {
         &self.reference.0
     }
+}
+
+#[rustler::nif]
+fn array_insert(
+    env: Env<'_>,
+    array: NifArray,
+    index: u32,
+    value: NifYInput,
+) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || array.insert(index, value))
+}
+#[rustler::nif]
+fn array_length(array: NifArray) -> u32 {
+    array.length()
+}
+#[rustler::nif]
+fn array_get(array: NifArray, index: u32) -> Result<NifYOut, NifError> {
+    array.get(index)
+}
+#[rustler::nif]
+fn array_delete_range(
+    env: Env<'_>,
+    array: NifArray,
+    index: u32,
+    length: u32,
+) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || array.delete_range(index, length))
+}
+#[rustler::nif]
+fn array_to_list(array: NifArray) -> Vec<NifYOut> {
+    array.to_list()
+}
+#[rustler::nif]
+fn array_to_json(array: NifArray) -> NifAny {
+    array.to_json()
 }

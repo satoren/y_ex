@@ -4,7 +4,7 @@ use std::ops::Deref;
 use crate::subscription::SubscriptionResource;
 use crate::wrap::encode_binary_slice_to_term;
 use crate::{atoms, ENV};
-use rustler::{LocalPid, NifStruct, NifUnitEnum, ResourceArc};
+use rustler::{Env, LocalPid, NifStruct, NifUnitEnum, ResourceArc};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::*;
@@ -319,4 +319,58 @@ impl Deref for NifDoc {
     fn deref(&self) -> &Self::Target {
         &self.reference.0.doc
     }
+}
+
+#[rustler::nif]
+fn doc_new() -> NifDoc {
+    NifDoc::default()
+}
+
+#[rustler::nif]
+fn doc_with_options(option: NifOptions) -> NifDoc {
+    NifDoc::with_options(option)
+}
+
+#[rustler::nif]
+fn doc_get_or_insert_text(env: Env<'_>, doc: NifDoc, name: &str) -> NifText {
+    ENV.set(&mut env.clone(), || doc.get_or_insert_text(name))
+}
+
+#[rustler::nif]
+fn doc_get_or_insert_array(env: Env<'_>, doc: NifDoc, name: &str) -> NifArray {
+    ENV.set(&mut env.clone(), || doc.get_or_insert_array(name))
+}
+
+#[rustler::nif]
+fn doc_get_or_insert_map(env: Env<'_>, doc: NifDoc, name: &str) -> NifMap {
+    ENV.set(&mut env.clone(), || doc.get_or_insert_map(name))
+}
+
+#[rustler::nif]
+fn doc_begin_transaction(doc: NifDoc, origin: Option<&str>) -> Result<(), NifError> {
+    if let Some(origin) = origin {
+        doc.begin_transaction_with(origin)
+    } else {
+        doc.begin_transaction()
+    }
+}
+
+#[rustler::nif]
+fn doc_commit_transaction(env: Env<'_>, doc: NifDoc) {
+    ENV.set(&mut env.clone(), || doc.commit_transaction())
+}
+
+#[rustler::nif]
+fn doc_monitor_update_v1(
+    doc: NifDoc,
+    pid: LocalPid,
+) -> Result<ResourceArc<SubscriptionResource>, NifError> {
+    doc.monitor_update_v1(pid)
+}
+#[rustler::nif]
+fn doc_monitor_update_v2(
+    doc: NifDoc,
+    pid: LocalPid,
+) -> Result<ResourceArc<SubscriptionResource>, NifError> {
+    doc.monitor_update_v2(pid)
 }
