@@ -10,26 +10,44 @@ defmodule Yex.Array do
           reference: any()
         }
 
+  @doc """
+  Insert content at the specified index.
+  """
   def insert(%__MODULE__{} = array, index, content) do
     Yex.Nif.array_insert(array, index, content)
   end
 
+  @doc """
+  Push content to the end of the array.
+  """
   def push(%__MODULE__{} = array, content) do
     insert(array, __MODULE__.length(array), content)
   end
 
+  @doc """
+  Unshift content to the beginning of the array.
+  """
   def unshift(%__MODULE__{} = array, content) do
     insert(array, 0, content)
   end
 
+  @doc """
+  Delete content at the specified index.
+  """
   def delete(%__MODULE__{} = array, index) do
     delete_range(array, index, 1)
   end
 
+  @doc """
+  Delete contents in the specified range.
+  """
   def delete_range(%__MODULE__{} = array, index, length) do
     Yex.Nif.array_delete_range(array, index, length)
   end
 
+  @doc """
+  Get content at the specified index.
+  """
   def get(%__MODULE__{} = array, index) do
     Yex.Nif.array_get(array, index)
   end

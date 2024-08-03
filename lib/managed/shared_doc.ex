@@ -1,5 +1,6 @@
 defmodule Yex.Managed.SharedDoc do
-  @moduledoc """
+  @moduledoc false
+  @doc """
   This module is experimental
 
   Automatically synchronized document processes within the same process group.
@@ -291,7 +292,8 @@ defmodule Yex.Managed.SharedDoc do
   end
 
   defmodule PersistenceBehaviour do
-    @moduledoc """
+    @moduledoc false
+    @doc """
     Persistence behavior for SharedDoc
     """
 
@@ -308,7 +310,8 @@ defmodule Yex.Managed.SharedDoc do
   end
 
   defmodule LocalPubSubBehaviour do
-    @moduledoc """
+    @moduledoc false
+    @doc """
     LocalPubSub behavior for SharedDoc
     Used to notify SharedDoc users of updates.
 

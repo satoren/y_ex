@@ -1,5 +1,6 @@
 defmodule Yex.Managed.SharedDocSupervisor do
-  @moduledoc """
+  @moduledoc false
+  @doc """
   This module is experimental
 
   Supervisor for SharedDoc
@@ -9,7 +10,8 @@ defmodule Yex.Managed.SharedDocSupervisor do
   use Supervisor
 
   defmodule LocalPubsub do
-    @moduledoc """
+    @moduledoc false
+    @doc """
     default implementation for local pubsub
 
     Used to notify SharedDoc users of updates.

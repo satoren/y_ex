@@ -137,7 +137,7 @@ defmodule Yex.Awareness do
   end
 
   @doc """
-    /// Applies an update (incoming from remote channel or generated using [Awareness.encode_update] method) and modifies a state of a current instance.
+    Applies an update (incoming from remote channel or generated using [Awareness.encode_update] method) and modifies a state of a current instance.
 
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.new())

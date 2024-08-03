@@ -13,6 +13,13 @@ defmodule Yex.Sync do
   @spec message_decode(binary) :: {:ok, message} | {:error, term}
   def message_decode(message), do: message_decode_v1(message)
 
+  @doc """
+  Decode a message.
+
+  ## Examples
+      iex> Yex.Sync.message_decode(<<0, 0, 1,0>>)
+      {:ok, {:sync, {:sync_step1, <<0>>}}}
+  """
   @spec message_decode!(binary) :: message
   def message_decode!(message) do
     case message_decode(message) do
@@ -21,6 +28,13 @@ defmodule Yex.Sync do
     end
   end
 
+  @doc """
+  Encode a message.
+
+  ## Examples
+      iex> Yex.Sync.message_encode({:sync, {:sync_step1, <<0>>}})
+      {:ok, <<0, 0, 1,0>>}
+  """
   @spec message_encode(message) :: {:ok, binary} | {:error, term}
   def message_encode(message), do: message_encode_v1(message)
 
