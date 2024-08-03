@@ -49,7 +49,7 @@ defmodule Yex.Doc do
   @doc """
   Get or insert the text type.
   """
-  @spec get_text(t, String.t()) :: Yex.Text.t
+  @spec get_text(t, String.t()) :: Yex.Text.t()
   def get_text(%__MODULE__{} = doc, name) do
     Yex.Nif.doc_get_or_insert_text(doc, name)
   end
@@ -57,7 +57,7 @@ defmodule Yex.Doc do
   @doc """
   Get or insert the array type.
   """
-  @spec get_array(t, String.t()) :: Yex.Array.t
+  @spec get_array(t, String.t()) :: Yex.Array.t()
   def get_array(%__MODULE__{} = doc, name) do
     Yex.Nif.doc_get_or_insert_array(doc, name)
   end
@@ -65,7 +65,7 @@ defmodule Yex.Doc do
   @doc """
   Get or insert the map type.
   """
-  @spec get_map(t, String.t()) :: Yex.Map.t
+  @spec get_map(t, String.t()) :: Yex.Map.t()
   def get_map(%__MODULE__{} = doc, name) do
     Yex.Nif.doc_get_or_insert_map(doc, name)
   end
