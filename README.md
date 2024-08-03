@@ -13,7 +13,7 @@ by adding `y_ex` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:y_ex, "~> 0.1.0"}
+    {:y_ex, "~> 0.5.1"}
   ]
 end
 ```
