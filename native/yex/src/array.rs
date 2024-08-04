@@ -29,79 +29,41 @@ impl NifArray {
     }
 
     pub fn insert(&self, index: u32, input: NifYInput) -> Result<(), NifError> {
-        if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
+        self.doc.mutably(|txn| {
             self.reference.insert(txn, index, input);
             Ok(())
-        } else {
-            let mut txn = self.doc.0.doc.transact_mut();
-            self.reference.insert(&mut txn, index, input);
-            Ok(())
-        }
+        })
     }
     pub fn length(&self) -> u32 {
-        if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
-            self.reference.len(txn)
-        } else {
-            let txn = self.doc.0.doc.transact();
-
-            self.reference.len(&txn)
-        }
+        self.doc.readonly(|txn| self.reference.len(txn))
     }
     pub fn delete_range(&self, index: u32, length: u32) -> Result<(), NifError> {
-        if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
+        self.doc.mutably(|txn| {
             self.reference.remove_range(txn, index, length);
-        } else {
-            let mut txn = self.doc.0.doc.transact_mut();
-            self.reference.remove_range(&mut txn, index, length);
-        }
-        Ok(())
+            Ok(())
+        })
     }
     pub fn get(&self, index: u32) -> Result<NifYOut, NifError> {
-        if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
-            let doc = self.doc.clone();
+        self.doc.readonly(|txn| {
             self.reference
                 .get(txn, index)
-                .map(|b| NifYOut::from_native(b, doc.clone()))
+                .map(|b| NifYOut::from_native(b, self.doc.clone()))
                 .ok_or(NifError {
                     reason: atoms::error(),
                     message: "can not get".into(),
                 })
-        } else {
-            let txn = self.doc.0.doc.transact();
-
-            let doc = self.doc.clone();
-            self.reference
-                .get(&txn, index)
-                .map(|b| NifYOut::from_native(b, doc.clone()))
-                .ok_or(NifError {
-                    reason: atoms::error(),
-                    message: "can not get".into(),
-                })
-        }
+        })
     }
     pub fn to_list(&self) -> Vec<NifYOut> {
-        if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
-            let doc = self.doc.clone();
+        self.doc.readonly(|txn| {
             self.reference
                 .iter(txn)
-                .map(|b| NifYOut::from_native(b, doc.clone()))
+                .map(|b| NifYOut::from_native(b, self.doc.clone()))
                 .collect()
-        } else {
-            let txn = self.doc.0.doc.transact();
-            let doc = self.doc.clone();
-            self.reference
-                .iter(&txn)
-                .map(|b| NifYOut::from_native(b, doc.clone()))
-                .collect()
-        }
+        })
     }
     pub fn to_json(&self) -> NifAny {
-        if let Some(txn) = self.doc.current_transaction.borrow_mut().as_mut() {
-            self.reference.to_json(txn).into()
-        } else {
-            let txn = self.doc.0.doc.transact();
-            self.reference.to_json(&txn).into()
-        }
+        self.doc.readonly(|txn| self.reference.to_json(txn).into())
     }
 }
 

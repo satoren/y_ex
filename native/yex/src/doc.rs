@@ -17,6 +17,32 @@ pub struct DocInner {
 
 pub type DocResource = NifWrap<DocInner>;
 
+impl DocInner {
+    pub fn mutably<F, T>(&self, f: F) -> Result<T, NifError>
+    where
+        F: FnOnce(&mut TransactionMut<'_>) -> Result<T, NifError>,
+    {
+        if let Some(txn) = self.current_transaction.borrow_mut().as_mut() {
+            f(txn)
+        } else {
+            let mut txn = self.doc.transact_mut();
+            f(&mut txn)
+        }
+    }
+
+    pub fn readonly<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&TransactionMut<'_>) -> T,
+    {
+        if let Some(txn) = self.current_transaction.borrow_mut().as_ref() {
+            f(txn)
+        } else {
+            let txn = self.doc.transact_mut();
+            f(&txn)
+        }
+    }
+}
+
 #[rustler::resource_impl]
 impl rustler::Resource for DocResource {}
 
@@ -174,26 +200,18 @@ impl NifDoc {
             StateVector::default()
         };
 
-        if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
-            Ok(txn.encode_diff_v1(&sv))
-        } else {
-            let txn = self.reference.doc.transact();
-
-            Ok(txn.encode_diff_v1(&sv))
-        }
+        self.reference.readonly(|txn| Ok(txn.encode_diff_v1(&sv)))
     }
     pub fn apply_update_v1(&self, update: &[u8]) -> Result<(), NifError> {
         let update = Update::decode_v1(update).map_err(|e| NifError {
             reason: atoms::encoding_exception(),
             message: e.to_string(),
         })?;
-        if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
+
+        self.reference.mutably(|txn| {
             txn.apply_update(update);
-        } else {
-            let mut txn = self.reference.doc.transact_mut();
-            txn.apply_update(update);
-        }
-        Ok(())
+            Ok(())
+        })
     }
     pub fn monitor_update_v1(
         &self,
@@ -222,13 +240,8 @@ impl NifDoc {
         })
     }
     pub fn encode_state_vector_v2(&self) -> Result<Vec<u8>, NifError> {
-        if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
-            Ok(txn.state_vector().encode_v2())
-        } else {
-            let txn = self.reference.doc.transact();
-
-            Ok(txn.state_vector().encode_v2())
-        }
+        self.reference
+            .readonly(|txn| Ok(txn.state_vector().encode_v2()))
     }
     pub fn encode_state_as_update_v2(
         &self,
@@ -243,27 +256,20 @@ impl NifDoc {
             StateVector::default()
         };
 
-        if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
-            Ok(txn.encode_diff_v2(&sv))
-        } else {
-            let txn = self.reference.doc.transact();
-
-            Ok(txn.encode_diff_v2(&sv))
-        }
+        self.reference.mutably(|txn| Ok(txn.encode_diff_v2(&sv)))
     }
     pub fn apply_update_v2(&self, update: &[u8]) -> Result<(), NifError> {
         let update = Update::decode_v2(update).map_err(|e| NifError {
             reason: atoms::encoding_exception(),
             message: e.to_string(),
         })?;
-        if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
+
+        self.reference.mutably(|txn| {
             txn.apply_update(update);
-        } else {
-            let mut txn = self.reference.doc.transact_mut();
-            txn.apply_update(update);
-        }
-        Ok(())
+            Ok(())
+        })
     }
+
     pub fn monitor_update_v2(
         &self,
         pid: LocalPid,
