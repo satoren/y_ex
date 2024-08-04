@@ -6,6 +6,10 @@ defmodule Yex.Text do
     :reference
   ]
 
+  @type delta ::
+          [%{:insert => Yex.input_type(), optional(:attributes) => map()}]
+          | [%{delete: integer()}]
+          | [%{:retain => integer(), optional(:attributes) => map()}]
   @type t :: %__MODULE__{
           reference: any()
         }
@@ -36,7 +40,7 @@ defmodule Yex.Text do
       iex> Yex.Text.insert(text,0, "12345")
       iex> Yex.Text.apply_delta(text,delta)
       iex> Yex.Text.to_delta(text)
-      [%{"insert" => "15"}]
+      [%{insert: "15"}]
   """
   def apply_delta(%__MODULE__{} = text, delta) do
     Yex.Nif.text_apply_delta(text, delta)
@@ -63,9 +67,58 @@ defmodule Yex.Text do
       iex> Yex.Text.insert(text, 0, "12345")
       iex> Yex.Text.insert(text, 0, "0", %{"bold" => true})
       iex> Yex.Text.to_delta(text)
-      [%{"insert" => "0", "attributes" => %{"bold" => true}}, %{"insert" => "12345"}]
+      [%{insert: "0", attributes: %{"bold" => true}}, %{insert: "12345"}]
   """
   def to_delta(%__MODULE__{} = text) do
     Yex.Nif.text_to_delta(text)
+  end
+end
+
+defmodule Yex.TextPrelim do
+  @moduledoc """
+  A preliminary array. It can be used to early initialize the contents of a Array.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "key", Yex.TextPrelim.from("Hello World"))
+      iex> {:ok, %Yex.Text{} = text} = Yex.Map.get(map, "key")
+      iex> Yex.Text.to_delta(text)
+      [%{insert: "Hello World"}]
+
+  """
+  defstruct [
+    :delta
+  ]
+
+  @type t :: %__MODULE__{
+          delta: Yex.Text.delta()
+        }
+
+  @doc """
+  Transforms a Text to a TextPrelim
+  ## Examples with a binary
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "key", Yex.TextPrelim.from("Hello World"))
+      iex> {:ok, %Yex.Text{} = text} = Yex.Map.get(map, "key")
+      iex> Yex.Text.to_delta(text)
+      [%{insert: "Hello World"}]
+
+
+  ## Examples with delta
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "key", Yex.TextPrelim.from([%{insert: "Hello"},%{insert: " World", attributes: %{ "bold" => true }},]))
+      iex> {:ok, %Yex.Text{} = text} = Yex.Map.get(map, "key")
+      iex> Yex.Text.to_delta(text)
+      [%{insert: "Hello"}, %{attributes: %{"bold" => true}, insert: " World"}]
+  """
+  def from(text) when is_binary(text) do
+    %__MODULE__{delta: [%{insert: text}]}
+  end
+
+  def from(delta) do
+    %__MODULE__{delta: delta}
   end
 end

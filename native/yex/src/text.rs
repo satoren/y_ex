@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rustler::{Decoder, Encoder, Env, ListIterator, NifResult, NifStruct, ResourceArc, Term};
+use rustler::{Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
 use types::{
     text::{Diff, YChange},
     Delta,
@@ -8,8 +8,14 @@ use types::{
 use yrs::*;
 
 use crate::{
-    any::NifAttr, doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput,
-    youtput::NifYOut, ENV,
+    any::NifAttr,
+    atoms,
+    doc::DocResource,
+    error::NifError,
+    wrap::NifWrap,
+    yinput::{NifYInput, NifYInputDelta},
+    youtput::NifYOut,
+    ENV,
 };
 
 pub type TextReResource = NifWrap<TextRef>;
@@ -178,50 +184,8 @@ fn text_to_delta(env: Env<'_>, text: NifText) -> NifResult<rustler::Term<'_>> {
 }
 
 #[rustler::nif]
-fn text_apply_delta(text: NifText, delta: NifInDelta) -> Result<(), NifError> {
+fn text_apply_delta(text: NifText, delta: NifYInputDelta) -> Result<(), NifError> {
     text.apply_delta(delta.0)
-}
-
-type NifInDelta = NifWrap<Vec<Delta<NifYInput>>>;
-
-impl<'a> Decoder<'a> for NifInDelta {
-    fn decode(term: Term<'a>) -> NifResult<Self> {
-        if let Ok(v) = term.decode::<ListIterator<'a>>() {
-            let a = v
-                .map(|v| decode_delta(v))
-                .collect::<Result<Vec<Delta<NifYInput>>, rustler::Error>>()?;
-
-            return Ok(a.into());
-        }
-        Err(rustler::Error::BadArg)
-    }
-}
-
-fn decode_delta(term: Term<'_>) -> NifResult<Delta<NifYInput>> {
-    let attributes = term.map_get("attributes");
-
-    if let Ok(insert) = term.map_get("insert") {
-        let attrs = attributes.map_or(None, |s| {
-            s.decode()
-                .map_or(None, |attr: NifAttr| Some(Box::new(attr.0)))
-        });
-        return Ok(Delta::Inserted(insert.decode::<NifYInput>()?, attrs));
-    }
-    if let Ok(delete) = term.map_get("delete") {
-        if let Ok(len) = delete.decode::<u32>() {
-            return Ok(Delta::Deleted(len));
-        }
-    }
-    if let Ok(retain) = term.map_get("retain") {
-        if let Ok(len) = retain.decode::<u32>() {
-            let attrs = attributes.map_or(None, |s| {
-                s.decode()
-                    .map_or(None, |attr: NifAttr| Some(Box::new(attr.0)))
-            });
-            return Ok(Delta::Retain(len, attrs));
-        }
-    }
-    Err(rustler::Error::BadArg)
 }
 
 pub fn encode_diffs<'a>(
@@ -241,7 +205,6 @@ pub fn encode_diff<'a>(
     env: Env<'a>,
 ) -> NifResult<Term<'a>> {
     let insert = NifYOut::from_native(diff.insert.clone(), doc.clone());
-    let mut result: HashMap<String, NifYOut> = HashMap::from([("insert".into(), insert)]);
 
     let mut attribute = diff.attributes.as_deref().map(|attr| {
         attr.iter()
@@ -267,12 +230,13 @@ pub fn encode_diff<'a>(
         }
     }
 
-    if let Some(attribute) = attribute {
-        result.insert(
-            "attributes".into(),
-            NifYOut::Any(Any::from(attribute).into()),
-        );
-    }
+    let mut map = Term::map_new(env);
 
-    Ok(result.encode(env))
+    map = map.map_put(atoms::insert(), insert.encode(env))?;
+    if let Some(attrs) = attribute {
+        map = map
+            .map_put(atoms::attributes(), NifYOut::Any(Any::from(attrs).into()))
+            .unwrap();
+    }
+    Ok(map)
 }
