@@ -1,7 +1,8 @@
 defmodule Yex.TextTest do
   use ExUnit.Case
-  alias Yex.{Doc, Text}
+  alias Yex.{Doc, Text, TextPrelim}
   doctest Text
+  doctest TextPrelim
 
   test "transaction" do
     doc = Doc.new()
@@ -36,7 +37,7 @@ defmodule Yex.TextTest do
       Text.apply_delta(text, delta)
       assert "45" == Text.to_string(text)
 
-      assert [%{"insert" => "4"}, %{"attributes" => %{"bold" => true}, "insert" => "5"}] ==
+      assert [%{insert: "4"}, %{attributes: %{"bold" => true}, insert: "5"}] ==
                Text.to_delta(text)
     end
   end
@@ -48,10 +49,10 @@ defmodule Yex.TextTest do
 
     delta = [
       %{
-        "retain" => 1
+        retain: 1
       },
       %{
-        "delete" => 3
+        delete: 3
       }
     ]
 
@@ -59,7 +60,7 @@ defmodule Yex.TextTest do
     Text.apply_delta(text, delta)
     assert "15" == Text.to_string(text)
 
-    assert [%{"insert" => "15"}] ==
+    assert [%{insert: "15"}] ==
              Text.to_delta(text)
   end
 
@@ -88,9 +89,9 @@ defmodule Yex.TextTest do
     Text.apply_delta(text, delta)
 
     assert [
-             %{"insert" => "1"},
-             %{"attributes" => %{"bold" => true}, "insert" => "abc"},
-             %{"insert" => "2xyz3"}
+             %{insert: "1"},
+             %{insert: "abc", attributes: %{"bold" => true}},
+             %{insert: "2xyz3"}
            ] ==
              Text.to_delta(text)
   end
@@ -110,7 +111,7 @@ defmodule Yex.TextTest do
     Text.insert(text, 0, "123456")
     Text.apply_delta(text, delta)
 
-    assert [%{"insert" => "12345", "attributes" => %{"italic" => true}}, %{"insert" => "6"}] ==
+    assert [%{insert: "12345", attributes: %{"italic" => true}}, %{insert: "6"}] ==
              Text.to_delta(text)
   end
 end

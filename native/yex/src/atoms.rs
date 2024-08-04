@@ -22,5 +22,10 @@ rustler::atoms! {
 
   //awareness message types
   awareness_update,
-  awareness_change
+  awareness_change,
+
+  insert,
+  delete,
+  retain,
+  attributes,
 }

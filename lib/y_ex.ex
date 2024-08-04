@@ -3,6 +3,19 @@ defmodule Yex do
   Yex is wrapper library for the Yjs CRDT library.
   """
 
+  @type input_type ::
+          :binary
+          | :string
+          | :map
+          | :list
+          | :integer
+          | :float
+          | :boolean
+          | nil
+          | Yex.MapPrelim.t()
+          | Yex.TextPrelim.t()
+          | Yex.ArrayPrelim.t()
+
   @doc """
   Computes the state vector and encodes it into an Binary.
   A state vector describes the state of the local client.

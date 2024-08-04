@@ -80,6 +80,10 @@ defmodule Yex.MapPrelim do
     :map
   ]
 
+  @type t :: %__MODULE__{
+          map: map()
+        }
+
   def from(%{} = map) do
     %__MODULE__{map: map}
   end

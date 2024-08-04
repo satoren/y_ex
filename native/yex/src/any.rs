@@ -86,3 +86,14 @@ impl<'a> Decoder<'a> for NifAttr {
         Err(Error::BadArg)
     }
 }
+
+impl<'de, 'a: 'de> rustler::Encoder for NifAttr {
+    fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
+        let map: HashMap<String, NifAny> = self
+            .0
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone().into()))
+            .collect();
+        map.encode(env)
+    }
+}
