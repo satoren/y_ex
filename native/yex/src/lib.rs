@@ -9,6 +9,7 @@ mod subscription;
 mod sync;
 mod text;
 mod wrap;
+mod xml;
 mod yinput;
 mod youtput;
 
@@ -31,23 +32,6 @@ pub trait TryInto<T>: Sized {
 
     // Required method
     fn try_into(self) -> Result<T, Self::Error>;
-}
-
-#[derive(NifStruct)]
-#[module = "Yex.XmlFragment"]
-struct NifXmlFragment {}
-#[derive(NifStruct)]
-#[module = "Yex.XmlElement"]
-pub struct NifXmlElement {
-    // not supported yet
-    doc: ResourceArc<DocResource>,
-}
-
-#[derive(NifStruct)]
-#[module = "Yex.XmlText"]
-pub struct NifXmlText {
-    // not supported yet
-    doc: ResourceArc<DocResource>,
 }
 
 #[derive(NifStruct)]

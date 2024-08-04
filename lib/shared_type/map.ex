@@ -3,11 +3,13 @@ defmodule Yex.Map do
   A shareable Map type.
   """
   defstruct [
+    :doc,
     :reference
   ]
 
   @type t :: %__MODULE__{
-          reference: any()
+          doc: reference(),
+          reference: reference()
         }
 
   @doc """

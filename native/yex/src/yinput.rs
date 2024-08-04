@@ -9,8 +9,12 @@ use rustler::*;
 use yrs::{
     block::{ItemContent, Prelim, Unused},
     branch::{Branch, BranchPtr},
-    types::{Delta, TypeRef},
-    Any, Array, ArrayRef, Map, MapRef, Text, TextRef, TransactionMut,
+    types::{
+        xml::{XmlDeltaPrelim, XmlIn},
+        Delta, TypeRef,
+    },
+    Any, Array, ArrayRef, Map, MapRef, Text, TextRef, TransactionMut, XmlElementPrelim,
+    XmlFragmentPrelim, XmlTextPrelim,
 };
 
 #[derive(NifStruct)]
@@ -31,6 +35,61 @@ pub struct NifTextPrelim {
     delta: NifYInputDelta,
 }
 
+#[derive(NifStruct)]
+#[module = "Yex.XmlFragmentPrelim"]
+pub struct NifXmlFragmentPrelim {
+    children: Vec<NifXmlIn>,
+}
+
+impl From<NifXmlFragmentPrelim> for XmlFragmentPrelim {
+    #[inline]
+    fn from(value: NifXmlFragmentPrelim) -> Self {
+        let children = value
+            .children
+            .into_iter()
+            .map(|v| Into::<XmlIn>::into(v))
+            .collect();
+        XmlFragmentPrelim::new::<Vec<XmlIn>, XmlIn>(children)
+    }
+}
+
+#[derive(NifStruct)]
+#[module = "Yex.XmlElementPrelim"]
+pub struct NifXmlElementPrelim {
+    tag: String,
+    attributes: HashMap<String, String>,
+    children: Vec<NifXmlIn>,
+}
+
+impl From<NifXmlElementPrelim> for XmlElementPrelim {
+    #[inline]
+    fn from(value: NifXmlElementPrelim) -> Self {
+        XmlElementPrelim {
+            tag: value.tag.into(),
+            attributes: value
+                .attributes
+                .into_iter()
+                .map(|(key, value)| (key.into(), value))
+                .collect(),
+            children: value.children.into_iter().map(|v| v.into()).collect(),
+        }
+    }
+}
+
+#[derive(NifStruct)]
+#[module = "Yex.XmlTextPrelim"]
+pub struct NifXmlTextPrelim {
+    //    delta: NifYInputDelta,
+    text: String,
+}
+
+impl From<NifXmlTextPrelim> for XmlDeltaPrelim {
+    #[inline]
+    fn from(value: NifXmlTextPrelim) -> Self {
+        XmlTextPrelim::new(value.text).into()
+    }
+}
+
 #[derive(NifUntaggedEnum)]
 pub enum NifYInput {
     Any(NifAny),
@@ -38,6 +97,16 @@ pub enum NifYInput {
     ArrayPrelim(NifArrayPrelim),
     TextPrelim(NifTextPrelim),
 }
+
+//Text(DeltaPrelim),
+//Array(ArrayPrelim),
+//Map(MapPrelim),
+//XmlElement(XmlElementPrelim),
+//XmlFragment(XmlFragmentPrelim),
+//XmlText(XmlDeltaPrelim),
+//Doc(Doc),
+//#[cfg(feature = "weak")]
+//WeakLink(crate::types::weak::WeakPrelim<BranchPtr>),
 
 impl Prelim for NifYInput {
     type Return = Unused;
@@ -85,6 +154,24 @@ impl Prelim for NifYInput {
                 let array = TextRef::from(inner_ref);
                 array.apply_delta(txn, v.delta.0);
             }
+        }
+    }
+}
+
+#[derive(NifUntaggedEnum)]
+pub enum NifXmlIn {
+    Text(NifXmlTextPrelim),
+    Element(NifXmlElementPrelim),
+    Fragment(NifXmlFragmentPrelim),
+}
+
+impl From<NifXmlIn> for XmlIn {
+    #[inline]
+    fn from(value: NifXmlIn) -> Self {
+        match value {
+            NifXmlIn::Text(v) => XmlIn::Text(v.into()),
+            NifXmlIn::Element(v) => XmlIn::Element(v.into()),
+            NifXmlIn::Fragment(v) => XmlIn::Fragment(v.into()),
         }
     }
 }

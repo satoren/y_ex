@@ -54,6 +54,50 @@ defmodule Yex.Nif do
   def map_to_map(_map), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_json(_map), do: :erlang.nif_error(:nif_not_loaded)
 
+  def xml_fragment_insert(_xml_fragment, _index, _content), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_fragment_delete_range(_xml_fragment, _index, _length),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_fragment_get(_xml_fragment, _index), do: :erlang.nif_error(:nif_not_loaded)
+  #  def xml_fragment_to_json(_xml_fragment), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_fragment_to_string(_xml_fragment), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_fragment_length(_xml_fragment), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_element_insert(_xml_element, _index, _content), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_element_delete_range(_xml_element, _index, _length),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_element_get(_xml_element, _index), do: :erlang.nif_error(:nif_not_loaded)
+  #  def xml_element_to_json(_xml_element), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_element_length(_xml_element), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_element_insert_attribute(_xml_element, _key, _value),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_element_remove_attribute(_xml_element, _key), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_element_get_attribute(_xml_element, _key), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_element_get_attributes(_xml_element), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_element_next_sibling(_xml_element), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_element_prev_sibling(_xml_element), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_element_to_string(_xml_element), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_insert(_xml_text, _index, _content), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_insert_with_attributes(_xml_text, _index, _content, _attr),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_delete(_xml_text, _index, _length), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_text_format(_xml_text, _index, _length, _attr), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_text_apply_delta(_xml_text, _delta), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_text_length(_xml_text), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_next_sibling(_xml_text), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_text_prev_sibling(_xml_text), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_text_to_delta(_xml_text), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_text_to_string(_xml_text), do: :erlang.nif_error(:nif_not_loaded)
+
   def encode_state_vector_v1(_doc), do: :erlang.nif_error(:nif_not_loaded)
   def encode_state_as_update_v1(_doc, _diff), do: :erlang.nif_error(:nif_not_loaded)
   def apply_update_v1(_doc, _update), do: :erlang.nif_error(:nif_not_loaded)

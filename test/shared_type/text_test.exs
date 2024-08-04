@@ -140,13 +140,6 @@ defmodule Yex.TextTest do
 
     text = Doc.get_text(doc, "text")
 
-    delta = [
-      %{
-        "retain" => 3,
-        "attributes" => %{"italic" => true}
-      }
-    ]
-
     Text.insert(text, 0, "123456")
 
     assert "123456" == Text.to_string(text)
