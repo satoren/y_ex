@@ -1,21 +1,12 @@
 use std::collections::HashMap;
 
 use rustler::{Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
-use types::{
-    text::{Diff, YChange},
-    Delta,
-};
+use types::text::{Diff, YChange};
 use yrs::*;
 
 use crate::{
-    any::NifAttr,
-    atoms,
-    doc::DocResource,
-    error::NifError,
-    wrap::NifWrap,
-    yinput::{NifYInput, NifYInputDelta},
+    any::NifAttr, atoms, doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInputDelta,
     youtput::NifYOut,
-    ENV,
 };
 
 pub type TextReResource = NifWrap<TextRef>;
@@ -36,53 +27,12 @@ impl NifText {
         }
     }
 
-    pub fn insert(&self, index: u32, chunk: &str) -> Result<(), NifError> {
-        self.doc.mutably(|txn| {
-            self.reference.insert(txn, index, chunk);
-            Ok(())
-        })
-    }
-
-    pub fn insert_with_attributes(
-        &self,
-        index: u32,
-        chunk: &str,
-        attr: NifAttr,
-    ) -> Result<(), NifError> {
-        self.doc.mutably(|txn| {
-            self.reference
-                .insert_with_attributes(txn, index, chunk, attr.0);
-            Ok(())
-        })
-    }
-
-    pub fn delete(&self, index: u32, len: u32) -> Result<(), NifError> {
-        self.doc.mutably(|txn| {
-            self.reference.remove_range(txn, index, len);
-            Ok(())
-        })
-    }
-
-    pub fn format(&self, index: u32, len: u32, attr: NifAttr) -> Result<(), NifError> {
-        self.doc.mutably(|txn| {
-            self.reference.format(txn, index, len, attr.0);
-            Ok(())
-        })
-    }
-
     pub fn length(&self) -> u32 {
         self.doc.readonly(|txn| self.reference.len(txn))
     }
     pub fn diff(&self) -> Vec<Diff<YChange>> {
         self.doc
             .readonly(|txn| self.reference.diff(txn, YChange::identity))
-    }
-
-    pub fn apply_delta(&self, delta: Vec<Delta<NifYInput>>) -> Result<(), NifError> {
-        self.doc.mutably(|txn| {
-            self.reference.apply_delta(txn, delta);
-            Ok(())
-        })
     }
 }
 
@@ -95,7 +45,10 @@ impl std::fmt::Display for NifText {
 
 #[rustler::nif]
 fn text_insert(env: Env<'_>, text: NifText, index: u32, chunk: &str) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || text.insert(index, chunk))
+    text.doc.mutably(env, |txn| {
+        text.reference.insert(txn, index, chunk);
+        Ok(())
+    })
 }
 
 #[rustler::nif]
@@ -106,14 +59,19 @@ fn text_insert_with_attributes(
     chunk: &str,
     attr: NifAttr,
 ) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || {
-        text.insert_with_attributes(index, chunk, attr)
+    text.doc.mutably(env, |txn| {
+        text.reference
+            .insert_with_attributes(txn, index, chunk, attr.0);
+        Ok(())
     })
 }
 
 #[rustler::nif]
 fn text_delete(env: Env<'_>, text: NifText, index: u32, len: u32) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || text.delete(index, len))
+    text.doc.mutably(env, |txn| {
+        text.reference.remove_range(txn, index, len);
+        Ok(())
+    })
 }
 
 #[rustler::nif]
@@ -124,7 +82,10 @@ fn text_format(
     len: u32,
     attr: NifAttr,
 ) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || text.format(index, len, attr))
+    text.doc.mutably(env, |txn| {
+        text.reference.format(txn, index, len, attr.0);
+        Ok(())
+    })
 }
 
 #[rustler::nif]
@@ -143,8 +104,11 @@ fn text_to_delta(env: Env<'_>, text: NifText) -> NifResult<rustler::Term<'_>> {
 }
 
 #[rustler::nif]
-fn text_apply_delta(text: NifText, delta: NifYInputDelta) -> Result<(), NifError> {
-    text.apply_delta(delta.0)
+fn text_apply_delta(env: Env<'_>, text: NifText, delta: NifYInputDelta) -> Result<(), NifError> {
+    text.doc.mutably(env, |txn| {
+        text.reference.apply_delta(txn, delta.0);
+        Ok(())
+    })
 }
 
 pub fn encode_diffs<'a>(

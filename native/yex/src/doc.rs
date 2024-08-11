@@ -4,7 +4,7 @@ use std::ops::Deref;
 use crate::subscription::SubscriptionResource;
 use crate::wrap::encode_binary_slice_to_term;
 use crate::{atoms, ENV};
-use rustler::{Env, LocalPid, NifStruct, NifUnitEnum, ResourceArc};
+use rustler::{Binary, Env, LocalPid, NifStruct, NifUnitEnum, ResourceArc, Term};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::*;
@@ -18,16 +18,18 @@ pub struct DocInner {
 pub type DocResource = NifWrap<DocInner>;
 
 impl DocInner {
-    pub fn mutably<F, T>(&self, f: F) -> Result<T, NifError>
+    pub fn mutably<F, T>(&self, env: Env<'_>, f: F) -> Result<T, NifError>
     where
         F: FnOnce(&mut TransactionMut<'_>) -> Result<T, NifError>,
     {
-        if let Some(txn) = self.current_transaction.borrow_mut().as_mut() {
-            f(txn)
-        } else {
-            let mut txn = self.doc.transact_mut();
-            f(&mut txn)
-        }
+        ENV.set(&mut env.clone(), || {
+            if let Some(txn) = self.current_transaction.borrow_mut().as_mut() {
+                f(txn)
+            } else {
+                let mut txn = self.doc.transact_mut();
+                f(&mut txn)
+            }
+        })
     }
 
     pub fn readonly<F, T>(&self, f: F) -> T
@@ -187,32 +189,6 @@ impl NifDoc {
             Ok(txn.state_vector().encode_v1())
         }
     }
-    pub fn encode_state_as_update_v1(
-        &self,
-        state_vector: Option<&[u8]>,
-    ) -> Result<Vec<u8>, NifError> {
-        let sv = if let Some(vector) = state_vector {
-            StateVector::decode_v1(vector).map_err(|e| NifError {
-                reason: atoms::encoding_exception(),
-                message: e.to_string(),
-            })?
-        } else {
-            StateVector::default()
-        };
-
-        self.reference.readonly(|txn| Ok(txn.encode_diff_v1(&sv)))
-    }
-    pub fn apply_update_v1(&self, update: &[u8]) -> Result<(), NifError> {
-        let update = Update::decode_v1(update).map_err(|e| NifError {
-            reason: atoms::encoding_exception(),
-            message: e.to_string(),
-        })?;
-
-        self.reference.mutably(|txn| {
-            txn.apply_update(update);
-            Ok(())
-        })
-    }
     pub fn monitor_update_v1(
         &self,
         pid: LocalPid,
@@ -242,32 +218,6 @@ impl NifDoc {
     pub fn encode_state_vector_v2(&self) -> Result<Vec<u8>, NifError> {
         self.reference
             .readonly(|txn| Ok(txn.state_vector().encode_v2()))
-    }
-    pub fn encode_state_as_update_v2(
-        &self,
-        state_vector: Option<&[u8]>,
-    ) -> Result<Vec<u8>, NifError> {
-        let sv = if let Some(vector) = state_vector {
-            StateVector::decode_v2(vector).map_err(|e| NifError {
-                reason: atoms::encoding_exception(),
-                message: e.to_string(),
-            })?
-        } else {
-            StateVector::default()
-        };
-
-        self.reference.mutably(|txn| Ok(txn.encode_diff_v2(&sv)))
-    }
-    pub fn apply_update_v2(&self, update: &[u8]) -> Result<(), NifError> {
-        let update = Update::decode_v2(update).map_err(|e| NifError {
-            reason: atoms::encoding_exception(),
-            message: e.to_string(),
-        })?;
-
-        self.reference.mutably(|txn| {
-            txn.apply_update(update);
-            Ok(())
-        })
     }
 
     pub fn monitor_update_v2(
@@ -373,4 +323,85 @@ fn doc_monitor_update_v2(
     pid: LocalPid,
 ) -> Result<ResourceArc<SubscriptionResource>, NifError> {
     doc.monitor_update_v2(pid)
+}
+
+#[rustler::nif]
+fn apply_update_v1(env: Env<'_>, doc: NifDoc, update: Binary) -> Result<(), NifError> {
+    let update = Update::decode_v1(update.as_slice()).map_err(|e| NifError {
+        reason: atoms::encoding_exception(),
+        message: e.to_string(),
+    })?;
+
+    doc.reference.mutably(env, |txn| {
+        txn.apply_update(update);
+        Ok(())
+    })
+}
+
+#[rustler::nif]
+fn apply_update_v2(env: Env<'_>, doc: NifDoc, update: Binary) -> Result<(), NifError> {
+    let update = Update::decode_v2(update.as_slice()).map_err(|e| NifError {
+        reason: atoms::encoding_exception(),
+        message: e.to_string(),
+    })?;
+
+    doc.reference.mutably(env, |txn| {
+        txn.apply_update(update);
+        Ok(())
+    })
+}
+
+#[rustler::nif]
+fn encode_state_vector_v1(env: Env<'_>, doc: NifDoc) -> Result<Term<'_>, NifError> {
+    ENV.set(&mut env.clone(), || {
+        doc.encode_state_vector_v1()
+            .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
+    })
+}
+
+#[rustler::nif]
+fn encode_state_as_update_v1<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    state_vector: Option<Binary>,
+) -> Result<Term<'a>, NifError> {
+    let sv = if let Some(vector) = state_vector {
+        StateVector::decode_v1(vector.as_slice()).map_err(|e| NifError {
+            reason: atoms::encoding_exception(),
+            message: e.to_string(),
+        })?
+    } else {
+        StateVector::default()
+    };
+
+    doc.reference
+        .readonly(|txn| Ok(txn.encode_diff_v1(&sv)))
+        .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
+}
+
+#[rustler::nif]
+fn encode_state_vector_v2(env: Env<'_>, doc: NifDoc) -> Result<Term<'_>, NifError> {
+    ENV.set(&mut env.clone(), || {
+        doc.encode_state_vector_v2()
+            .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
+    })
+}
+#[rustler::nif]
+fn encode_state_as_update_v2<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    state_vector: Option<Binary>,
+) -> Result<Term<'a>, NifError> {
+    let sv = if let Some(vector) = state_vector {
+        StateVector::decode_v2(vector.as_slice()).map_err(|e| NifError {
+            reason: atoms::encoding_exception(),
+            message: e.to_string(),
+        })?
+    } else {
+        StateVector::default()
+    };
+
+    doc.reference
+        .readonly(|txn| Ok(txn.encode_diff_v2(&sv)))
+        .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
 }
