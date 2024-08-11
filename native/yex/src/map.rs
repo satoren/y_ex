@@ -1,4 +1,4 @@
-use crate::{atoms, ENV};
+use crate::atoms;
 use crate::{
     doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
 };
@@ -29,18 +29,6 @@ impl NifMap {
         self.doc.readonly(|txn| self.reference.len(txn))
     }
 
-    pub fn set(&self, key: &str, input: NifYInput) -> Result<(), NifError> {
-        self.doc.mutably(|txn| {
-            self.reference.insert(txn, key, input);
-            Ok(())
-        })
-    }
-    pub fn delete(&self, key: &str) -> Result<(), NifError> {
-        self.doc.mutably(|txn| {
-            self.reference.remove(txn, key);
-            Ok(())
-        })
-    }
     pub fn get(&self, key: &str) -> Result<NifYOut, NifError> {
         self.doc.readonly(|txn| {
             self.reference
@@ -74,7 +62,10 @@ impl Deref for NifMap {
 
 #[rustler::nif]
 fn map_set(env: Env<'_>, map: NifMap, key: &str, value: NifYInput) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || map.set(key, value))
+    map.doc.mutably(env, |txn| {
+        map.reference.insert(txn, key, value);
+        Ok(())
+    })
 }
 #[rustler::nif]
 fn map_size(map: NifMap) -> u32 {
@@ -86,7 +77,10 @@ fn map_get(map: NifMap, key: &str) -> Result<NifYOut, NifError> {
 }
 #[rustler::nif]
 fn map_delete(env: Env<'_>, map: NifMap, key: &str) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || map.delete(key))
+    map.doc.mutably(env, |txn| {
+        map.reference.remove(txn, key);
+        Ok(())
+    })
 }
 #[rustler::nif]
 fn map_to_map(map: NifMap) -> HashMap<String, NifYOut> {

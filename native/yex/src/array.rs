@@ -4,7 +4,7 @@ use rustler::{Env, NifStruct, ResourceArc};
 use yrs::types::ToJson;
 use yrs::*;
 
-use crate::{atoms, ENV};
+use crate::atoms;
 use crate::{
     doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
 };
@@ -28,20 +28,8 @@ impl NifArray {
         }
     }
 
-    pub fn insert(&self, index: u32, input: NifYInput) -> Result<(), NifError> {
-        self.doc.mutably(|txn| {
-            self.reference.insert(txn, index, input);
-            Ok(())
-        })
-    }
     pub fn length(&self) -> u32 {
         self.doc.readonly(|txn| self.reference.len(txn))
-    }
-    pub fn delete_range(&self, index: u32, length: u32) -> Result<(), NifError> {
-        self.doc.mutably(|txn| {
-            self.reference.remove_range(txn, index, length);
-            Ok(())
-        })
     }
     pub fn get(&self, index: u32) -> Result<NifYOut, NifError> {
         self.doc.readonly(|txn| {
@@ -81,7 +69,10 @@ fn array_insert(
     index: u32,
     value: NifYInput,
 ) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || array.insert(index, value))
+    array.doc.mutably(env, |txn| {
+        array.reference.insert(txn, index, value);
+        Ok(())
+    })
 }
 #[rustler::nif]
 fn array_length(array: NifArray) -> u32 {
@@ -98,7 +89,10 @@ fn array_delete_range(
     index: u32,
     length: u32,
 ) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || array.delete_range(index, length))
+    array.doc.mutably(env, |txn| {
+        array.reference.remove_range(txn, index, length);
+        Ok(())
+    })
 }
 #[rustler::nif]
 fn array_to_list(array: NifArray) -> Vec<NifYOut> {
