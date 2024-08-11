@@ -33,6 +33,7 @@ defmodule Yex.Doc do
   @doc """
   Create a new document.
   """
+  @spec new() :: Yex.Doc.t()
   def new() do
     Yex.Nif.doc_new()
   end
@@ -40,6 +41,7 @@ defmodule Yex.Doc do
   @doc """
   Create a new document with options.
   """
+  @spec with_options(Options.t()) :: Yex.Doc.t()
   def with_options(%Options{} = option) do
     Yex.Nif.doc_with_options(option)
   end
@@ -47,6 +49,7 @@ defmodule Yex.Doc do
   @doc """
   Get or insert the text type.
   """
+  @spec get_text(t, String.t()) :: Yex.Text.t()
   def get_text(%__MODULE__{} = doc, name) do
     Yex.Nif.doc_get_or_insert_text(doc, name)
   end
@@ -54,6 +57,7 @@ defmodule Yex.Doc do
   @doc """
   Get or insert the array type.
   """
+  @spec get_array(t, String.t()) :: Yex.Array.t()
   def get_array(%__MODULE__{} = doc, name) do
     Yex.Nif.doc_get_or_insert_array(doc, name)
   end
@@ -61,6 +65,7 @@ defmodule Yex.Doc do
   @doc """
   Get or insert the map type.
   """
+  @spec get_map(t, String.t()) :: Yex.Map.t()
   def get_map(%__MODULE__{} = doc, name) do
     Yex.Nif.doc_get_or_insert_map(doc, name)
   end
@@ -84,6 +89,7 @@ defmodule Yex.Doc do
       iex> refute_receive {:update_v1, _, nil, _} # only one update message
 
   """
+  @spec transaction(t, fun()) :: :ok | {:error, term()}
   def transaction(%__MODULE__{} = doc, exec) do
     case Yex.Nif.doc_begin_transaction(doc, nil) do
       {:ok, _} ->
@@ -111,6 +117,7 @@ defmodule Yex.Doc do
   @doc """
   Monitor document updates.
   """
+  @spec monitor_update(t) :: {:ok, reference()} | {:error, term()}
   def monitor_update(%__MODULE__{} = doc) do
     monitor_update_v1(doc)
   end
@@ -142,6 +149,7 @@ defmodule Yex.Doc do
   @doc """
   Stop monitoring document updates.
   """
+  @spec demonitor_update(reference()) :: :ok | {:error, term()}
   def demonitor_update(sub) do
     demonitor_update_v2(sub)
   end
