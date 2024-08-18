@@ -24,6 +24,9 @@ jobs:
     name: Build and test
     runs-on: ubuntu-latest
 
+    env:
+      MIX_ENV: test
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up Elixir
@@ -40,7 +43,7 @@ jobs:
     - name: Install dependencies
       run: mix deps.get
     - name: Run tests
-      run: mix test
+      run: mix coveralls.github
     - name: format check
       run: mix format --check-formatted
     - name: Run credo

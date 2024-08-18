@@ -20,7 +20,15 @@ defmodule Yex.MixProject do
       deps: deps(),
       source_url: @repo,
       homepage_url: @repo,
-      test_coverage: [ignore_modules: [Yex.Nif]]
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.lcov": :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test,
+        "coveralls.cobertura": :test
+      ]
     ]
   end
 
@@ -54,7 +62,8 @@ defmodule Yex.MixProject do
       {:rustler_precompiled, "~> 0.7"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:excoveralls, "~> 0.18", only: :test}
     ]
   end
 end
