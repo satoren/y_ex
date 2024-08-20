@@ -34,6 +34,7 @@ defmodule Yex.Array do
   @doc """
   Delete content at the specified index.
   """
+  @spec delete(t, integer()) :: :ok
   def delete(%__MODULE__{} = array, index) do
     delete_range(array, index, 1)
   end
@@ -41,15 +42,19 @@ defmodule Yex.Array do
   @doc """
   Delete contents in the specified range.
   """
+  @spec delete_range(t, integer(), integer()) :: :ok
   def delete_range(%__MODULE__{} = array, index, length) do
-    Yex.Nif.array_delete_range(array, index, length)
+    index = if index < 0, do: __MODULE__.length(array) + index, else: index
+    Yex.Nif.array_delete_range(array, index, length) |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
   @doc """
   Get content at the specified index.
   """
+  @spec get(t, integer()) :: {:ok, term()} | :error
   def get(%__MODULE__{} = array, index) do
-    Yex.Nif.array_get(array, index)
+    index = if index < 0, do: __MODULE__.length(array) + index, else: index
+    Yex.Nif.array_get(array, index) |> Yex.Nif.Util.unwrap_tuple()
   end
 
   @doc """

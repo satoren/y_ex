@@ -1,4 +1,3 @@
-use crate::atoms;
 use crate::{
     doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
 };
@@ -29,15 +28,12 @@ impl NifMap {
         self.doc.readonly(|txn| self.reference.len(txn))
     }
 
-    pub fn get(&self, key: &str) -> Result<NifYOut, NifError> {
+    pub fn get(&self, key: &str) -> Result<NifYOut, ()> {
         self.doc.readonly(|txn| {
             self.reference
                 .get(txn, key)
                 .map(|b| NifYOut::from_native(b, self.doc.clone()))
-                .ok_or(NifError {
-                    reason: atoms::error(),
-                    message: "can not get".into(),
-                })
+                .ok_or(())
         })
     }
 
@@ -72,7 +68,7 @@ fn map_size(map: NifMap) -> u32 {
     map.size()
 }
 #[rustler::nif]
-fn map_get(map: NifMap, key: &str) -> Result<NifYOut, NifError> {
+fn map_get(map: NifMap, key: &str) -> Result<NifYOut, ()> {
     map.get(key)
 }
 #[rustler::nif]

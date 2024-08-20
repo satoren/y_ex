@@ -14,18 +14,23 @@ defmodule Yex.Text do
           reference: any()
         }
 
+  @spec insert(t, integer(), Yex.input_type()) :: :ok | :error
   def insert(%__MODULE__{} = text, index, content) do
     Yex.Nif.text_insert(text, index, content)
   end
 
+  @spec insert(t, integer(), Yex.input_type(), map()) :: :ok | :error
   def insert(%__MODULE__{} = text, index, content, attr) do
     Yex.Nif.text_insert_with_attributes(text, index, content, attr)
   end
 
+  @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{} = text, index, length) do
-    Yex.Nif.text_delete(text, index, length)
+    index = if index < 0, do: __MODULE__.length(text) + index, else: index
+    Yex.Nif.text_delete(text, index, length) |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
+  @spec format(t, integer(), integer(), map()) :: :ok | :error
   def format(%__MODULE__{} = text, index, length, attr) do
     Yex.Nif.text_format(text, index, length, attr)
   end
@@ -42,14 +47,17 @@ defmodule Yex.Text do
       iex> Yex.Text.to_delta(text)
       [%{insert: "15"}]
   """
+  @spec apply_delta(t, delta) :: :ok | :error
   def apply_delta(%__MODULE__{} = text, delta) do
     Yex.Nif.text_apply_delta(text, delta)
   end
 
+  @spec to_string(t) :: binary()
   def to_string(%__MODULE__{} = text) do
     Yex.Nif.text_to_string(text)
   end
 
+  @spec length(t) :: integer()
   def length(%__MODULE__{} = text) do
     Yex.Nif.text_length(text)
   end
@@ -114,10 +122,12 @@ defmodule Yex.TextPrelim do
       iex> Yex.Text.to_delta(text)
       [%{insert: "Hello"}, %{attributes: %{"bold" => true}, insert: " World"}]
   """
+  @spec from(binary()) :: t
   def from(text) when is_binary(text) do
     %__MODULE__{delta: [%{insert: text}]}
   end
 
+  @spec from(Yex.Text.delta()) :: t
   def from(delta) do
     %__MODULE__{delta: delta}
   end

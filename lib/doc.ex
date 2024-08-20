@@ -91,27 +91,17 @@ defmodule Yex.Doc do
   """
   @spec transaction(t, fun()) :: :ok | {:error, term()}
   def transaction(%__MODULE__{} = doc, exec) do
-    case Yex.Nif.doc_begin_transaction(doc, nil) do
-      {:ok, _} ->
-        exec.()
-        Yex.Nif.doc_commit_transaction(doc)
-        :ok
-
-      error ->
-        error
-    end
+    Yex.Nif.doc_begin_transaction(doc, nil)
+    exec.()
+    Yex.Nif.doc_commit_transaction(doc)
+    :ok
   end
 
   def transaction(%__MODULE__{} = doc, origin, exec) do
-    case Yex.Nif.doc_begin_transaction(doc, origin) do
-      {:ok, _} ->
-        exec.()
-        Yex.Nif.doc_commit_transaction(doc)
-        :ok
-
-      error ->
-        error
-    end
+    Yex.Nif.doc_begin_transaction(doc, origin)
+    exec.()
+    Yex.Nif.doc_commit_transaction(doc)
+    :ok
   end
 
   @doc """
@@ -151,7 +141,7 @@ defmodule Yex.Doc do
   """
   @spec demonitor_update(reference()) :: :ok | {:error, term()}
   def demonitor_update(sub) do
-    demonitor_update_v2(sub)
+    demonitor_update_v1(sub)
   end
 
   def demonitor_update_v1(sub) do

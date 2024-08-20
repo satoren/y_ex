@@ -82,15 +82,11 @@ defmodule Yex.Awareness do
       iex> receive do {:awareness_update, %{removed: [], added: [10], updated: []}, _origin, _awareness} -> :ok end
   """
   def monitor_update(%__MODULE__{} = awareness) do
-    case Yex.Nif.awareness_monitor_update(awareness, self()) do
-      {:ok, ref} ->
-        # Subscription should not be automatically released by gc, so put it in the process dictionary
-        Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
-        {:ok, ref}
+    ref = Yex.Nif.awareness_monitor_update(awareness, self())
 
-      error ->
-        error
-    end
+    # Subscription should not be automatically released by gc, so put it in the process dictionary
+    Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
+    ref
   end
 
   def demonitor_update(sub) do

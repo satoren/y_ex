@@ -4,7 +4,6 @@ use rustler::{Env, NifStruct, ResourceArc};
 use yrs::types::ToJson;
 use yrs::*;
 
-use crate::atoms;
 use crate::{
     doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
 };
@@ -31,15 +30,12 @@ impl NifArray {
     pub fn length(&self) -> u32 {
         self.doc.readonly(|txn| self.reference.len(txn))
     }
-    pub fn get(&self, index: u32) -> Result<NifYOut, NifError> {
+    pub fn get(&self, index: u32) -> Result<NifYOut, ()> {
         self.doc.readonly(|txn| {
             self.reference
                 .get(txn, index)
                 .map(|b| NifYOut::from_native(b, self.doc.clone()))
-                .ok_or(NifError {
-                    reason: atoms::error(),
-                    message: "can not get".into(),
-                })
+                .ok_or(())
         })
     }
     pub fn to_list(&self) -> Vec<NifYOut> {
@@ -79,7 +75,7 @@ fn array_length(array: NifArray) -> u32 {
     array.length()
 }
 #[rustler::nif]
-fn array_get(array: NifArray, index: u32) -> Result<NifYOut, NifError> {
+fn array_get(array: NifArray, index: u32) -> Result<NifYOut, ()> {
     array.get(index)
 }
 #[rustler::nif]

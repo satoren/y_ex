@@ -28,7 +28,7 @@ defmodule Yex.Map do
   get a key from the map.
   """
   def get(%__MODULE__{} = map, key) do
-    Yex.Nif.map_get(map, key)
+    Yex.Nif.map_get(map, key) |> Yex.Nif.Util.unwrap_tuple()
   end
 
   @doc """

@@ -33,6 +33,8 @@ defmodule Yex.ArrayTest do
     Array.push(array, "Hello2")
     assert {:ok, "Hello1"} == Array.get(array, 0)
     assert {:ok, "Hello2"} == Array.get(array, 1)
+    assert :error == Array.get(array, 2)
+    assert {:ok, "Hello2"} == Array.get(array, -1)
   end
 
   test "unshift" do
@@ -44,6 +46,43 @@ defmodule Yex.ArrayTest do
     Array.unshift(array, "Hello2")
     assert ["Hello2", "Hello1"] == Array.to_list(array)
     assert 2 == Array.length(array)
+  end
+
+  test "delete" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "array")
+
+    Array.push(array, "Hello1")
+    Array.push(array, "Hello2")
+    assert :ok == Array.delete(array, 0)
+    assert ["Hello2"] == Array.to_list(array)
+  end
+
+  test "delete_range" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "array")
+
+    Array.push(array, "1")
+    Array.push(array, "2")
+    Array.push(array, "3")
+    Array.push(array, "4")
+    Array.push(array, "5")
+    assert :ok == Array.delete_range(array, 0, 2)
+    assert ["3", "4", "5"] == Array.to_list(array)
+  end
+
+  test "delete with minus" do
+    doc = Doc.new()
+    array = Doc.get_array(doc, "array")
+    Array.push(array, "1")
+    Array.push(array, "2")
+    Array.push(array, "3")
+    Array.push(array, "4")
+    Array.push(array, "5")
+    assert :ok == Array.delete(array, -1)
+    assert ["1", "2", "3", "4"] == Array.to_list(array)
   end
 
   test "ArrayPrelim" do
