@@ -24,6 +24,18 @@ defmodule Yex.MapTest do
     assert {:ok, "Hello2"} == Map.get(map, "key2")
   end
 
+  test "delete" do
+    doc = Doc.new()
+
+    map = Doc.get_map(doc, "map")
+
+    Map.set(map, "key", "Hello1")
+    Map.set(map, "key2", "Hello2")
+    Map.delete(map, "key2")
+    assert {:ok, "Hello1"} == Map.get(map, "key")
+    assert :error == Map.get(map, "key2")
+  end
+
   test "MapPrelim" do
     doc = Doc.new()
 

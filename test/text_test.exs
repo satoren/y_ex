@@ -114,4 +114,55 @@ defmodule Yex.TextTest do
     assert [%{insert: "12345", attributes: %{"italic" => true}}, %{insert: "6"}] ==
              Text.to_delta(text)
   end
+
+  test "delete" do
+    doc = Doc.new()
+
+    text = Doc.get_text(doc, "text")
+
+    delta = [
+      %{
+        "retain" => 3,
+        "attributes" => %{"italic" => true}
+      }
+    ]
+
+    Text.insert(text, 0, "123456")
+    Text.apply_delta(text, delta)
+    Text.delete(text, 2, 2)
+
+    assert [%{insert: "12", attributes: %{"italic" => true}}, %{insert: "56"}] ==
+             Text.to_delta(text)
+  end
+
+  test "delete with minus" do
+    doc = Doc.new()
+
+    text = Doc.get_text(doc, "text")
+
+    delta = [
+      %{
+        "retain" => 3,
+        "attributes" => %{"italic" => true}
+      }
+    ]
+
+    Text.insert(text, 0, "123456")
+
+    assert "123456" == Text.to_string(text)
+    assert :ok == Text.delete(text, -1, 1)
+    assert "12345" == Text.to_string(text)
+  end
+
+  test "format" do
+    doc = Doc.new()
+
+    text = Doc.get_text(doc, "text")
+
+    Text.insert(text, 0, "123456")
+    Text.format(text, 1, 3, %{"bold" => true})
+
+    assert [%{insert: "1"}, %{insert: "234", attributes: %{"bold" => true}}, %{insert: "56"}] ==
+             Text.to_delta(text)
+  end
 end

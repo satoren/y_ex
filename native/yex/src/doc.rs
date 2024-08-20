@@ -163,17 +163,15 @@ impl NifDoc {
         )
     }
 
-    pub fn begin_transaction(&self) -> Result<(), NifError> {
+    pub fn begin_transaction(&self) {
         let txn: TransactionMut = self.reference.doc.transact_mut();
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
         *self.reference.current_transaction.borrow_mut() = Some(txn);
-        Ok(())
     }
-    pub fn begin_transaction_with(&self, origin: &str) -> Result<(), NifError> {
+    pub fn begin_transaction_with(&self, origin: &str) {
         let txn: TransactionMut = self.reference.doc.transact_mut_with(origin);
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
         *self.reference.current_transaction.borrow_mut() = Some(txn);
-        Ok(())
     }
 
     pub fn commit_transaction(&self) {
@@ -297,7 +295,7 @@ fn doc_get_or_insert_map(env: Env<'_>, doc: NifDoc, name: &str) -> NifMap {
 }
 
 #[rustler::nif]
-fn doc_begin_transaction(doc: NifDoc, origin: Option<&str>) -> Result<(), NifError> {
+fn doc_begin_transaction(doc: NifDoc, origin: Option<&str>) {
     if let Some(origin) = origin {
         doc.begin_transaction_with(origin)
     } else {

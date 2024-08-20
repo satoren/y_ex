@@ -29,6 +29,22 @@ defmodule Yex.DocTest do
       end)
   end
 
+  test "transaction error" do
+    doc = Doc.new()
+
+    _text = Doc.get_text(doc, "text")
+
+    :ok =
+      Doc.transaction(doc, fn ->
+        # nif panic
+        assert_raise ErlangError, fn ->
+          Doc.transaction(doc, fn ->
+            nil
+          end)
+        end
+      end)
+  end
+
   test "Sync two clients by exchanging the complete document structure" do
     doc1 = Doc.new()
 
@@ -57,6 +73,18 @@ defmodule Yex.DocTest do
     assert Text.to_string(text1) == "HelloWorld"
     assert_receive {:update_v1, _update, nil, ^doc}
     Doc.demonitor_update(monitor_ref)
+  end
+
+  test "monitor_update_v2" do
+    doc = Doc.new()
+    {:ok, monitor_ref} = Doc.monitor_update_v2(doc)
+
+    text1 = Doc.get_text(doc, "text")
+    Text.insert(text1, 0, "HelloWorld")
+
+    assert Text.to_string(text1) == "HelloWorld"
+    assert_receive {:update_v2, _update, nil, ^doc}
+    Doc.demonitor_update_v2(monitor_ref)
   end
 
   test "monitor_update with transaction" do
