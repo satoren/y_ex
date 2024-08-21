@@ -84,7 +84,7 @@ end
 
 defmodule Yex.TextPrelim do
   @moduledoc """
-  A preliminary array. It can be used to early initialize the contents of a Array.
+  A preliminary text. It can be used to early initialize the contents of a Text.
 
   ## Examples
       iex> doc = Yex.Doc.new()

@@ -70,9 +70,12 @@ defmodule Yex.Doc do
     Yex.Nif.doc_get_or_insert_map(doc, name)
   end
 
-  #  def get_xml_fragment(%__MODULE__{} = _doc, _name) do
-  #    raise "Not implemented"
-  #  end
+  @doc """
+  Get or insert the xml fragment type.
+  """
+  def get_xml_fragment(%__MODULE__{} = doc, name) do
+    Yex.Nif.doc_get_or_insert_xml_fragment(doc, name)
+  end
 
   @doc """
   Start a transaction.

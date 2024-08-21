@@ -9,15 +9,15 @@ use crate::{
     youtput::NifYOut,
 };
 
-pub type TextReResource = NifWrap<TextRef>;
+pub type TextRefResource = NifWrap<TextRef>;
 #[rustler::resource_impl]
-impl rustler::Resource for TextReResource {}
+impl rustler::Resource for TextRefResource {}
 
 #[derive(NifStruct)]
 #[module = "Yex.Text"]
 pub struct NifText {
     doc: ResourceArc<DocResource>,
-    reference: ResourceArc<TextReResource>,
+    reference: ResourceArc<TextRefResource>,
 }
 impl NifText {
     pub fn new(doc: ResourceArc<DocResource>, text: TextRef) -> Self {

@@ -3,6 +3,7 @@ use std::ops::Deref;
 
 use crate::subscription::SubscriptionResource;
 use crate::wrap::encode_binary_slice_to_term;
+use crate::xml::NifXmlFragment;
 use crate::{atoms, ENV};
 use rustler::{Binary, Env, LocalPid, NifStruct, NifUnitEnum, ResourceArc, Term};
 use yrs::updates::decoder::Decode;
@@ -163,6 +164,13 @@ impl NifDoc {
         )
     }
 
+    pub fn get_or_insert_xml_fragment(&self, name: &str) -> NifXmlFragment {
+        NifXmlFragment::new(
+            self.reference.clone(),
+            self.reference.doc.get_or_insert_xml_fragment(name),
+        )
+    }
+
     pub fn begin_transaction(&self) {
         let txn: TransactionMut = self.reference.doc.transact_mut();
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
@@ -292,6 +300,11 @@ fn doc_get_or_insert_array(env: Env<'_>, doc: NifDoc, name: &str) -> NifArray {
 #[rustler::nif]
 fn doc_get_or_insert_map(env: Env<'_>, doc: NifDoc, name: &str) -> NifMap {
     ENV.set(&mut env.clone(), || doc.get_or_insert_map(name))
+}
+
+#[rustler::nif]
+fn doc_get_or_insert_xml_fragment(env: Env<'_>, doc: NifDoc, name: &str) -> NifXmlFragment {
+    ENV.set(&mut env.clone(), || doc.get_or_insert_xml_fragment(name))
 }
 
 #[rustler::nif]
