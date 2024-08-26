@@ -27,7 +27,7 @@ impl DocInner {
             if let Some(txn) = self.current_transaction.borrow_mut().as_mut() {
                 f(txn)
             } else {
-                let mut txn = self.doc.transact_mut();
+                let mut txn = self.doc.try_transact_mut().unwrap();
                 f(&mut txn)
             }
         })
@@ -40,7 +40,7 @@ impl DocInner {
         if let Some(txn) = self.current_transaction.borrow_mut().as_ref() {
             f(txn)
         } else {
-            let txn = self.doc.transact_mut();
+            let txn = self.doc.try_transact_mut().unwrap();
             f(&txn)
         }
     }
@@ -106,7 +106,7 @@ impl From<NifOptions> for Options {
         Options {
             client_id: w.client_id,
             guid,
-            collection_id: w.collection_id,
+            collection_id: w.collection_id.map(|s| s.into()),
             offset_kind,
             skip_gc: w.skip_gc,
             auto_load: w.auto_load,
@@ -171,30 +171,10 @@ impl NifDoc {
         )
     }
 
-    pub fn begin_transaction(&self) {
-        let txn: TransactionMut = self.reference.doc.transact_mut();
-        let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
-        *self.reference.current_transaction.borrow_mut() = Some(txn);
-    }
-    pub fn begin_transaction_with(&self, origin: &str) {
-        let txn: TransactionMut = self.reference.doc.transact_mut_with(origin);
-        let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
-        *self.reference.current_transaction.borrow_mut() = Some(txn);
-    }
-
     pub fn commit_transaction(&self) {
         *self.reference.current_transaction.borrow_mut() = None;
     }
 
-    pub fn encode_state_vector_v1(&self) -> Result<Vec<u8>, NifError> {
-        if let Some(txn) = self.reference.current_transaction.borrow_mut().as_mut() {
-            Ok(txn.state_vector().encode_v1())
-        } else {
-            let txn = self.reference.doc.transact();
-
-            Ok(txn.state_vector().encode_v1())
-        }
-    }
     pub fn monitor_update_v1(
         &self,
         pid: LocalPid,
@@ -220,10 +200,6 @@ impl NifDoc {
             reason: atoms::encoding_exception(),
             message: e.to_string(),
         })
-    }
-    pub fn encode_state_vector_v2(&self) -> Result<Vec<u8>, NifError> {
-        self.reference
-            .readonly(|txn| Ok(txn.state_vector().encode_v2()))
     }
 
     pub fn monitor_update_v2(
@@ -310,9 +286,13 @@ fn doc_get_or_insert_xml_fragment(env: Env<'_>, doc: NifDoc, name: &str) -> NifX
 #[rustler::nif]
 fn doc_begin_transaction(doc: NifDoc, origin: Option<&str>) {
     if let Some(origin) = origin {
-        doc.begin_transaction_with(origin)
+        let txn: TransactionMut = doc.reference.doc.try_transact_mut_with(origin).unwrap();
+        let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
+        *doc.reference.current_transaction.borrow_mut() = Some(txn);
     } else {
-        doc.begin_transaction()
+        let txn: TransactionMut = doc.reference.doc.try_transact_mut().unwrap();
+        let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
+        *doc.reference.current_transaction.borrow_mut() = Some(txn);
     }
 }
 
@@ -364,9 +344,9 @@ fn apply_update_v2(env: Env<'_>, doc: NifDoc, update: Binary) -> Result<(), NifE
 
 #[rustler::nif]
 fn encode_state_vector_v1(env: Env<'_>, doc: NifDoc) -> Result<Term<'_>, NifError> {
-    ENV.set(&mut env.clone(), || {
-        doc.encode_state_vector_v1()
-            .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
+    doc.reference.readonly(|txn| {
+        let vec = txn.state_vector().encode_v1();
+        Ok(encode_binary_slice_to_term(env, vec.as_slice()))
     })
 }
 
@@ -392,10 +372,8 @@ fn encode_state_as_update_v1<'a>(
 
 #[rustler::nif]
 fn encode_state_vector_v2(env: Env<'_>, doc: NifDoc) -> Result<Term<'_>, NifError> {
-    ENV.set(&mut env.clone(), || {
-        doc.encode_state_vector_v2()
-            .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
-    })
+    let vec = doc.reference.readonly(|txn| txn.state_vector().encode_v2());
+    Ok(encode_binary_slice_to_term(env, vec.as_slice()))
 }
 #[rustler::nif]
 fn encode_state_as_update_v2<'a>(
