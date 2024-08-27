@@ -42,11 +42,11 @@ defmodule Yex do
   end
 
   def encode_state_vector_v1(%Yex.Doc{} = doc) do
-    Yex.Nif.encode_state_vector_v1(doc)
+    Yex.Nif.encode_state_vector_v1(doc, cur_txn(doc))
   end
 
   def encode_state_vector_v2(%Yex.Doc{} = doc) do
-    Yex.Nif.encode_state_vector_v2(doc)
+    Yex.Nif.encode_state_vector_v2(doc, cur_txn(doc))
   end
 
   @doc """
@@ -74,11 +74,11 @@ defmodule Yex do
   end
 
   def encode_state_as_update_v1(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
-    Yex.Nif.encode_state_as_update_v1(doc, encoded_state_vector)
+    Yex.Nif.encode_state_as_update_v1(doc, cur_txn(doc), encoded_state_vector)
   end
 
   def encode_state_as_update_v2(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
-    Yex.Nif.encode_state_as_update_v2(doc, encoded_state_vector)
+    Yex.Nif.encode_state_as_update_v2(doc, cur_txn(doc), encoded_state_vector)
   end
 
   @doc """
@@ -101,11 +101,15 @@ defmodule Yex do
 
   @spec apply_update_v1(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v1(%Yex.Doc{} = doc, update) do
-    Yex.Nif.apply_update_v1(doc, update) |> Yex.Nif.Util.unwrap_ok_tuple()
+    Yex.Nif.apply_update_v1(doc, cur_txn(doc), update) |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
   @spec apply_update_v2(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v2(%Yex.Doc{} = doc, update) do
-    Yex.Nif.apply_update_v2(doc, update) |> Yex.Nif.Util.unwrap_ok_tuple()
+    Yex.Nif.apply_update_v2(doc, cur_txn(doc), update) |> Yex.Nif.Util.unwrap_ok_tuple()
+  end
+
+  defp cur_txn(%Yex.Doc{reference: doc_ref}) do
+    Process.get(doc_ref, nil)
   end
 end

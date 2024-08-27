@@ -14,42 +14,44 @@ defmodule Yex.XmlText do
 
   @spec insert(t, integer(), Yex.input_type()) :: :ok | :error
   def insert(%__MODULE__{} = xml_text, index, content) do
-    Yex.Nif.xml_text_insert(xml_text, index, content)
+    Yex.Nif.xml_text_insert(xml_text, cur_txn(xml_text), index, content)
   end
 
   @spec insert(t, integer(), Yex.input_type(), map()) :: :ok | :error
   def insert(%__MODULE__{} = xml_text, index, content, attr) do
-    Yex.Nif.xml_text_insert_with_attributes(xml_text, index, content, attr)
+    Yex.Nif.xml_text_insert_with_attributes(xml_text, cur_txn(xml_text), index, content, attr)
   end
 
   @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{} = xml_text, index, length) do
     index = if index < 0, do: __MODULE__.length(xml_text) + index, else: index
-    Yex.Nif.xml_text_delete(xml_text, index, length) |> Yex.Nif.Util.unwrap_ok_tuple()
+
+    Yex.Nif.xml_text_delete(xml_text, cur_txn(xml_text), index, length)
+    |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
   @spec format(t, integer(), integer(), map()) :: :ok | :error
   def format(%__MODULE__{} = xml_text, index, length, attr) do
-    Yex.Nif.xml_text_format(xml_text, index, length, attr)
+    Yex.Nif.xml_text_format(xml_text, cur_txn(xml_text), index, length, attr)
   end
 
   @spec apply_delta(t, delta) :: :ok | :error
   def apply_delta(%__MODULE__{} = xml_text, delta) do
-    Yex.Nif.xml_text_apply_delta(xml_text, delta)
+    Yex.Nif.xml_text_apply_delta(xml_text, cur_txn(xml_text), delta)
   end
 
-  def to_delta(%__MODULE__{} = text) do
-    Yex.Nif.xml_text_to_delta(text)
+  def to_delta(%__MODULE__{} = xml_text) do
+    Yex.Nif.xml_text_to_delta(xml_text, cur_txn(xml_text))
   end
 
   @spec to_string(t) :: binary()
   def to_string(%__MODULE__{} = xml_text) do
-    Yex.Nif.xml_text_to_string(xml_text)
+    Yex.Nif.xml_text_to_string(xml_text, cur_txn(xml_text))
   end
 
   @spec length(t) :: integer()
   def length(%__MODULE__{} = xml_text) do
-    Yex.Nif.xml_text_length(xml_text)
+    Yex.Nif.xml_text_length(xml_text, cur_txn(xml_text))
   end
 
   @type t :: %__MODULE__{
@@ -57,11 +59,15 @@ defmodule Yex.XmlText do
           reference: reference()
         }
   def next_sibling(%__MODULE__{} = xml_text) do
-    Yex.Nif.xml_text_next_sibling(xml_text)
+    Yex.Nif.xml_text_next_sibling(xml_text, cur_txn(xml_text))
   end
 
   def prev_sibling(%__MODULE__{} = xml_text) do
-    Yex.Nif.xml_text_prev_sibling(xml_text)
+    Yex.Nif.xml_text_prev_sibling(xml_text, cur_txn(xml_text))
+  end
+
+  defp cur_txn(%__MODULE__{doc: doc_ref}) do
+    Process.get(doc_ref, nil)
   end
 end
 

@@ -16,21 +16,21 @@ defmodule Yex.Map do
   set a key-value pair in the map.
   """
   def set(%__MODULE__{} = map, key, content) do
-    Yex.Nif.map_set(map, key, content)
+    Yex.Nif.map_set(map, cur_txn(map), key, content)
   end
 
   @doc """
   delete a key from the map.
   """
   def delete(%__MODULE__{} = map, key) do
-    Yex.Nif.map_delete(map, key)
+    Yex.Nif.map_delete(map, cur_txn(map), key)
   end
 
   @doc """
   get a key from the map.
   """
   def get(%__MODULE__{} = map, key) do
-    Yex.Nif.map_get(map, key) |> Yex.Nif.Util.unwrap_tuple()
+    Yex.Nif.map_get(map, cur_txn(map), key) |> Yex.Nif.Util.unwrap_tuple()
   end
 
   @doc """
@@ -44,11 +44,11 @@ defmodule Yex.Map do
       iex> assert %{"plane" => ["Hello", "World"], "array" => %Yex.Array{}} = Yex.Map.to_map(map)
   """
   def to_map(%__MODULE__{} = map) do
-    Yex.Nif.map_to_map(map)
+    Yex.Nif.map_to_map(map, cur_txn(map))
   end
 
   def size(%__MODULE__{} = map) do
-    Yex.Nif.map_size(map)
+    Yex.Nif.map_size(map, cur_txn(map))
   end
 
   @doc """
@@ -62,7 +62,11 @@ defmodule Yex.Map do
       iex> assert %{"plane" => ["Hello", "World"], "array" => ["Hello", "World"]} = Yex.Map.to_json(map)
   """
   def to_json(%__MODULE__{} = map) do
-    Yex.Nif.map_to_json(map)
+    Yex.Nif.map_to_json(map, cur_txn(map))
+  end
+
+  defp cur_txn(%__MODULE__{doc: doc_ref}) do
+    Process.get(doc_ref, nil)
   end
 end
 

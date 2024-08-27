@@ -3,18 +3,20 @@ defmodule Yex.Array do
   A shareable Array-like type that supports efficient insert/delete of elements at any position.
   """
   defstruct [
+    :doc,
     :reference
   ]
 
   @type t :: %__MODULE__{
-          reference: any()
+          doc: reference(),
+          reference: reference()
         }
 
   @doc """
   Insert content at the specified index.
   """
   def insert(%__MODULE__{} = array, index, content) do
-    Yex.Nif.array_insert(array, index, content)
+    Yex.Nif.array_insert(array, cur_txn(array), index, content)
   end
 
   @doc """
@@ -45,7 +47,9 @@ defmodule Yex.Array do
   @spec delete_range(t, integer(), integer()) :: :ok
   def delete_range(%__MODULE__{} = array, index, length) do
     index = if index < 0, do: __MODULE__.length(array) + index, else: index
-    Yex.Nif.array_delete_range(array, index, length) |> Yex.Nif.Util.unwrap_ok_tuple()
+
+    Yex.Nif.array_delete_range(array, cur_txn(array), index, length)
+    |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
   @doc """
@@ -54,7 +58,7 @@ defmodule Yex.Array do
   @spec get(t, integer()) :: {:ok, term()} | :error
   def get(%__MODULE__{} = array, index) do
     index = if index < 0, do: __MODULE__.length(array) + index, else: index
-    Yex.Nif.array_get(array, index) |> Yex.Nif.Util.unwrap_tuple()
+    Yex.Nif.array_get(array, cur_txn(array), index) |> Yex.Nif.Util.unwrap_tuple()
   end
 
   @doc """
@@ -70,7 +74,7 @@ defmodule Yex.Array do
 
   """
   def to_list(%__MODULE__{} = array) do
-    Yex.Nif.array_to_list(array)
+    Yex.Nif.array_to_list(array, cur_txn(array))
   end
 
   @doc """
@@ -85,7 +89,7 @@ defmodule Yex.Array do
       2
   """
   def length(%__MODULE__{} = array) do
-    Yex.Nif.array_length(array)
+    Yex.Nif.array_length(array, cur_txn(array))
   end
 
   @doc """
@@ -101,7 +105,11 @@ defmodule Yex.Array do
   """
   @spec to_json(t) :: term()
   def to_json(%__MODULE__{} = array) do
-    Yex.Nif.array_to_json(array)
+    Yex.Nif.array_to_json(array, cur_txn(array))
+  end
+
+  defp cur_txn(%__MODULE__{doc: doc_ref}) do
+    Process.get(doc_ref, nil)
   end
 end
 

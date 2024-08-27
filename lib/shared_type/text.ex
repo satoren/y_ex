@@ -3,6 +3,7 @@ defmodule Yex.Text do
   A shareable type that is optimized for shared editing on text.
   """
   defstruct [
+    :doc,
     :reference
   ]
 
@@ -11,28 +12,29 @@ defmodule Yex.Text do
           | [%{delete: integer()}]
           | [%{:retain => integer(), optional(:attributes) => map()}]
   @type t :: %__MODULE__{
-          reference: any()
+          doc: reference(),
+          reference: reference()
         }
 
   @spec insert(t, integer(), Yex.input_type()) :: :ok | :error
   def insert(%__MODULE__{} = text, index, content) do
-    Yex.Nif.text_insert(text, index, content)
+    Yex.Nif.text_insert(text, cur_txn(text), index, content)
   end
 
   @spec insert(t, integer(), Yex.input_type(), map()) :: :ok | :error
   def insert(%__MODULE__{} = text, index, content, attr) do
-    Yex.Nif.text_insert_with_attributes(text, index, content, attr)
+    Yex.Nif.text_insert_with_attributes(text, cur_txn(text), index, content, attr)
   end
 
   @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{} = text, index, length) do
     index = if index < 0, do: __MODULE__.length(text) + index, else: index
-    Yex.Nif.text_delete(text, index, length) |> Yex.Nif.Util.unwrap_ok_tuple()
+    Yex.Nif.text_delete(text, cur_txn(text), index, length) |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
   @spec format(t, integer(), integer(), map()) :: :ok | :error
   def format(%__MODULE__{} = text, index, length, attr) do
-    Yex.Nif.text_format(text, index, length, attr)
+    Yex.Nif.text_format(text, cur_txn(text), index, length, attr)
   end
 
   @doc """
@@ -49,17 +51,17 @@ defmodule Yex.Text do
   """
   @spec apply_delta(t, delta) :: :ok | :error
   def apply_delta(%__MODULE__{} = text, delta) do
-    Yex.Nif.text_apply_delta(text, delta)
+    Yex.Nif.text_apply_delta(text, cur_txn(text), delta)
   end
 
   @spec to_string(t) :: binary()
   def to_string(%__MODULE__{} = text) do
-    Yex.Nif.text_to_string(text)
+    Yex.Nif.text_to_string(text, cur_txn(text))
   end
 
   @spec length(t) :: integer()
   def length(%__MODULE__{} = text) do
-    Yex.Nif.text_length(text)
+    Yex.Nif.text_length(text, cur_txn(text))
   end
 
   def to_json(%__MODULE__{} = _text) do
@@ -78,7 +80,11 @@ defmodule Yex.Text do
       [%{insert: "0", attributes: %{"bold" => true}}, %{insert: "12345"}]
   """
   def to_delta(%__MODULE__{} = text) do
-    Yex.Nif.text_to_delta(text)
+    Yex.Nif.text_to_delta(text, cur_txn(text))
+  end
+
+  defp cur_txn(%__MODULE__{doc: doc_ref}) do
+    Process.get(doc_ref, nil)
   end
 end
 
