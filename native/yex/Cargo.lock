@@ -570,9 +570,9 @@ dependencies = [
 
 [[package]]
 name = "yrs"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e90cd90ff3ff16fcc4aae89bbc06da1b364a3cdda4845074c6804f0be220dc95"
+checksum = "a8fc56b25e3aaf4b81a73f2a9a68ceae1e02d9005552e24058cfb9f96db73f33"
 dependencies = [
  "arc-swap",
  "async-lock",
