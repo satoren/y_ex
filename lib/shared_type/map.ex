@@ -14,16 +14,29 @@ defmodule Yex.Map do
 
   @doc """
   set a key-value pair in the map.
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "plane", ["Hello", "World"])
+      :ok
   """
+  @spec set(t, term(), term()) :: term()
   def set(%__MODULE__{} = map, key, content) do
-    Yex.Nif.map_set(map, cur_txn(map), key, content)
+    Yex.Nif.map_set(map, cur_txn(map), key, content) |> Yex.Nif.Util.unwrap_tuple()
   end
 
   @doc """
   delete a key from the map.
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "plane", ["Hello", "World"])
+      iex> Yex.Map.delete(map, "plane")
+      :ok
   """
+  @spec delete(t, term()) :: :ok
   def delete(%__MODULE__{} = map, key) do
-    Yex.Nif.map_delete(map, cur_txn(map), key)
+    Yex.Nif.map_delete(map, cur_txn(map), key) |> Yex.Nif.Util.unwrap_tuple()
   end
 
   @doc """
@@ -37,6 +50,7 @@ defmodule Yex.Map do
       iex> Yex.Map.get(map, "not_found")
       :error
   """
+  @spec get(t, term()) :: {:ok, term()} | :error
   def get(%__MODULE__{} = map, key) do
     Yex.Nif.map_get(map, cur_txn(map), key) |> Yex.Nif.Util.unwrap_tuple()
   end
@@ -51,10 +65,12 @@ defmodule Yex.Map do
       iex> Yex.Map.set(map, "plane", ["Hello", "World"])
       iex> assert %{"plane" => ["Hello", "World"], "array" => %Yex.Array{}} = Yex.Map.to_map(map)
   """
+  @spec to_map(t) :: map()
   def to_map(%__MODULE__{} = map) do
     Yex.Nif.map_to_map(map, cur_txn(map))
   end
 
+  @spec size(t) :: integer()
   def size(%__MODULE__{} = map) do
     Yex.Nif.map_size(map, cur_txn(map))
   end
@@ -69,6 +85,7 @@ defmodule Yex.Map do
       iex> Yex.Map.set(map, "plane", ["Hello", "World"])
       iex> assert %{"plane" => ["Hello", "World"], "array" => ["Hello", "World"]} = Yex.Map.to_json(map)
   """
+  @spec to_json(t) :: map()
   def to_json(%__MODULE__{} = map) do
     Yex.Nif.map_to_json(map, cur_txn(map))
   end

@@ -48,6 +48,7 @@ defmodule Yex.XmlFragment do
     |> Yex.Nif.Util.unwrap_tuple()
   end
 
+  @spec to_string(t) :: binary()
   def to_string(%__MODULE__{} = xml_fragment) do
     Yex.Nif.xml_fragment_to_string(xml_fragment, cur_txn(xml_fragment))
   end

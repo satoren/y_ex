@@ -79,6 +79,7 @@ defmodule Yex.Text do
       iex> Yex.Text.to_delta(text)
       [%{insert: "0", attributes: %{"bold" => true}}, %{insert: "12345"}]
   """
+  @spec to_delta(t) :: delta()
   def to_delta(%__MODULE__{} = text) do
     Yex.Nif.text_to_delta(text, cur_txn(text))
   end

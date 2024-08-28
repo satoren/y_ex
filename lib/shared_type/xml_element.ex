@@ -14,6 +14,7 @@ defmodule Yex.XmlElement do
           reference: reference()
         }
 
+  @spec first_child(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def first_child(%__MODULE__{} = xml_element) do
     get(xml_element, 0)
     |> case do
@@ -22,56 +23,69 @@ defmodule Yex.XmlElement do
     end
   end
 
+  @spec length(t) :: integer()
   def length(%__MODULE__{} = xml_element) do
     Yex.Nif.xml_element_length(xml_element, cur_txn(xml_element))
   end
 
+  @spec insert(t, integer(), Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) :: :ok | :error
   def insert(%__MODULE__{} = xml_element, index, content) do
     Yex.Nif.xml_element_insert(xml_element, cur_txn(xml_element), index, content)
   end
 
+  @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{} = xml_element, index, length) do
     Yex.Nif.xml_element_delete_range(xml_element, cur_txn(xml_element), index, length)
     |> Yex.Nif.Util.unwrap_tuple()
   end
 
+  @spec push(t, Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) :: :ok | :error
   def push(%__MODULE__{} = xml_element, content) do
     insert(xml_element, __MODULE__.length(xml_element), content)
   end
 
+  @spec unshift(t, Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) :: :ok | :error
   def unshift(%__MODULE__{} = xml_element, content) do
     insert(xml_element, 0, content)
   end
 
+  @spec get(t, integer()) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
   def get(%__MODULE__{} = xml_element, index) do
     Yex.Nif.xml_element_get(xml_element, cur_txn(xml_element), index)
     |> Yex.Nif.Util.unwrap_tuple()
   end
 
+  @spec insert_attribute(t, term(), term()) :: :ok | :error
   def insert_attribute(%__MODULE__{} = xml_element, key, value) do
     Yex.Nif.xml_element_insert_attribute(xml_element, cur_txn(xml_element), key, value)
   end
 
+  @spec remove_attribute(t, term()) :: :ok | :error
   def remove_attribute(%__MODULE__{} = xml_element, key) do
     Yex.Nif.xml_element_remove_attribute(xml_element, cur_txn(xml_element), key)
   end
 
+  @spec get_attribute(t, term()) :: term() | :error
   def get_attribute(%__MODULE__{} = xml_element, key) do
     Yex.Nif.xml_element_get_attribute(xml_element, cur_txn(xml_element), key)
   end
 
+  @spec get_attributes(t) :: map() | :error
   def get_attributes(%__MODULE__{} = xml_element) do
     Yex.Nif.xml_element_get_attributes(xml_element, cur_txn(xml_element))
   end
 
+  @spec next_sibling(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def next_sibling(%__MODULE__{} = xml_element) do
     Yex.Nif.xml_element_next_sibling(xml_element, cur_txn(xml_element))
   end
 
+  @spec prev_sibling(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def prev_sibling(%__MODULE__{} = xml_element) do
     Yex.Nif.xml_element_prev_sibling(xml_element, cur_txn(xml_element))
   end
 
+  @spec to_string(t) :: binary()
   def to_string(%__MODULE__{} = xml_element) do
     Yex.Nif.xml_element_to_string(xml_element, cur_txn(xml_element))
   end

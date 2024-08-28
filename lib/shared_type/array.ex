@@ -134,6 +134,7 @@ defmodule Yex.ArrayPrelim do
           list: list()
         }
 
+  @spec from(Enumerable.t()) :: t
   def from(enumerable) do
     %__MODULE__{list: Enum.to_list(enumerable)}
   end
