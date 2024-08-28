@@ -33,12 +33,10 @@ impl DocInner {
                 if let Some(txn) = txn.0.borrow_mut().as_mut() {
                     f(txn)
                 } else {
-                    let mut txn = self.doc.try_transact_mut().unwrap();
-                    f(&mut txn)
+                    f(&mut yrs::Transact::transact_mut(&self.doc))
                 }
             } else {
-                let mut txn = self.doc.try_transact_mut().unwrap();
-                f(&mut txn)
+                f(&mut yrs::Transact::transact_mut(&self.doc))
             }
         })
     }
@@ -49,19 +47,36 @@ impl DocInner {
         f: F,
     ) -> T
     where
-        F: FnOnce(&TransactionMut<'_>) -> T,
+        F: FnOnce(&ReadTransaction) -> T,
     {
         // TODO:
         if let Some(txn) = current_transaction {
             if let Some(txn) = txn.0.borrow_mut().as_ref() {
-                f(txn)
+                txn.store();
+                f(&ReadTransaction::ReadWrite(txn))
             } else {
-                let txn = self.doc.try_transact_mut().unwrap();
-                f(&txn)
+                f(&ReadTransaction::ReadOnly(&yrs::Transact::transact(
+                    &self.doc,
+                )))
             }
         } else {
-            let txn = self.doc.try_transact_mut().unwrap();
-            f(&txn)
+            f(&ReadTransaction::ReadOnly(&yrs::Transact::transact(
+                &self.doc,
+            )))
+        }
+    }
+}
+
+pub enum ReadTransaction<'a, 'doc> {
+    ReadOnly(&'a yrs::Transaction<'doc>),
+    ReadWrite(&'a yrs::TransactionMut<'doc>),
+}
+
+impl ReadTxn for ReadTransaction<'_, '_> {
+    fn store(&self) -> &Store {
+        match &self {
+            ReadTransaction::ReadOnly(txn) => txn.store(),
+            ReadTransaction::ReadWrite(txn) => txn.store(),
         }
     }
 }
