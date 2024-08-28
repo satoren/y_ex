@@ -5,7 +5,12 @@ use yrs::types::ToJson;
 use yrs::*;
 
 use crate::{
-    doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
+    doc::{DocResource, TransactionResource},
+    error::NifError,
+    wrap::NifWrap,
+    yinput::NifYInput,
+    youtput::NifYOut,
+    NifAny,
 };
 
 pub type ArrayRefResource = NifWrap<ArrayRef>;
@@ -26,29 +31,6 @@ impl NifArray {
             reference: ResourceArc::new(array.into()),
         }
     }
-
-    pub fn length(&self) -> u32 {
-        self.doc.readonly(|txn| self.reference.len(txn))
-    }
-    pub fn get(&self, index: u32) -> Result<NifYOut, ()> {
-        self.doc.readonly(|txn| {
-            self.reference
-                .get(txn, index)
-                .map(|b| NifYOut::from_native(b, self.doc.clone()))
-                .ok_or(())
-        })
-    }
-    pub fn to_list(&self) -> Vec<NifYOut> {
-        self.doc.readonly(|txn| {
-            self.reference
-                .iter(txn)
-                .map(|b| NifYOut::from_native(b, self.doc.clone()))
-                .collect()
-        })
-    }
-    pub fn to_json(&self) -> NifAny {
-        self.doc.readonly(|txn| self.reference.to_json(txn).into())
-    }
 }
 
 impl Deref for NifArray {
@@ -62,39 +44,70 @@ impl Deref for NifArray {
 fn array_insert(
     env: Env<'_>,
     array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     value: NifYInput,
 ) -> Result<(), NifError> {
-    array.doc.mutably(env, |txn| {
+    array.doc.mutably(env, current_transaction, |txn| {
         array.reference.insert(txn, index, value);
         Ok(())
     })
 }
 #[rustler::nif]
-fn array_length(array: NifArray) -> u32 {
-    array.length()
+fn array_length(
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> u32 {
+    array
+        .doc
+        .readonly(current_transaction, |txn| array.reference.len(txn))
 }
 #[rustler::nif]
-fn array_get(array: NifArray, index: u32) -> Result<NifYOut, ()> {
-    array.get(index)
+fn array_get(
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: u32,
+) -> Result<NifYOut, ()> {
+    array.doc.readonly(current_transaction, |txn| {
+        array
+            .reference
+            .get(txn, index)
+            .map(|b| NifYOut::from_native(b, array.doc.clone()))
+            .ok_or(())
+    })
 }
 #[rustler::nif]
 fn array_delete_range(
     env: Env<'_>,
     array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     length: u32,
 ) -> Result<(), NifError> {
-    array.doc.mutably(env, |txn| {
+    array.doc.mutably(env, current_transaction, |txn| {
         array.reference.remove_range(txn, index, length);
         Ok(())
     })
 }
 #[rustler::nif]
-fn array_to_list(array: NifArray) -> Vec<NifYOut> {
-    array.to_list()
+fn array_to_list(
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> Vec<NifYOut> {
+    array.doc.readonly(current_transaction, |txn| {
+        array
+            .reference
+            .iter(txn)
+            .map(|b| NifYOut::from_native(b, array.doc.clone()))
+            .collect()
+    })
 }
 #[rustler::nif]
-fn array_to_json(array: NifArray) -> NifAny {
-    array.to_json()
+fn array_to_json(
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifAny {
+    array.doc.readonly(current_transaction, |txn| {
+        array.reference.to_json(txn).into()
+    })
 }

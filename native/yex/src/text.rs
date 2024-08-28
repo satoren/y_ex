@@ -5,7 +5,12 @@ use types::text::{Diff, YChange};
 use yrs::*;
 
 use crate::{
-    any::NifAttr, atoms, doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInputDelta,
+    any::NifAttr,
+    atoms,
+    doc::{DocResource, TransactionResource},
+    error::NifError,
+    wrap::NifWrap,
+    yinput::NifYInputDelta,
     youtput::NifYOut,
 };
 
@@ -26,26 +31,17 @@ impl NifText {
             reference: ResourceArc::new(text.into()),
         }
     }
-
-    pub fn length(&self) -> u32 {
-        self.doc.readonly(|txn| self.reference.len(txn))
-    }
-    pub fn diff(&self) -> Vec<Diff<YChange>> {
-        self.doc
-            .readonly(|txn| self.reference.diff(txn, YChange::identity))
-    }
-}
-
-impl std::fmt::Display for NifText {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.doc
-            .readonly(|txn| write!(f, "{}", self.reference.get_string(txn)))
-    }
 }
 
 #[rustler::nif]
-fn text_insert(env: Env<'_>, text: NifText, index: u32, chunk: &str) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+fn text_insert(
+    env: Env<'_>,
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: u32,
+    chunk: &str,
+) -> Result<(), NifError> {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference.insert(txn, index, chunk);
         Ok(())
     })
@@ -55,11 +51,12 @@ fn text_insert(env: Env<'_>, text: NifText, index: u32, chunk: &str) -> Result<(
 fn text_insert_with_attributes(
     env: Env<'_>,
     text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     chunk: &str,
     attr: NifAttr,
 ) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference
             .insert_with_attributes(txn, index, chunk, attr.0);
         Ok(())
@@ -67,8 +64,14 @@ fn text_insert_with_attributes(
 }
 
 #[rustler::nif]
-fn text_delete(env: Env<'_>, text: NifText, index: u32, len: u32) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+fn text_delete(
+    env: Env<'_>,
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: u32,
+    len: u32,
+) -> Result<(), NifError> {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference.remove_range(txn, index, len);
         Ok(())
     })
@@ -78,34 +81,54 @@ fn text_delete(env: Env<'_>, text: NifText, index: u32, len: u32) -> Result<(), 
 fn text_format(
     env: Env<'_>,
     text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     len: u32,
     attr: NifAttr,
 ) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference.format(txn, index, len, attr.0);
         Ok(())
     })
 }
 
 #[rustler::nif]
-fn text_to_string(text: NifText) -> String {
-    text.to_string()
+fn text_to_string(
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> String {
+    text.doc
+        .readonly(current_transaction, |txn| text.reference.get_string(txn))
 }
 #[rustler::nif]
-fn text_length(text: NifText) -> u32 {
-    text.length()
+fn text_length(
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> u32 {
+    text.doc
+        .readonly(current_transaction, |txn| text.reference.len(txn))
 }
 
 #[rustler::nif]
-fn text_to_delta(env: Env<'_>, text: NifText) -> NifResult<rustler::Term<'_>> {
-    let diff = text.diff();
+fn text_to_delta(
+    env: Env<'_>,
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<rustler::Term<'_>> {
+    let diff = text.doc.readonly(current_transaction, |txn| {
+        text.reference.diff(txn, YChange::identity)
+    });
     encode_diffs(diff, &text.doc, env)
 }
 
 #[rustler::nif]
-fn text_apply_delta(env: Env<'_>, text: NifText, delta: NifYInputDelta) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+fn text_apply_delta(
+    env: Env<'_>,
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    delta: NifYInputDelta,
+) -> Result<(), NifError> {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference.apply_delta(txn, delta.0);
         Ok(())
     })

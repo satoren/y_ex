@@ -6,7 +6,7 @@ use yrs::*;
 
 use crate::{
     any::NifAttr,
-    doc::DocResource,
+    doc::{DocResource, TransactionResource},
     error::NifError,
     text::encode_diffs,
     wrap::NifWrap,
@@ -79,11 +79,12 @@ impl NifXmlText {
 fn xml_fragment_insert(
     env: Env<'_>,
     xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     value: NifXmlIn,
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        xml.doc.mutably(env, |txn| {
+        xml.doc.mutably(env, current_transaction, |txn| {
             let prelim: XmlIn = value.into();
             xml.reference.insert(txn, index, prelim);
             Ok(())
@@ -92,12 +93,20 @@ fn xml_fragment_insert(
 }
 
 #[rustler::nif]
-fn xml_fragment_length(xml: NifXmlFragment) -> u32 {
-    xml.doc.readonly(|txn| xml.reference.len(txn))
+fn xml_fragment_length(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> u32 {
+    xml.doc
+        .readonly(current_transaction, |txn| xml.reference.len(txn))
 }
 #[rustler::nif]
-fn xml_fragment_get(xml: NifXmlFragment, index: u32) -> Result<NifYOut, ()> {
-    xml.doc.readonly(|txn| {
+fn xml_fragment_get(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: u32,
+) -> Result<NifYOut, ()> {
+    xml.doc.readonly(current_transaction, |txn| {
         xml.reference
             .get(txn, index)
             .map(|b| NifYOut::from_xml_out(b, xml.doc.clone()))
@@ -108,29 +117,36 @@ fn xml_fragment_get(xml: NifXmlFragment, index: u32) -> Result<NifYOut, ()> {
 fn xml_fragment_delete_range(
     env: Env<'_>,
     xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     length: u32,
 ) -> Result<(), NifError> {
-    xml.doc.mutably(env, |txn| {
+    xml.doc.mutably(env, current_transaction, |txn| {
         xml.reference.remove_range(txn, index, length);
         Ok(())
     })
 }
 
 #[rustler::nif]
-fn xml_fragment_to_string(xml: NifXmlFragment) -> String {
-    xml.doc.readonly(|txn| xml.reference.get_string(txn).into())
+fn xml_fragment_to_string(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> String {
+    xml.doc.readonly(current_transaction, |txn| {
+        xml.reference.get_string(txn).into()
+    })
 }
 
 #[rustler::nif]
 fn xml_element_insert(
     env: Env<'_>,
     xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     value: NifXmlIn,
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        xml.doc.mutably(env, |txn| {
+        xml.doc.mutably(env, current_transaction, |txn| {
             let prelim: XmlIn = value.into();
             xml.reference.insert(txn, index, prelim);
             Ok(())
@@ -138,12 +154,20 @@ fn xml_element_insert(
     })
 }
 #[rustler::nif]
-fn xml_element_length(xml: NifXmlElement) -> u32 {
-    xml.doc.readonly(|txn| xml.reference.len(txn))
+fn xml_element_length(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> u32 {
+    xml.doc
+        .readonly(current_transaction, |txn| xml.reference.len(txn))
 }
 #[rustler::nif]
-fn xml_element_get(xml: NifXmlElement, index: u32) -> Result<NifYOut, ()> {
-    xml.doc.readonly(|txn| {
+fn xml_element_get(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: u32,
+) -> Result<NifYOut, ()> {
+    xml.doc.readonly(current_transaction, |txn| {
         xml.reference
             .get(txn, index)
             .map(|b| NifYOut::from_xml_out(b, xml.doc.clone()))
@@ -154,53 +178,69 @@ fn xml_element_get(xml: NifXmlElement, index: u32) -> Result<NifYOut, ()> {
 fn xml_element_delete_range(
     env: Env<'_>,
     xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     length: u32,
 ) -> Result<(), NifError> {
-    xml.doc.mutably(env, |txn| {
+    xml.doc.mutably(env, current_transaction, |txn| {
         xml.reference.remove_range(txn, index, length);
         Ok(())
     })
 }
 
 #[rustler::nif]
-fn xml_element_to_string(xml: NifXmlElement) -> String {
-    xml.doc.readonly(|txn| xml.reference.get_string(txn).into())
+fn xml_element_to_string(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> String {
+    xml.doc.readonly(current_transaction, |txn| {
+        xml.reference.get_string(txn).into()
+    })
 }
 
 #[rustler::nif]
 fn xml_element_insert_attribute(
     env: Env<'_>,
     xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     key: &str,
     value: &str,
 ) -> Result<(), NifError> {
-    xml.doc.mutably(env, |txn| {
+    xml.doc.mutably(env, current_transaction, |txn| {
         xml.reference.insert_attribute(txn, key, value);
         Ok(())
     })
 }
 #[rustler::nif]
-fn xml_element_get_attribute(xml: NifXmlElement, key: &str) -> Option<String> {
-    xml.doc
-        .readonly(|txn| xml.reference.get_attribute(txn, key))
+fn xml_element_get_attribute(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    key: &str,
+) -> Option<String> {
+    xml.doc.readonly(current_transaction, |txn| {
+        xml.reference.get_attribute(txn, key)
+    })
 }
 
 #[rustler::nif]
 fn xml_element_remove_attribute(
     env: Env<'_>,
     xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     key: &str,
 ) -> Result<(), NifError> {
-    xml.doc.mutably(env, |txn| {
+    xml.doc.mutably(env, current_transaction, |txn| {
         xml.reference.remove_attribute(txn, &key);
         Ok(())
     })
 }
 
 #[rustler::nif]
-fn xml_element_get_attributes(xml: NifXmlElement) -> HashMap<String, String> {
-    xml.doc.readonly(|txn| {
+fn xml_element_get_attributes(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> HashMap<String, String> {
+    xml.doc.readonly(current_transaction, |txn| {
         xml.reference
             .attributes(txn)
             .map(|(key, value)| (key.into(), value))
@@ -209,8 +249,11 @@ fn xml_element_get_attributes(xml: NifXmlElement) -> HashMap<String, String> {
 }
 
 #[rustler::nif]
-fn xml_element_next_sibling(xml: NifXmlElement) -> Option<NifYOut> {
-    xml.doc.readonly(|txn| {
+fn xml_element_next_sibling(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> Option<NifYOut> {
+    xml.doc.readonly(current_transaction, |txn| {
         xml.reference
             .siblings(txn)
             .next()
@@ -219,8 +262,11 @@ fn xml_element_next_sibling(xml: NifXmlElement) -> Option<NifYOut> {
 }
 
 #[rustler::nif]
-fn xml_element_prev_sibling(xml: NifXmlElement) -> Option<NifYOut> {
-    xml.doc.readonly(|txn| {
+fn xml_element_prev_sibling(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> Option<NifYOut> {
+    xml.doc.readonly(current_transaction, |txn| {
         xml.reference
             .siblings(txn)
             .next_back()
@@ -232,10 +278,11 @@ fn xml_element_prev_sibling(xml: NifXmlElement) -> Option<NifYOut> {
 fn xml_text_insert(
     env: Env<'_>,
     text: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     chunk: &str,
 ) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference.insert(txn, index, chunk);
         Ok(())
     })
@@ -245,11 +292,12 @@ fn xml_text_insert(
 fn xml_text_insert_with_attributes(
     env: Env<'_>,
     text: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     chunk: &str,
     attr: NifAttr,
 ) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference
             .insert_with_attributes(txn, index, chunk, attr.0);
         Ok(())
@@ -257,26 +305,37 @@ fn xml_text_insert_with_attributes(
 }
 
 #[rustler::nif]
-fn xml_text_delete(env: Env<'_>, text: NifXmlText, index: u32, len: u32) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+fn xml_text_delete(
+    env: Env<'_>,
+    text: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: u32,
+    len: u32,
+) -> Result<(), NifError> {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference.remove_range(txn, index, len);
         Ok(())
     })
 }
 #[rustler::nif]
-fn xml_text_length(text: NifXmlText) -> u32 {
-    text.doc.readonly(|txn| text.reference.len(txn))
+fn xml_text_length(
+    text: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> u32 {
+    text.doc
+        .readonly(current_transaction, |txn| text.reference.len(txn))
 }
 
 #[rustler::nif]
 fn xml_text_format(
     env: Env<'_>,
     text: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     len: u32,
     attr: NifAttr,
 ) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference.format(txn, index, len, attr.0);
         Ok(())
     })
@@ -286,17 +345,21 @@ fn xml_text_format(
 fn xml_text_apply_delta(
     env: Env<'_>,
     text: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     delta: NifYInputDelta,
 ) -> Result<(), NifError> {
-    text.doc.mutably(env, |txn| {
+    text.doc.mutably(env, current_transaction, |txn| {
         text.reference.apply_delta(txn, delta.0);
         Ok(())
     })
 }
 
 #[rustler::nif]
-fn xml_text_next_sibling(xml: NifXmlText) -> Option<NifYOut> {
-    xml.doc.readonly(|txn| {
+fn xml_text_next_sibling(
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> Option<NifYOut> {
+    xml.doc.readonly(current_transaction, |txn| {
         xml.reference
             .siblings(txn)
             .next()
@@ -305,8 +368,11 @@ fn xml_text_next_sibling(xml: NifXmlText) -> Option<NifYOut> {
 }
 
 #[rustler::nif]
-fn xml_text_prev_sibling(xml: NifXmlText) -> Option<NifYOut> {
-    xml.doc.readonly(|txn| {
+fn xml_text_prev_sibling(
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> Option<NifYOut> {
+    xml.doc.readonly(current_transaction, |txn| {
         xml.reference
             .siblings(txn)
             .next_back()
@@ -315,14 +381,23 @@ fn xml_text_prev_sibling(xml: NifXmlText) -> Option<NifYOut> {
 }
 
 #[rustler::nif]
-fn xml_text_to_delta(env: Env<'_>, text: NifXmlText) -> NifResult<rustler::Term<'_>> {
-    let diff = text
-        .doc
-        .readonly(|txn| text.reference.diff(txn, YChange::identity));
+fn xml_text_to_delta(
+    env: Env<'_>,
+    text: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<rustler::Term<'_>> {
+    let diff = text.doc.readonly(current_transaction, |txn| {
+        text.reference.diff(txn, YChange::identity)
+    });
     encode_diffs(diff, &text.doc, env)
 }
 
 #[rustler::nif]
-fn xml_text_to_string(xml: NifXmlText) -> String {
-    xml.doc.readonly(|txn| xml.reference.get_string(txn).into())
+fn xml_text_to_string(
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> String {
+    xml.doc.readonly(current_transaction, |txn| {
+        xml.reference.get_string(txn).into()
+    })
 }

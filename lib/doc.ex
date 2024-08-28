@@ -93,17 +93,16 @@ defmodule Yex.Doc do
 
   """
   @spec transaction(t, fun()) :: :ok | {:error, term()}
-  def transaction(%__MODULE__{} = doc, exec) do
-    Yex.Nif.doc_begin_transaction(doc, nil)
-    exec.()
-    Yex.Nif.doc_commit_transaction(doc)
-    :ok
-  end
+  def transaction(%__MODULE__{reference: ref} = doc, origin \\ nil, exec) do
+    if cur_txn(doc) do
+      raise "Transaction already in progress"
+    end
 
-  def transaction(%__MODULE__{} = doc, origin, exec) do
-    Yex.Nif.doc_begin_transaction(doc, origin)
+    txn = Yex.Nif.doc_begin_transaction(doc, origin)
+    Process.put(ref, txn)
     exec.()
-    Yex.Nif.doc_commit_transaction(doc)
+    Process.delete(ref)
+    Yex.Nif.commit_transaction(txn)
     :ok
   end
 
@@ -155,5 +154,9 @@ defmodule Yex.Doc do
   def demonitor_update_v2(sub) do
     Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
     Yex.Nif.sub_unsubscribe(sub)
+  end
+
+  defp cur_txn(%__MODULE__{reference: ref}) do
+    Process.get(ref, nil)
   end
 end

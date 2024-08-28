@@ -4,9 +4,6 @@ use rustler::{Env, Term};
 
 pub struct NifWrap<T>(pub T);
 
-unsafe impl<T> Send for NifWrap<T> {}
-unsafe impl<T> Sync for NifWrap<T> {}
-
 impl<T> From<T> for NifWrap<T> {
     fn from(w: T) -> NifWrap<T> {
         NifWrap::<T>(w)

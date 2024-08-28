@@ -37,7 +37,7 @@ defmodule Yex.DocTest do
     :ok =
       Doc.transaction(doc, fn ->
         # nif panic
-        assert_raise ErlangError, fn ->
+        assert_raise RuntimeError, fn ->
           Doc.transaction(doc, fn ->
             nil
           end)
