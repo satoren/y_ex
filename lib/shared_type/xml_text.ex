@@ -84,24 +84,23 @@ defmodule Yex.XmlTextPrelim do
       [%{insert: "Hello World"}]
 
   """
-  defstruct [:text]
-  #  defstruct [
-  #    :delta,
-  #    :attributes
-  #  ]
+  defstruct [
+    :delta,
+    :attributes
+  ]
 
   @type t :: %__MODULE__{
-          text: binary()
-          #    delta: Yex.Text.delta()
+          delta: Yex.Text.delta(),
+          attributes: %{binary() => binary()}
         }
 
   @spec from(binary()) :: t
   def from(text) when is_binary(text) do
-    %__MODULE__{text: text}
+    %__MODULE__{delta: [%{insert: text}], attributes: %{}}
   end
 
-  #  @spec from(Yex.Text.delta()) :: t
-  #  def from(delta) do
-  #    %__MODULE__{delta: delta}
-  #  end
+  @spec from(Yex.Text.delta()) :: t
+  def from(delta) do
+    %__MODULE__{delta: delta, attributes: %{}}
+  end
 end

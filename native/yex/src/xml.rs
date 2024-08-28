@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use rustler::{Env, NifResult, NifStruct, ResourceArc};
-use types::{text::YChange, xml::XmlIn};
+use types::text::YChange;
 use yrs::*;
 
 use crate::{
@@ -85,8 +85,7 @@ fn xml_fragment_insert(
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         xml.doc.mutably(env, current_transaction, |txn| {
-            let prelim: XmlIn = value.into();
-            xml.reference.insert(txn, index, prelim);
+            xml.reference.insert(txn, index, value);
             Ok(())
         })
     })
@@ -147,8 +146,7 @@ fn xml_element_insert(
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         xml.doc.mutably(env, current_transaction, |txn| {
-            let prelim: XmlIn = value.into();
-            xml.reference.insert(txn, index, prelim);
+            xml.reference.insert(txn, index, value);
             Ok(())
         })
     })

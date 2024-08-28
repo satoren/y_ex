@@ -9,12 +9,9 @@ use rustler::*;
 use yrs::{
     block::{ItemContent, Prelim, Unused},
     branch::{Branch, BranchPtr},
-    types::{
-        xml::{XmlDeltaPrelim, XmlIn},
-        Delta, TypeRef,
-    },
-    Any, Array, ArrayRef, Map, MapRef, Text, TextRef, TransactionMut, XmlElementPrelim,
-    XmlFragmentPrelim, XmlTextPrelim,
+    types::{xml::XmlPrelim, Delta, TypeRef},
+    Any, Array, ArrayRef, Map, MapRef, Text, TextRef, TransactionMut, Xml, XmlElementRef,
+    XmlFragment, XmlFragmentRef, XmlTextRef,
 };
 
 #[derive(NifStruct)]
@@ -41,15 +38,20 @@ pub struct NifXmlFragmentPrelim {
     children: Vec<NifXmlIn>,
 }
 
-impl From<NifXmlFragmentPrelim> for XmlFragmentPrelim {
-    #[inline]
-    fn from(value: NifXmlFragmentPrelim) -> Self {
-        let children = value
-            .children
-            .into_iter()
-            .map(|v| Into::<XmlIn>::into(v))
-            .collect();
-        XmlFragmentPrelim::new::<Vec<XmlIn>, XmlIn>(children)
+impl XmlPrelim for NifXmlFragmentPrelim {}
+impl Prelim for NifXmlFragmentPrelim {
+    type Return = XmlFragmentRef;
+
+    fn into_content(self, _txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
+        let inner = Branch::new(TypeRef::XmlFragment);
+        (ItemContent::Type(inner), Some(self))
+    }
+
+    fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
+        let xml = XmlFragmentRef::from(inner_ref);
+        for value in self.children {
+            xml.push_back(txn, value);
+        }
     }
 }
 
@@ -60,18 +62,23 @@ pub struct NifXmlElementPrelim {
     attributes: HashMap<String, String>,
     children: Vec<NifXmlIn>,
 }
+impl XmlPrelim for NifXmlElementPrelim {}
 
-impl From<NifXmlElementPrelim> for XmlElementPrelim {
-    #[inline]
-    fn from(value: NifXmlElementPrelim) -> Self {
-        XmlElementPrelim {
-            tag: value.tag.into(),
-            attributes: value
-                .attributes
-                .into_iter()
-                .map(|(key, value)| (key.into(), value))
-                .collect(),
-            children: value.children.into_iter().map(|v| v.into()).collect(),
+impl Prelim for NifXmlElementPrelim {
+    type Return = XmlElementRef;
+
+    fn into_content(self, _txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
+        let inner = Branch::new(TypeRef::XmlElement(self.tag.clone().into()));
+        (ItemContent::Type(inner), Some(self))
+    }
+
+    fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
+        let xml = XmlElementRef::from(inner_ref);
+        for (key, value) in self.attributes {
+            xml.insert_attribute(txn, key, value);
+        }
+        for value in self.children {
+            xml.push_back(txn, value);
         }
     }
 }
@@ -79,14 +86,24 @@ impl From<NifXmlElementPrelim> for XmlElementPrelim {
 #[derive(NifStruct)]
 #[module = "Yex.XmlTextPrelim"]
 pub struct NifXmlTextPrelim {
-    //    delta: NifYInputDelta,
-    text: String,
+    attributes: HashMap<String, String>,
+    delta: NifYInputDelta,
 }
 
-impl From<NifXmlTextPrelim> for XmlDeltaPrelim {
-    #[inline]
-    fn from(value: NifXmlTextPrelim) -> Self {
-        XmlTextPrelim::new(value.text).into()
+impl XmlPrelim for NifXmlTextPrelim {}
+impl Prelim for NifXmlTextPrelim {
+    type Return = XmlTextRef;
+
+    fn into_content(self, _txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
+        (ItemContent::Type(Branch::new(TypeRef::XmlText)), Some(self))
+    }
+
+    fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
+        let text_ref = XmlTextRef::from(inner_ref);
+        for (key, value) in self.attributes {
+            text_ref.insert_attribute(txn, key, value);
+        }
+        text_ref.apply_delta(txn, self.delta.0);
     }
 }
 
@@ -96,6 +113,9 @@ pub enum NifYInput {
     MapPrelim(NifMapPrelim),
     ArrayPrelim(NifArrayPrelim),
     TextPrelim(NifTextPrelim),
+    XmlTextPrelim(NifXmlTextPrelim),
+    XmlElementPrelim(NifXmlElementPrelim),
+    XmlFragmentPrelim(NifXmlFragmentPrelim),
 }
 
 //Text(DeltaPrelim),
@@ -129,6 +149,18 @@ impl Prelim for NifYInput {
                 let inner = Branch::new(TypeRef::Text);
                 (ItemContent::Type(inner), Some(self))
             }
+            NifYInput::XmlTextPrelim(_) => {
+                let inner = Branch::new(TypeRef::XmlText);
+                (ItemContent::Type(inner), Some(self))
+            }
+            NifYInput::XmlElementPrelim(ref v) => {
+                let inner = Branch::new(TypeRef::XmlElement(v.tag.clone().into()));
+                (ItemContent::Type(inner), Some(self))
+            }
+            NifYInput::XmlFragmentPrelim(_) => {
+                let inner = Branch::new(TypeRef::XmlText);
+                (ItemContent::Type(inner), Some(self))
+            }
         }
     }
 
@@ -151,8 +183,26 @@ impl Prelim for NifYInput {
                 }
             }
             NifYInput::TextPrelim(v) => {
-                let array = TextRef::from(inner_ref);
-                array.apply_delta(txn, v.delta.0);
+                let text = TextRef::from(inner_ref);
+                text.apply_delta(txn, v.delta.0);
+            }
+            NifYInput::XmlTextPrelim(v) => {
+                let text = XmlTextRef::from(inner_ref);
+                text.apply_delta(txn, v.delta.0);
+            }
+            NifYInput::XmlElementPrelim(v) => {
+                let element = XmlElementRef::from(inner_ref);
+
+                for value in v.children {
+                    element.push_back(txn, value);
+                }
+            }
+            NifYInput::XmlFragmentPrelim(v) => {
+                let element = XmlFragmentRef::from(inner_ref);
+
+                for value in v.children {
+                    element.push_back(txn, value);
+                }
             }
         }
     }
@@ -165,13 +215,48 @@ pub enum NifXmlIn {
     Fragment(NifXmlFragmentPrelim),
 }
 
-impl From<NifXmlIn> for XmlIn {
-    #[inline]
-    fn from(value: NifXmlIn) -> Self {
-        match value {
-            NifXmlIn::Text(v) => XmlIn::Text(v.into()),
-            NifXmlIn::Element(v) => XmlIn::Element(v.into()),
-            NifXmlIn::Fragment(v) => XmlIn::Fragment(v.into()),
+impl XmlPrelim for NifXmlIn {}
+
+impl Prelim for NifXmlIn {
+    type Return = Unused;
+
+    fn into_content(self, _txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
+        match self {
+            NifXmlIn::Text(_) => {
+                let inner = Branch::new(TypeRef::XmlText);
+                (ItemContent::Type(inner), Some(self))
+            }
+            NifXmlIn::Element(ref v) => {
+                let inner = Branch::new(TypeRef::XmlElement(v.tag.clone().into()));
+                (ItemContent::Type(inner), Some(self))
+            }
+            NifXmlIn::Fragment(_) => {
+                let inner = Branch::new(TypeRef::XmlText);
+                (ItemContent::Type(inner), Some(self))
+            }
+        }
+    }
+
+    fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
+        match self {
+            NifXmlIn::Text(v) => {
+                let text = XmlTextRef::from(inner_ref);
+                text.apply_delta(txn, v.delta.0);
+            }
+            NifXmlIn::Element(v) => {
+                let element = XmlElementRef::from(inner_ref);
+
+                for value in v.children {
+                    element.push_back(txn, value);
+                }
+            }
+            NifXmlIn::Fragment(v) => {
+                let element = XmlFragmentRef::from(inner_ref);
+
+                for value in v.children {
+                    element.push_back(txn, value);
+                }
+            }
         }
     }
 }
