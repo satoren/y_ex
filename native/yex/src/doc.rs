@@ -359,8 +359,10 @@ fn apply_update_v1(
     })?;
 
     doc.reference.mutably(env, current_transaction, |txn| {
-        txn.apply_update(update);
-        Ok(())
+        txn.apply_update(update).map_err(|e| NifError {
+            reason: atoms::error(),
+            message: e.to_string(),
+        })
     })
 }
 
@@ -377,8 +379,10 @@ fn apply_update_v2(
     })?;
 
     doc.reference.mutably(env, current_transaction, |txn| {
-        txn.apply_update(update);
-        Ok(())
+        txn.apply_update(update).map_err(|e| NifError {
+            reason: atoms::error(),
+            message: e.to_string(),
+        })
     })
 }
 

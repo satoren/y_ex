@@ -28,6 +28,14 @@ defmodule Yex.Map do
 
   @doc """
   get a key from the map.
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "plane", ["Hello", "World"])
+      iex> Yex.Map.get(map, "plane")
+      {:ok, ["Hello", "World"]}
+      iex> Yex.Map.get(map, "not_found")
+      :error
   """
   def get(%__MODULE__{} = map, key) do
     Yex.Nif.map_get(map, cur_txn(map), key) |> Yex.Nif.Util.unwrap_tuple()
