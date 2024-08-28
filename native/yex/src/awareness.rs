@@ -52,9 +52,14 @@ fn awareness_get_client_ids(awareness: NifAwareness) -> Vec<ClientID> {
     awareness
         .reference
         .borrow()
-        .clients()
-        .keys()
-        .map(|id| *id)
+        .iter()
+        .filter_map(|(id, state)| {
+            if let Some(_) = state.data {
+                Some(id)
+            } else {
+                None
+            }
+        })
         .collect()
 }
 #[rustler::nif]
@@ -62,14 +67,17 @@ fn awareness_get_states(awareness: NifAwareness) -> HashMap<ClientID, NifAny> {
     awareness
         .reference
         .borrow()
-        .clients()
         .iter()
-        .filter_map(
-            |(id, state)| match serde_json::from_str::<yrs::Any>(state) {
-                Ok(any) => Some((*id, any.into())),
-                Err(_) => None,
-            },
-        )
+        .filter_map(|(id, state)| {
+            if let Some(data) = state.data {
+                match serde_json::from_str::<yrs::Any>(&data) {
+                    Ok(any) => Some((id, any.into())),
+                    Err(_) => None,
+                }
+            } else {
+                None
+            }
+        })
         .collect()
 }
 
@@ -250,7 +258,7 @@ pub fn awareness_remove_states(
     clients: Vec<ClientID>,
 ) -> () {
     ENV.set(&mut env.clone(), || {
-        let mut awareness = awareness.reference.borrow_mut();
+        let awareness = awareness.reference.borrow_mut();
         for client_id in clients {
             awareness.remove_state(client_id);
         }
