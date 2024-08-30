@@ -61,22 +61,22 @@ defmodule Yex.XmlElement do
     |> Yex.Nif.Util.unwrap_tuple()
   end
 
-  @spec insert_attribute(t, term(), term()) :: :ok | :error
+  @spec insert_attribute(t, binary(), binary()) :: :ok | :error
   def insert_attribute(%__MODULE__{} = xml_element, key, value) do
     Yex.Nif.xml_element_insert_attribute(xml_element, cur_txn(xml_element), key, value)
   end
 
-  @spec remove_attribute(t, term()) :: :ok | :error
+  @spec remove_attribute(t, binary()) :: :ok | :error
   def remove_attribute(%__MODULE__{} = xml_element, key) do
     Yex.Nif.xml_element_remove_attribute(xml_element, cur_txn(xml_element), key)
   end
 
-  @spec get_attribute(t, term()) :: term() | :error
+  @spec get_attribute(t, binary()) :: binary() | nil
   def get_attribute(%__MODULE__{} = xml_element, key) do
     Yex.Nif.xml_element_get_attribute(xml_element, cur_txn(xml_element), key)
   end
 
-  @spec get_attributes(t) :: map() | :error
+  @spec get_attributes(t) :: map()
   def get_attributes(%__MODULE__{} = xml_element) do
     Yex.Nif.xml_element_get_attributes(xml_element, cur_txn(xml_element))
   end
