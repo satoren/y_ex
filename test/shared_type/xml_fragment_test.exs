@@ -10,7 +10,6 @@ defmodule YexXmlFragmentTest do
   end
 
   describe "xml_fragment" do
-
     test "push", %{xml_fragment: f} do
       XmlFragment.push(f, XmlTextPrelim.from(""))
       {:ok, %XmlText{}} = XmlFragment.fetch(f, 0)
@@ -25,17 +24,18 @@ defmodule YexXmlFragmentTest do
       {:ok, %XmlElement{}} = XmlFragment.fetch(f, 0)
     end
 
-    test "fetch", %{xml_fragment: xml}  do
+    test "fetch", %{xml_fragment: xml} do
       XmlFragment.push(xml, XmlElementPrelim.empty("div"))
 
-      assert {:ok,  %XmlElement{}} = XmlFragment.fetch(xml, 0)
+      assert {:ok, %XmlElement{}} = XmlFragment.fetch(xml, 0)
       assert :error == XmlFragment.fetch(xml, 1)
     end
-    test "fetch!", %{xml_fragment: xml}  do
 
+    test "fetch!", %{xml_fragment: xml} do
       XmlFragment.push(xml, XmlElementPrelim.empty("div"))
 
-      assert  %XmlElement{} = XmlFragment.fetch!(xml, 0)
+      assert %XmlElement{} = XmlFragment.fetch!(xml, 0)
+
       assert_raise ArgumentError, "Index out of bounds", fn ->
         XmlFragment.fetch!(xml, 1)
       end

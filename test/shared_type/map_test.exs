@@ -32,8 +32,9 @@ defmodule Yex.MapTest do
 
     Map.set(map, "key", "Hello1")
     Map.set(map, "key2", "Hello2")
-    assert  "Hello1" == Map.fetch!(map, "key")
+    assert "Hello1" == Map.fetch!(map, "key")
     assert "Hello2" == Map.fetch!(map, "key2")
+
     assert_raise ArgumentError, "Key not found", fn ->
       Map.fetch!(map, "key3")
     end
