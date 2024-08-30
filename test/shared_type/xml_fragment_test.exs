@@ -12,22 +12,22 @@ defmodule YexXmlFragmentTest do
   describe "xml_fragment" do
     test "push", %{xml_fragment: f} do
       XmlFragment.push(f, XmlTextPrelim.from(""))
-      {:ok, %XmlText{}} = XmlFragment.get(f, 0)
+      {:ok, %XmlText{}} = XmlFragment.fetch(f, 0)
       XmlFragment.push(f, XmlElementPrelim.empty("div"))
-      {:ok, %XmlElement{}} = XmlFragment.get(f, 1)
+      {:ok, %XmlElement{}} = XmlFragment.fetch(f, 1)
     end
 
     test "unshift", %{xml_fragment: f} do
       XmlFragment.push(f, XmlTextPrelim.from(""))
-      {:ok, %XmlText{}} = XmlFragment.get(f, 0)
+      {:ok, %XmlText{}} = XmlFragment.fetch(f, 0)
       XmlFragment.unshift(f, XmlElementPrelim.empty("div"))
-      {:ok, %XmlElement{}} = XmlFragment.get(f, 0)
+      {:ok, %XmlElement{}} = XmlFragment.fetch(f, 0)
     end
 
     test "delete", %{xml_fragment: f} do
       XmlFragment.push(f, XmlTextPrelim.from(""))
       :ok = XmlFragment.delete(f, 0, 1)
-      :error = XmlFragment.get(f, 0)
+      :error = XmlFragment.fetch(f, 0)
     end
 
     test "first_child", %{xml_fragment: f} do
@@ -67,7 +67,7 @@ defmodule YexXmlFragmentTest do
       XmlFragment.push(f, XmlElementPrelim.empty("div"))
       XmlFragment.push(f, XmlElementPrelim.empty("div"))
 
-      {:ok, last} = XmlFragment.get(f, 5)
+      {:ok, last} = XmlFragment.fetch(f, 5)
 
       stream =
         Stream.unfold(last, fn

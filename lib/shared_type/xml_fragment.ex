@@ -43,8 +43,14 @@ defmodule Yex.XmlFragment do
     insert(xml_fragment, 0, content)
   end
 
+  @deprecated "Rename to `fetch/2`"
   @spec get(t, integer()) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
   def get(%__MODULE__{} = xml_fragment, index) do
+    fetch(xml_fragment, index)
+  end
+
+  @spec fetch(t, integer()) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
+  def fetch(%__MODULE__{} = xml_fragment, index) do
     Yex.Nif.xml_fragment_get(xml_fragment, cur_txn(xml_fragment), index)
     |> Yex.Nif.Util.unwrap_tuple()
   end

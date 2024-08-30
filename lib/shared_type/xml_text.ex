@@ -79,7 +79,7 @@ defmodule Yex.XmlTextPrelim do
       iex> doc = Yex.Doc.new()
       iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
       iex> Yex.XmlFragment.insert(xml, 0,  Yex.XmlTextPrelim.from("Hello World"))
-      iex> {:ok, %Yex.XmlText{} = text} = Yex.XmlFragment.get(xml, 0)
+      iex> {:ok, %Yex.XmlText{} = text} = Yex.XmlFragment.fetch(xml, 0)
       iex> Yex.XmlText.to_delta(text)
       [%{insert: "Hello World"}]
 
@@ -100,7 +100,7 @@ defmodule Yex.XmlTextPrelim do
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "key", Yex.XmlTextPrelim.from("Hello World"))
-      iex> {:ok, %Yex.XmlText{} = text} = Yex.Map.get(map, "key")
+      iex> {:ok, %Yex.XmlText{} = text} = Yex.Map.fetch(map, "key")
       iex> Yex.XmlText.to_delta(text)
       [%{insert: "Hello World"}]
 
@@ -109,7 +109,7 @@ defmodule Yex.XmlTextPrelim do
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "key", Yex.XmlTextPrelim.from([%{insert: "Hello"},%{insert: " World", attributes: %{ "bold" => true }},]))
-      iex> {:ok,%Yex.XmlText{} = text} = Yex.Map.get(map, "key")
+      iex> {:ok,%Yex.XmlText{} = text} = Yex.Map.fetch(map, "key")
       iex> Yex.XmlText.to_delta(text)
       [%{insert: "Hello"}, %{attributes: %{"bold" => true}, insert: " World"}]
   """

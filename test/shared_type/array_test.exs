@@ -24,17 +24,17 @@ defmodule Yex.ArrayTest do
     assert 2 == Array.length(array)
   end
 
-  test "get" do
+  test "fetch" do
     doc = Doc.new()
 
     array = Doc.get_array(doc, "array")
 
     Array.push(array, "Hello1")
     Array.push(array, "Hello2")
-    assert {:ok, "Hello1"} == Array.get(array, 0)
-    assert {:ok, "Hello2"} == Array.get(array, 1)
-    assert :error == Array.get(array, 2)
-    assert {:ok, "Hello2"} == Array.get(array, -1)
+    assert {:ok, "Hello1"} == Array.fetch(array, 0)
+    assert {:ok, "Hello2"} == Array.fetch(array, 1)
+    assert :error == Array.fetch(array, 2)
+    assert {:ok, "Hello2"} == Array.fetch(array, -1)
   end
 
   test "unshift" do

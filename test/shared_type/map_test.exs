@@ -20,8 +20,8 @@ defmodule Yex.MapTest do
 
     Map.set(map, "key", "Hello1")
     Map.set(map, "key2", "Hello2")
-    assert {:ok, "Hello1"} == Map.get(map, "key")
-    assert {:ok, "Hello2"} == Map.get(map, "key2")
+    assert {:ok, "Hello1"} == Map.fetch(map, "key")
+    assert {:ok, "Hello2"} == Map.fetch(map, "key2")
   end
 
   test "delete" do
@@ -32,8 +32,8 @@ defmodule Yex.MapTest do
     Map.set(map, "key", "Hello1")
     Map.set(map, "key2", "Hello2")
     Map.delete(map, "key2")
-    assert {:ok, "Hello1"} == Map.get(map, "key")
-    assert :error == Map.get(map, "key2")
+    assert {:ok, "Hello1"} == Map.fetch(map, "key")
+    assert :error == Map.fetch(map, "key2")
   end
 
   test "MapPrelim" do
@@ -42,7 +42,7 @@ defmodule Yex.MapTest do
     map = Doc.get_map(doc, "map")
 
     Map.set(map, "key", MapPrelim.from(%{"key" => "Hello"}))
-    assert {:ok, inner_map} = Map.get(map, "key")
+    assert {:ok, inner_map} = Map.fetch(map, "key")
     assert %{"key" => "Hello"} == Map.to_map(inner_map)
 
     assert 1 == Map.size(map)

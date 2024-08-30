@@ -55,8 +55,17 @@ defmodule Yex.Array do
   @doc """
   Get content at the specified index.
   """
+  @deprecated "Rename to `fetch/2`"
   @spec get(t, integer()) :: {:ok, term()} | :error
-  def get(%__MODULE__{} = array, index) do
+  def get(array, index) do
+    fetch(array, index)
+  end
+
+  @doc """
+  Get content at the specified index.
+  """
+  @spec fetch(t, integer()) :: {:ok, term()} | :error
+  def fetch(%__MODULE__{} = array, index) do
     index = if index < 0, do: __MODULE__.length(array) + index, else: index
     Yex.Nif.array_get(array, cur_txn(array), index) |> Yex.Nif.Util.unwrap_tuple()
   end
@@ -121,8 +130,8 @@ defmodule Yex.ArrayPrelim do
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "key", Yex.ArrayPrelim.from(["Hello", "World"]))
-      iex> {:ok, %Yex.Array{} = array} = Yex.Map.get(map, "key")
-      iex> Yex.Array.get(array, 1)
+      iex> {:ok, %Yex.Array{} = array} = Yex.Map.fetch(map, "key")
+      iex> Yex.Array.fetch(array, 1)
       {:ok, "World"}
 
   """

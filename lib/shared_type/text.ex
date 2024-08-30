@@ -93,7 +93,7 @@ defmodule Yex.TextPrelim do
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "key", Yex.TextPrelim.from("Hello World"))
-      iex> {:ok, %Yex.Text{} = text} = Yex.Map.get(map, "key")
+      iex> {:ok, %Yex.Text{} = text} = Yex.Map.fetch(map, "key")
       iex> Yex.Text.to_delta(text)
       [%{insert: "Hello World"}]
 
@@ -112,7 +112,7 @@ defmodule Yex.TextPrelim do
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "key", Yex.TextPrelim.from("Hello World"))
-      iex> {:ok, %Yex.Text{} = text} = Yex.Map.get(map, "key")
+      iex> {:ok, %Yex.Text{} = text} = Yex.Map.fetch(map, "key")
       iex> Yex.Text.to_delta(text)
       [%{insert: "Hello World"}]
 
@@ -121,7 +121,7 @@ defmodule Yex.TextPrelim do
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "key", Yex.TextPrelim.from([%{insert: "Hello"},%{insert: " World", attributes: %{ "bold" => true }},]))
-      iex> {:ok, %Yex.Text{} = text} = Yex.Map.get(map, "key")
+      iex> {:ok, %Yex.Text{} = text} = Yex.Map.fetch(map, "key")
       iex> Yex.Text.to_delta(text)
       [%{insert: "Hello"}, %{attributes: %{"bold" => true}, insert: " World"}]
   """
