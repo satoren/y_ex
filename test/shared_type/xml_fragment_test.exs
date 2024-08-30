@@ -41,5 +41,41 @@ defmodule YexXmlFragmentTest do
       XmlFragment.push(f, XmlElementPrelim.empty("div"))
       assert "test<div></div>" = XmlFragment.to_string(f)
     end
+
+    test "next_sibling", %{xml_fragment: f} do
+      XmlFragment.push(f, XmlTextPrelim.from("test"))
+      XmlFragment.push(f, XmlTextPrelim.from("test"))
+      XmlFragment.push(f, XmlTextPrelim.from("test"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+
+      stream =
+        Stream.unfold(XmlFragment.first_child(f), fn
+          nil -> nil
+          xml -> {xml, Yex.Xml.next_sibling(xml)}
+        end)
+
+      assert 6 === stream |> Enum.to_list() |> Enum.count()
+    end
+
+    test "prev_sibling", %{xml_fragment: f} do
+      XmlFragment.push(f, XmlTextPrelim.from("test"))
+      XmlFragment.push(f, XmlTextPrelim.from("test"))
+      XmlFragment.push(f, XmlTextPrelim.from("test"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+
+      {:ok, last} = XmlFragment.get(f, 5)
+
+      stream =
+        Stream.unfold(last, fn
+          nil -> nil
+          xml -> {xml, Yex.Xml.prev_sibling(xml)}
+        end)
+
+      assert 6 === stream |> Enum.to_list() |> Enum.count()
+    end
   end
 end

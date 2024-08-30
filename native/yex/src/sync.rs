@@ -27,10 +27,7 @@ fn decode_sync_message<'a, D: Decoder>(
             let buf = decoder.read_buf()?;
             Ok((atoms::sync_update(), encode_binary_slice_to_term(env, buf)).encode(env))
         }
-        _ => Err(NifError {
-            reason: atoms::error(),
-            message: format!("Unexpected tag value: {}", tag),
-        }),
+        _ => Err(NifError::Message(format!("Unexpected tag value: {}", tag))),
     }
 }
 
@@ -53,10 +50,7 @@ fn encode_sync_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Resul
             return Ok(());
         }
     }
-    return Err(NifError {
-        reason: atoms::error(),
-        message: format!("Unexpected structure"),
-    });
+    Err(NifError::Message(format!("Unexpected structure")))
 }
 
 fn decode_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<'a>, NifError> {
@@ -114,10 +108,7 @@ fn encode_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Result<(),
             return Ok(());
         }
     }
-    return Err(NifError {
-        reason: atoms::error(),
-        message: format!("Unexpected structure"),
-    });
+    return Err(NifError::Message("Unexpected structure".into()));
 }
 
 #[rustler::nif]
