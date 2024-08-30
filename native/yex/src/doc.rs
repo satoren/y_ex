@@ -228,10 +228,7 @@ impl NifDoc {
             })
         })
         .map(|sub| ResourceArc::new(Mutex::new(Some(sub)).into()))
-        .map_err(|e| NifError {
-            reason: atoms::encoding_exception(),
-            message: e.to_string(),
-        })
+        .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))
     }
 
     pub fn monitor_update_v2(
@@ -256,10 +253,7 @@ impl NifDoc {
             })
         })
         .map(|sub| ResourceArc::new(Mutex::new(Some(sub)).into()))
-        .map_err(|e| NifError {
-            reason: atoms::encoding_exception(),
-            message: e.to_string(),
-        })
+        .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))
     }
 }
 
@@ -353,16 +347,12 @@ fn apply_update_v1(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     update: Binary,
 ) -> Result<(), NifError> {
-    let update = Update::decode_v1(update.as_slice()).map_err(|e| NifError {
-        reason: atoms::encoding_exception(),
-        message: e.to_string(),
-    })?;
+    let update = Update::decode_v1(update.as_slice())
+        .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))?;
 
     doc.reference.mutably(env, current_transaction, |txn| {
-        txn.apply_update(update).map_err(|e| NifError {
-            reason: atoms::error(),
-            message: e.to_string(),
-        })
+        txn.apply_update(update)
+            .map_err(|e| NifError::Message(e.to_string()))
     })
 }
 
@@ -373,16 +363,12 @@ fn apply_update_v2(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     update: Binary,
 ) -> Result<(), NifError> {
-    let update = Update::decode_v2(update.as_slice()).map_err(|e| NifError {
-        reason: atoms::encoding_exception(),
-        message: e.to_string(),
-    })?;
+    let update = Update::decode_v2(update.as_slice())
+        .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))?;
 
     doc.reference.mutably(env, current_transaction, |txn| {
-        txn.apply_update(update).map_err(|e| NifError {
-            reason: atoms::error(),
-            message: e.to_string(),
-        })
+        txn.apply_update(update)
+            .map_err(|e| NifError::Message(e.to_string()))
     })
 }
 
@@ -406,10 +392,8 @@ fn encode_state_as_update_v1<'a>(
     state_vector: Option<Binary>,
 ) -> Result<Term<'a>, NifError> {
     let sv = if let Some(vector) = state_vector {
-        StateVector::decode_v1(vector.as_slice()).map_err(|e| NifError {
-            reason: atoms::encoding_exception(),
-            message: e.to_string(),
-        })?
+        StateVector::decode_v1(vector.as_slice())
+            .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))?
     } else {
         StateVector::default()
     };
@@ -438,10 +422,8 @@ fn encode_state_as_update_v2<'a>(
     state_vector: Option<Binary>,
 ) -> Result<Term<'a>, NifError> {
     let sv = if let Some(vector) = state_vector {
-        StateVector::decode_v2(vector.as_slice()).map_err(|e| NifError {
-            reason: atoms::encoding_exception(),
-            message: e.to_string(),
-        })?
+        StateVector::decode_v2(vector.as_slice())
+            .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))?
     } else {
         StateVector::default()
     };

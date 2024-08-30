@@ -86,4 +86,31 @@ defmodule YexXmlElementTest do
       assert "next_content" == Xml.to_string(next_prev)
     end
   end
+
+  describe "XmlElementPrelim" do
+    setup do
+      d1 = Doc.with_options(%Doc.Options{client_id: 1})
+      f = Doc.get_xml_fragment(d1, "xml")
+      %{doc: d1, xml_fragment: f}
+    end
+
+    test "XmlElementPrelim.new", %{xml_fragment: xml_fragment} do
+      XmlFragment.push(
+        xml_fragment,
+        XmlElementPrelim.new("div", [
+          XmlElementPrelim.empty("div"),
+          XmlElementPrelim.empty("div"),
+          XmlElementPrelim.new("span", [
+            XmlTextPrelim.from("text")
+          ]),
+          XmlElementPrelim.empty("div"),
+          XmlTextPrelim.from("text"),
+          XmlTextPrelim.from("div")
+        ])
+      )
+
+      assert "<div><div></div><div></div><span>text</span><div></div>textdiv</div>" ==
+               XmlFragment.to_string(xml_fragment)
+    end
+  end
 end

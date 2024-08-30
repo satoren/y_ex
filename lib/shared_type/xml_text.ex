@@ -84,24 +84,42 @@ defmodule Yex.XmlTextPrelim do
       [%{insert: "Hello World"}]
 
   """
-  defstruct [:text]
-  #  defstruct [
-  #    :delta,
-  #    :attributes
-  #  ]
+  defstruct [
+    :delta,
+    :attributes
+  ]
 
   @type t :: %__MODULE__{
-          text: binary()
-          #    delta: Yex.Text.delta()
+          delta: Yex.Text.delta(),
+          attributes: %{binary() => binary()}
         }
 
+  @doc """
+  Transforms a Text to a TextPrelim
+  ## Examples with a binary
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "key", Yex.XmlTextPrelim.from("Hello World"))
+      iex> {:ok, %Yex.XmlText{} = text} = Yex.Map.get(map, "key")
+      iex> Yex.XmlText.to_delta(text)
+      [%{insert: "Hello World"}]
+
+
+  ## Examples with delta
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "key", Yex.XmlTextPrelim.from([%{insert: "Hello"},%{insert: " World", attributes: %{ "bold" => true }},]))
+      iex> {:ok,%Yex.XmlText{} = text} = Yex.Map.get(map, "key")
+      iex> Yex.XmlText.to_delta(text)
+      [%{insert: "Hello"}, %{attributes: %{"bold" => true}, insert: " World"}]
+  """
   @spec from(binary()) :: t
   def from(text) when is_binary(text) do
-    %__MODULE__{text: text}
+    %__MODULE__{delta: [%{insert: text}], attributes: %{}}
   end
 
-  #  @spec from(Yex.Text.delta()) :: t
-  #  def from(delta) do
-  #    %__MODULE__{delta: delta}
-  #  end
+  @spec from(Yex.Text.delta()) :: t
+  def from(delta) do
+    %__MODULE__{delta: delta, attributes: %{}}
+  end
 end

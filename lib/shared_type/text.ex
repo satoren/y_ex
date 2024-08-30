@@ -64,10 +64,6 @@ defmodule Yex.Text do
     Yex.Nif.text_length(text, cur_txn(text))
   end
 
-  def to_json(%__MODULE__{} = _text) do
-    raise "Not implemented"
-  end
-
   @doc """
   Transforms this type to a Quill Delta
 

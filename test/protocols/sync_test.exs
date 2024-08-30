@@ -9,6 +9,31 @@ defmodule Yex.SyncTest do
 
     {:ok, {:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}}} =
       Sync.message_decode(<<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>)
+
+    {:error,
+     "while trying to read more data (expected: 10 bytes), an unexpected end of buffer was reached"} =
+      Sync.message_decode(<<0, 0, 10, 1, 217, 239, 244, 171, 5, 13>>)
+  end
+
+  test "message_decode!" do
+    {:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}} =
+      Sync.message_decode!(<<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>)
+
+    assert_raise RuntimeError, fn ->
+      Sync.message_decode!(<<0, 0, 10, 1, 217, 239, 244, 171, 5, 13>>)
+    end
+  end
+
+  test "message_decode_v1" do
+    {:ok, {:sync, {:sync_step1, <<0>>}}} = Sync.message_decode_v1(<<0, 0, 1, 0>>)
+    {:ok, :query_awareness} = Sync.message_decode_v1(<<3>>)
+
+    {:ok, {:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}}} =
+      Sync.message_decode_v1(<<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>)
+  end
+
+  test "message_decode_v2" do
+    {:error, "failed to decode variable length integer"} = Sync.message_decode_v2(<<0, 0, 1, 0>>)
   end
 
   test "message_encode" do

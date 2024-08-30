@@ -96,10 +96,7 @@ fn awareness_set_local_state(
         awareness
             .reference
             .set_local_state(json.0)
-            .map_err(|e| NifError {
-                reason: atoms::error(),
-                message: e.to_string(),
-            })
+            .map_err(|e| NifError::Message(e.to_string()))
     })
 }
 
@@ -197,15 +194,12 @@ pub fn awareness_encode_update_v1(
         awareness
             .reference
             .update_with_clients(clients)
-            .map_err(|e| NifError {
-                reason: atoms::error(),
-                message: e.to_string(),
-            })?
+            .map_err(|e| NifError::Message(e.to_string()))?
     } else {
-        awareness.reference.update().map_err(|e| NifError {
-            reason: atoms::error(),
-            message: e.to_string(),
-        })?
+        awareness
+            .reference
+            .update()
+            .map_err(|e| NifError::Message(e.to_string()))?
     };
 
     Ok(encode_binary_slice_to_term(
@@ -227,18 +221,12 @@ pub fn awareness_apply_update_v1(
             awareness
                 .reference
                 .apply_update_with(update, origin)
-                .map_err(|e| NifError {
-                    reason: atoms::error(),
-                    message: e.to_string(),
-                })
+                .map_err(|e| NifError::Message(e.to_string()))
         } else {
             awareness
                 .reference
                 .apply_update(update)
-                .map_err(|e| NifError {
-                    reason: atoms::error(),
-                    message: e.to_string(),
-                })
+                .map_err(|e| NifError::Message(e.to_string()))
         }
     })
 }
