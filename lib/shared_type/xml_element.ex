@@ -61,6 +61,14 @@ defmodule Yex.XmlElement do
     |> Yex.Nif.Util.unwrap_tuple()
   end
 
+  @spec fetch(t, integer()) :: Yex.XmlElement.t() | Yex.XmlText.t()
+  def fetch!(%__MODULE__{} = map, index) do
+    case fetch(map, index) do
+      {:ok, value} -> value
+      :error -> raise ArgumentError, "Index out of bounds"
+    end
+  end
+
   @spec insert_attribute(t, binary(), binary()) :: :ok | :error
   def insert_attribute(%__MODULE__{} = xml_element, key, value) do
     Yex.Nif.xml_element_insert_attribute(xml_element, cur_txn(xml_element), key, value)

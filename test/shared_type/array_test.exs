@@ -36,6 +36,20 @@ defmodule Yex.ArrayTest do
     assert :error == Array.fetch(array, 2)
     assert {:ok, "Hello2"} == Array.fetch(array, -1)
   end
+  test "fetch!" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "array")
+
+    Array.push(array, "Hello1")
+    Array.push(array, "Hello2")
+    assert  "Hello1" == Array.fetch!(array, 0)
+    assert  "Hello2" == Array.fetch!(array, 1)
+    assert_raise ArgumentError, "Index out of bounds", fn ->
+      Array.fetch!(array, 2)
+    end
+    assert  "Hello2" == Array.fetch!(array, -1)
+  end
 
   test "unshift" do
     doc = Doc.new()

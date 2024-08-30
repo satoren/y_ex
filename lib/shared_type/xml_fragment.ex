@@ -55,6 +55,14 @@ defmodule Yex.XmlFragment do
     |> Yex.Nif.Util.unwrap_tuple()
   end
 
+  @spec fetch(t, integer()) :: Yex.XmlElement.t() | Yex.XmlText.t()
+  def fetch!(%__MODULE__{} = map, index) do
+    case fetch(map, index) do
+      {:ok, value} -> value
+      :error -> raise ArgumentError, "Index out of bounds"
+    end
+  end
+
   @spec to_string(t) :: binary()
   def to_string(%__MODULE__{} = xml_fragment) do
     Yex.Nif.xml_fragment_to_string(xml_fragment, cur_txn(xml_fragment))

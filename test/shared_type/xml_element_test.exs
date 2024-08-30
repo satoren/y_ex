@@ -13,6 +13,22 @@ defmodule YexXmlElementTest do
       %{doc: d1, xml_element: xml, xml_fragment: f}
     end
 
+    test "fetch", %{xml_element: xml}  do
+      XmlElement.push(xml, XmlElementPrelim.empty("div"))
+
+      assert {:ok,  %XmlElement{}} = XmlElement.fetch(xml, 0)
+      assert :error == XmlElement.fetch(xml, 1)
+    end
+    test "fetch!", %{xml_element: xml}  do
+
+      XmlElement.push(xml, XmlElementPrelim.empty("div"))
+
+      assert  %XmlElement{} = XmlElement.fetch!(xml, 0)
+      assert_raise ArgumentError, "Index out of bounds", fn ->
+        XmlElement.fetch!(xml, 1)
+      end
+    end
+
     test "insert_attribute", %{doc: d1, xml_element: xml1} do
       XmlElement.insert_attribute(xml1, "height", "10")
 

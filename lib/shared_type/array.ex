@@ -54,6 +54,12 @@ defmodule Yex.Array do
 
   @doc """
   Get content at the specified index.
+  ## Examples Sync two clients by exchanging the complete document structure
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "Hello")
+      iex> Yex.Array.get(array, 0)
+      {:ok, "Hello"}
   """
   @deprecated "Rename to `fetch/2`"
   @spec get(t, integer()) :: {:ok, term()} | :error
@@ -68,6 +74,14 @@ defmodule Yex.Array do
   def fetch(%__MODULE__{} = array, index) do
     index = if index < 0, do: __MODULE__.length(array) + index, else: index
     Yex.Nif.array_get(array, cur_txn(array), index) |> Yex.Nif.Util.unwrap_tuple()
+  end
+
+  @spec fetch!(t, integer()) :: term()
+  def fetch!(%__MODULE__{} = array, index) do
+    case fetch(array, index) do
+      {:ok, value} -> value
+      :error -> raise ArgumentError, "Index out of bounds"
+    end
   end
 
   @doc """

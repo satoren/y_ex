@@ -51,7 +51,7 @@ defmodule Yex.Map do
       :error
   """
   @deprecated "Rename to `fetch/2`"
-  @spec get(t, term()) :: {:ok, term()} | :error
+  @spec get(t, binary()) :: {:ok, term()} | :error
   def get(map, key) do
     fetch(map, key)
   end
@@ -67,9 +67,17 @@ defmodule Yex.Map do
       iex> Yex.Map.fetch(map, "not_found")
       :error
   """
-  @spec fetch(t, term()) :: {:ok, term()} | :error
+  @spec fetch(t, binary()) :: {:ok, term()} | :error
   def fetch(%__MODULE__{} = map, key) do
     Yex.Nif.map_get(map, cur_txn(map), key) |> Yex.Nif.Util.unwrap_tuple()
+  end
+
+  @spec fetch(t, binary()) :: {:ok, term()} | :error
+  def fetch!(%__MODULE__{} = map, key) do
+    case fetch(map, key) do
+      {:ok, value} -> value
+      :error -> raise ArgumentError, "Key not found"
+    end
   end
 
   @doc """

@@ -13,7 +13,7 @@ defmodule Yex.MapTest do
     assert 1 == Map.size(map)
   end
 
-  test "get" do
+  test "fetch" do
     doc = Doc.new()
 
     map = Doc.get_map(doc, "map")
@@ -22,6 +22,21 @@ defmodule Yex.MapTest do
     Map.set(map, "key2", "Hello2")
     assert {:ok, "Hello1"} == Map.fetch(map, "key")
     assert {:ok, "Hello2"} == Map.fetch(map, "key2")
+    assert :error == Map.fetch(map, "key3")
+  end
+
+  test "fetch!" do
+    doc = Doc.new()
+
+    map = Doc.get_map(doc, "map")
+
+    Map.set(map, "key", "Hello1")
+    Map.set(map, "key2", "Hello2")
+    assert  "Hello1" == Map.fetch!(map, "key")
+    assert "Hello2" == Map.fetch!(map, "key2")
+    assert_raise ArgumentError, "Key not found", fn ->
+      Map.fetch!(map, "key3")
+    end
   end
 
   test "delete" do
