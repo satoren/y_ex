@@ -264,6 +264,9 @@ defmodule Yex.Sync.SharedDoc do
          {:ok, sync_message} <- Sync.message_encode({:sync, reply}) do
       send(from, {:yjs, sync_message, self()})
     else
+      :ok ->
+        :ok
+
       error ->
         error
     end
