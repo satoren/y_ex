@@ -49,28 +49,42 @@ defmodule Yex.XmlElement do
     insert(xml_element, 0, content)
   end
 
+  @deprecated "Rename to `fetch/2`"
   @spec get(t, integer()) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
   def get(%__MODULE__{} = xml_element, index) do
+    fetch(xml_element, index)
+  end
+
+  @spec fetch(t, integer()) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
+  def fetch(%__MODULE__{} = xml_element, index) do
     Yex.Nif.xml_element_get(xml_element, cur_txn(xml_element), index)
     |> Yex.Nif.Util.unwrap_tuple()
   end
 
-  @spec insert_attribute(t, term(), term()) :: :ok | :error
+  @spec fetch(t, integer()) :: Yex.XmlElement.t() | Yex.XmlText.t()
+  def fetch!(%__MODULE__{} = map, index) do
+    case fetch(map, index) do
+      {:ok, value} -> value
+      :error -> raise ArgumentError, "Index out of bounds"
+    end
+  end
+
+  @spec insert_attribute(t, binary(), binary()) :: :ok | :error
   def insert_attribute(%__MODULE__{} = xml_element, key, value) do
     Yex.Nif.xml_element_insert_attribute(xml_element, cur_txn(xml_element), key, value)
   end
 
-  @spec remove_attribute(t, term()) :: :ok | :error
+  @spec remove_attribute(t, binary()) :: :ok | :error
   def remove_attribute(%__MODULE__{} = xml_element, key) do
     Yex.Nif.xml_element_remove_attribute(xml_element, cur_txn(xml_element), key)
   end
 
-  @spec get_attribute(t, term()) :: term() | :error
+  @spec get_attribute(t, binary()) :: binary() | nil
   def get_attribute(%__MODULE__{} = xml_element, key) do
     Yex.Nif.xml_element_get_attribute(xml_element, cur_txn(xml_element), key)
   end
 
-  @spec get_attributes(t) :: map() | :error
+  @spec get_attributes(t) :: map()
   def get_attributes(%__MODULE__{} = xml_element) do
     Yex.Nif.xml_element_get_attributes(xml_element, cur_txn(xml_element))
   end

@@ -9,8 +9,25 @@ defmodule YexXmlElementTest do
       d1 = Doc.with_options(%Doc.Options{client_id: 1})
       f = Doc.get_xml_fragment(d1, "xml")
       XmlFragment.push(f, XmlElementPrelim.empty("div"))
-      {:ok, xml} = XmlFragment.get(f, 0)
+      {:ok, xml} = XmlFragment.fetch(f, 0)
       %{doc: d1, xml_element: xml, xml_fragment: f}
+    end
+
+    test "fetch", %{xml_element: xml} do
+      XmlElement.push(xml, XmlElementPrelim.empty("div"))
+
+      assert {:ok, %XmlElement{}} = XmlElement.fetch(xml, 0)
+      assert :error == XmlElement.fetch(xml, 1)
+    end
+
+    test "fetch!", %{xml_element: xml} do
+      XmlElement.push(xml, XmlElementPrelim.empty("div"))
+
+      assert %XmlElement{} = XmlElement.fetch!(xml, 0)
+
+      assert_raise ArgumentError, "Index out of bounds", fn ->
+        XmlElement.fetch!(xml, 1)
+      end
     end
 
     test "insert_attribute", %{doc: d1, xml_element: xml1} do
@@ -23,7 +40,7 @@ defmodule YexXmlElementTest do
 
       XmlFragment.push(f, XmlElementPrelim.empty("div"))
 
-      {:ok, xml2} = XmlFragment.get(f, 0)
+      {:ok, xml2} = XmlFragment.fetch(f, 0)
 
       {:ok, u} = Yex.encode_state_as_update(d1)
       Yex.apply_update(d2, u)
@@ -33,9 +50,9 @@ defmodule YexXmlElementTest do
 
     test "unshift", %{xml_element: xml} do
       XmlElement.push(xml, XmlTextPrelim.from(""))
-      {:ok, %XmlText{}} = XmlElement.get(xml, 0)
+      {:ok, %XmlText{}} = XmlElement.fetch(xml, 0)
       XmlElement.unshift(xml, XmlElementPrelim.empty("div"))
-      {:ok, %XmlElement{}} = XmlElement.get(xml, 0)
+      {:ok, %XmlElement{}} = XmlElement.fetch(xml, 0)
     end
 
     test "delete", %{xml_element: xml} do

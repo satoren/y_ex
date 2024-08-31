@@ -9,7 +9,7 @@ defmodule YexXmlTextTest do
       d1 = Doc.with_options(%Doc.Options{client_id: 1})
       f = Doc.get_xml_fragment(d1, "xml")
       XmlFragment.push(f, XmlTextPrelim.from(""))
-      {:ok, xml} = XmlFragment.get(f, 0)
+      {:ok, xml} = XmlFragment.fetch(f, 0)
       %{doc: d1, xml_text: xml, xml_fragment: f}
     end
 

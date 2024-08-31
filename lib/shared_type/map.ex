@@ -50,9 +50,34 @@ defmodule Yex.Map do
       iex> Yex.Map.get(map, "not_found")
       :error
   """
-  @spec get(t, term()) :: {:ok, term()} | :error
-  def get(%__MODULE__{} = map, key) do
+  @deprecated "Rename to `fetch/2`"
+  @spec get(t, binary()) :: {:ok, term()} | :error
+  def get(map, key) do
+    fetch(map, key)
+  end
+
+  @doc """
+  get a key from the map.
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "plane", ["Hello", "World"])
+      iex> Yex.Map.fetch(map, "plane")
+      {:ok, ["Hello", "World"]}
+      iex> Yex.Map.fetch(map, "not_found")
+      :error
+  """
+  @spec fetch(t, binary()) :: {:ok, term()} | :error
+  def fetch(%__MODULE__{} = map, key) do
     Yex.Nif.map_get(map, cur_txn(map), key) |> Yex.Nif.Util.unwrap_tuple()
+  end
+
+  @spec fetch(t, binary()) :: {:ok, term()} | :error
+  def fetch!(%__MODULE__{} = map, key) do
+    case fetch(map, key) do
+      {:ok, value} -> value
+      :error -> raise ArgumentError, "Key not found"
+    end
   end
 
   @doc """
@@ -103,8 +128,8 @@ defmodule Yex.MapPrelim do
       iex> doc = Yex.Doc.new()
       iex> array = Yex.Doc.get_array(doc, "array")
       iex> Yex.Array.insert(array, 0, Yex.MapPrelim.from(%{ "key" => "value" }))
-      iex> {:ok, %Yex.Map{} = map} = Yex.Array.get(array, 0)
-      iex> Yex.Map.get(map, "key")
+      iex> {:ok, %Yex.Map{} = map} = Yex.Array.fetch(array, 0)
+      iex> Yex.Map.fetch(map, "key")
       {:ok, "value"}
   """
   defstruct [
