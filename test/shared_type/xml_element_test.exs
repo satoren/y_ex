@@ -102,6 +102,18 @@ defmodule YexXmlElementTest do
 
       assert "next_content" == Xml.to_string(next_prev)
     end
+
+    test "children", %{xml_element: e} do
+      assert 0 === XmlElement.children(e) |> Enum.count()
+      XmlElement.push(e, XmlTextPrelim.from("test"))
+      XmlElement.push(e, XmlTextPrelim.from("test"))
+      XmlElement.push(e, XmlTextPrelim.from("test"))
+      XmlElement.push(e, XmlElementPrelim.empty("div"))
+      XmlElement.push(e, XmlElementPrelim.empty("div"))
+      XmlElement.push(e, XmlElementPrelim.empty("div"))
+
+      assert 6 === XmlElement.children(e) |> Enum.count()
+    end
   end
 
   describe "XmlElementPrelim" do

@@ -4,6 +4,8 @@ defmodule Yex.XmlFragment do
 
   """
 
+  alias Yex.Xml
+
   defstruct [
     :doc,
     :reference
@@ -20,6 +22,14 @@ defmodule Yex.XmlFragment do
       {:ok, node} -> node
       :error -> nil
     end
+  end
+
+  @spec children(t) :: Enumerable.t(Yex.XmlElement.t() | Yex.XmlText.t())
+  def children(%__MODULE__{} = xml_fragment) do
+    Stream.unfold(first_child(xml_fragment), fn
+      nil -> nil
+      xml -> {xml, Xml.next_sibling(xml)}
+    end)
   end
 
   def length(%__MODULE__{} = xml_fragment) do

@@ -84,15 +84,25 @@ defmodule YexXmlFragmentTest do
       XmlFragment.push(f, XmlElementPrelim.empty("div"))
       XmlFragment.push(f, XmlElementPrelim.empty("div"))
 
-      {:ok, last} = XmlFragment.fetch(f, 5)
-
       stream =
-        Stream.unfold(last, fn
+        Stream.unfold(XmlFragment.fetch!(f, 5), fn
           nil -> nil
           xml -> {xml, Yex.Xml.prev_sibling(xml)}
         end)
 
       assert 6 === stream |> Enum.to_list() |> Enum.count()
+    end
+
+    test "children", %{xml_fragment: f} do
+      assert 0 === XmlFragment.children(f) |> Enum.count()
+      XmlFragment.push(f, XmlTextPrelim.from("test"))
+      XmlFragment.push(f, XmlTextPrelim.from("test"))
+      XmlFragment.push(f, XmlTextPrelim.from("test"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+
+      assert 6 === XmlFragment.children(f) |> Enum.count()
     end
   end
 end
