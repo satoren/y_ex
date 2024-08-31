@@ -4,6 +4,8 @@ defmodule Yex.XmlElement do
 
   """
 
+  alias Yex.Xml
+
   defstruct [
     :doc,
     :reference
@@ -21,6 +23,14 @@ defmodule Yex.XmlElement do
       {:ok, node} -> node
       :error -> nil
     end
+  end
+
+  @spec children(t) :: Enumerable.t(Yex.XmlElement.t() | Yex.XmlText.t())
+  def children(%__MODULE__{} = xml_element) do
+    Stream.unfold(first_child(xml_element), fn
+      nil -> nil
+      xml -> {xml, Xml.next_sibling(xml)}
+    end)
   end
 
   @spec length(t) :: integer()
