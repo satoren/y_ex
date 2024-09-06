@@ -1,19 +1,18 @@
-use std::ops::Deref;
-
-use rustler::{Env, NifStruct, ResourceArc};
+use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
 use yrs::types::ToJson;
 use yrs::*;
 
 use crate::{
+    atoms,
     doc::{DocResource, TransactionResource},
-    error::NifError,
+    error::deleted_error,
     wrap::NifWrap,
     yinput::NifYInput,
     youtput::NifYOut,
     NifAny,
 };
 
-pub type ArrayRefResource = NifWrap<ArrayRef>;
+pub type ArrayRefResource = NifWrap<Hook<ArrayRef>>;
 #[rustler::resource_impl]
 impl rustler::Resource for ArrayRefResource {}
 
@@ -28,15 +27,8 @@ impl NifArray {
     pub fn new(doc: ResourceArc<DocResource>, array: ArrayRef) -> Self {
         NifArray {
             doc,
-            reference: ResourceArc::new(array.into()),
+            reference: ResourceArc::new(array.hook().into()),
         }
-    }
-}
-
-impl Deref for NifArray {
-    type Target = ArrayRef;
-    fn deref(&self) -> &Self::Target {
-        &self.reference.0
     }
 }
 
@@ -47,33 +39,45 @@ fn array_insert(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     value: NifYInput,
-) -> Result<(), NifError> {
+) -> NifResult<Atom> {
     array.doc.mutably(env, current_transaction, |txn| {
-        array.reference.insert(txn, index, value);
-        Ok(())
+        let array = array
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+        array.insert(txn, index, value);
+        Ok(atoms::ok())
     })
 }
 #[rustler::nif]
 fn array_length(
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> u32 {
-    array
-        .doc
-        .readonly(current_transaction, |txn| array.reference.len(txn))
+) -> NifResult<u32> {
+    array.doc.readonly(current_transaction, |txn| {
+        let array = array
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+        Ok(array.len(txn))
+    })
 }
 #[rustler::nif]
 fn array_get(
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
-) -> Result<NifYOut, ()> {
-    array.doc.readonly(current_transaction, |txn| {
-        array
+) -> NifResult<(Atom, NifYOut)> {
+    let doc = array.doc;
+    doc.readonly(current_transaction, |txn| {
+        let array = array
             .reference
+            .get(txn)
+            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+        array
             .get(txn, index)
-            .map(|b| NifYOut::from_native(b, array.doc.clone()))
-            .ok_or(())
+            .map(|b| (atoms::ok(), NifYOut::from_native(b, doc.clone())))
+            .ok_or(rustler::Error::Atom("error"))
     })
 }
 #[rustler::nif]
@@ -83,31 +87,45 @@ fn array_delete_range(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     length: u32,
-) -> Result<(), NifError> {
-    array.doc.mutably(env, current_transaction, |txn| {
-        array.reference.remove_range(txn, index, length);
-        Ok(())
+) -> NifResult<Atom> {
+    let doc = array.doc;
+    doc.mutably(env, current_transaction, |txn| {
+        let array = array
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+        array.remove_range(txn, index, length);
+        Ok(atoms::ok())
     })
 }
 #[rustler::nif]
 fn array_to_list(
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> Vec<NifYOut> {
-    array.doc.readonly(current_transaction, |txn| {
-        array
+) -> NifResult<Vec<NifYOut>> {
+    let doc = array.doc;
+    doc.readonly(current_transaction, |txn| {
+        let array = array
             .reference
+            .get(txn)
+            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+        Ok(array
             .iter(txn)
-            .map(|b| NifYOut::from_native(b, array.doc.clone()))
-            .collect()
+            .map(|b| NifYOut::from_native(b, doc.clone()))
+            .collect())
     })
 }
 #[rustler::nif]
 fn array_to_json(
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifAny {
-    array.doc.readonly(current_transaction, |txn| {
-        array.reference.to_json(txn).into()
+) -> NifResult<NifAny> {
+    let doc = array.doc;
+    doc.readonly(current_transaction, |txn| {
+        let array = array
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+        Ok(array.to_json(txn).into())
     })
 }

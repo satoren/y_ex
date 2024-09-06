@@ -1,4 +1,4 @@
-use rustler::{Atom, NifUntaggedEnum};
+use rustler::{Atom, NifException, NifUntaggedEnum};
 
 #[derive(NifUntaggedEnum)]
 pub enum NifError {
@@ -16,4 +16,14 @@ impl From<rustler::Error> for NifError {
     fn from(_w: rustler::Error) -> NifError {
         NifError::Message("todo".to_string())
     }
+}
+
+#[derive(Debug, NifException)]
+#[module = "Yex.DeletedSharedTypeError"]
+pub struct DeletedSharedTypeError {
+    message: String,
+}
+
+pub fn deleted_error(message: String) -> rustler::Error {
+    rustler::Error::RaiseTerm(Box::new(DeletedSharedTypeError { message }))
 }

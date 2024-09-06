@@ -24,9 +24,9 @@ impl DocInner {
         env: Env<'_>,
         current_transaction: Option<ResourceArc<TransactionResource>>,
         f: F,
-    ) -> Result<T, NifError>
+    ) -> T
     where
-        F: FnOnce(&mut TransactionMut<'_>) -> Result<T, NifError>,
+        F: FnOnce(&mut TransactionMut<'_>) -> T,
     {
         ENV.set(&mut env.clone(), || {
             if let Some(txn) = current_transaction {
@@ -306,12 +306,12 @@ fn doc_get_or_insert_xml_fragment(env: Env<'_>, doc: NifDoc, name: &str) -> NifX
 #[rustler::nif]
 fn doc_begin_transaction(doc: NifDoc, origin: Option<&str>) -> ResourceArc<TransactionResource> {
     if let Some(origin) = origin {
-        let txn: TransactionMut = doc.reference.doc.try_transact_mut_with(origin).unwrap();
+        let txn: TransactionMut = yrs::Transact::transact_mut_with(&doc.reference.doc, origin);
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
 
         TransactionResource(RefCell::new(Some(txn))).into()
     } else {
-        let txn: TransactionMut = doc.reference.doc.try_transact_mut().unwrap();
+        let txn: TransactionMut = yrs::Transact::transact_mut(&doc.reference.doc);
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
         TransactionResource(RefCell::new(Some(txn))).into()
     }
