@@ -13,6 +13,15 @@ defmodule YexXmlElementTest do
       %{doc: d1, xml_element: xml, xml_fragment: f}
     end
 
+    test "compare", %{doc: doc} do
+      xml1 = Doc.get_xml_fragment(doc, "xml")
+      xml2 = Doc.get_xml_fragment(doc, "xml")
+
+      assert xml1 == xml2
+      xml3 = Doc.get_xml_fragment(doc, "xml3")
+      assert xml1 != xml3
+    end
+
     test "fetch", %{xml_element: xml} do
       XmlElement.push(xml, XmlElementPrelim.empty("div"))
 
@@ -53,6 +62,17 @@ defmodule YexXmlElementTest do
       {:ok, %XmlText{}} = XmlElement.fetch(xml, 0)
       XmlElement.unshift(xml, XmlElementPrelim.empty("div"))
       {:ok, %XmlElement{}} = XmlElement.fetch(xml, 0)
+    end
+
+    test "insert_after", %{xml_element: xml} do
+      XmlElement.push(xml, XmlTextPrelim.from("1"))
+      XmlElement.push(xml, XmlTextPrelim.from("2"))
+      XmlElement.push(xml, XmlTextPrelim.from("3"))
+      assert text2 = XmlElement.fetch!(xml, 1)
+      XmlElement.insert_after(xml, text2, XmlElementPrelim.empty("div"))
+      assert "<div>12<div></div>3</div>" = XmlElement.to_string(xml)
+      XmlElement.insert_after(xml, nil, XmlElementPrelim.empty("div"))
+      assert "<div><div></div>12<div></div>3</div>" = XmlElement.to_string(xml)
     end
 
     test "delete", %{xml_element: xml} do

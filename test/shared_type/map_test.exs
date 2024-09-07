@@ -13,6 +13,17 @@ defmodule Yex.MapTest do
     assert 1 == Map.size(map)
   end
 
+  test "compare" do
+    doc = Doc.new()
+
+    map1 = Doc.get_map(doc, "map")
+    map2 = Doc.get_map(doc, "map")
+    map3 = Doc.get_map(doc, "map3")
+
+    assert map1 == map2
+    assert map1 != map3
+  end
+
   test "fetch" do
     doc = Doc.new()
 

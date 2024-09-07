@@ -24,6 +24,28 @@ defmodule YexXmlFragmentTest do
       {:ok, %XmlElement{}} = XmlFragment.fetch(f, 0)
     end
 
+    test "insert_after", %{xml_fragment: f} do
+      XmlFragment.push(f, XmlTextPrelim.from("1"))
+      XmlFragment.push(f, XmlTextPrelim.from("2"))
+      XmlFragment.push(f, XmlTextPrelim.from("3"))
+      assert text2 = XmlFragment.fetch!(f, 1)
+      XmlFragment.insert_after(f, text2, XmlElementPrelim.empty("div"))
+      assert "12<div></div>3" = XmlFragment.to_string(f)
+      XmlFragment.insert_after(f, nil, XmlElementPrelim.empty("div"))
+      assert "<div></div>12<div></div>3" = XmlFragment.to_string(f)
+    end
+
+    test "compare", %{xml_fragment: f} do
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      xml1 = XmlFragment.fetch!(f, 0)
+      xml2 = XmlFragment.fetch!(f, 0)
+
+      assert xml1 == xml2
+      xml3 = XmlFragment.fetch!(f, 1)
+      assert xml1 != xml3
+    end
+
     test "fetch", %{xml_fragment: xml} do
       XmlFragment.push(xml, XmlElementPrelim.empty("div"))
 

@@ -9,26 +9,24 @@ use crate::{
     atoms,
     doc::{DocResource, TransactionResource},
     error::deleted_error,
-    wrap::NifWrap,
+    shared_type::NifSharedType,
     yinput::NifYInputDelta,
     youtput::NifYOut,
 };
 
-pub type TextRefResource = NifWrap<Hook<TextRef>>;
-#[rustler::resource_impl]
-impl rustler::Resource for TextRefResource {}
+pub type TextRefId = NifSharedType<TextRef>;
 
 #[derive(NifStruct)]
 #[module = "Yex.Text"]
 pub struct NifText {
     doc: ResourceArc<DocResource>,
-    reference: ResourceArc<TextRefResource>,
+    reference: TextRefId,
 }
 impl NifText {
     pub fn new(doc: ResourceArc<DocResource>, text: TextRef) -> Self {
         NifText {
             doc,
-            reference: ResourceArc::new(text.hook().into()),
+            reference: TextRefId::new(text.hook()),
         }
     }
 }

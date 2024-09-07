@@ -43,10 +43,24 @@ defmodule Yex.XmlElement do
     Yex.Nif.xml_element_insert(xml_element, cur_txn(xml_element), index, content)
   end
 
+  @spec insert_after(
+          t,
+          Yex.XmlElement.t() | Yex.XmlText.t(),
+          Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()
+        ) :: :ok | :error
+  def insert_after(%__MODULE__{} = xml_fragment, ref, content) do
+    index = children(xml_fragment) |> Enum.find_index(&(&1 == ref))
+
+    if index == nil do
+      insert(xml_fragment, 0, content)
+    else
+      insert(xml_fragment, index + 1, content)
+    end
+  end
+
   @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{} = xml_element, index, length) do
     Yex.Nif.xml_element_delete_range(xml_element, cur_txn(xml_element), index, length)
-    |> Yex.Nif.Util.unwrap_tuple()
   end
 
   @spec push(t, Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) :: :ok | :error
@@ -68,7 +82,6 @@ defmodule Yex.XmlElement do
   @spec fetch(t, integer()) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
   def fetch(%__MODULE__{} = xml_element, index) do
     Yex.Nif.xml_element_get(xml_element, cur_txn(xml_element), index)
-    |> Yex.Nif.Util.unwrap_tuple()
   end
 
   @spec fetch(t, integer()) :: Yex.XmlElement.t() | Yex.XmlText.t()

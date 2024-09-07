@@ -9,37 +9,29 @@ use crate::{
     atoms,
     doc::{DocResource, TransactionResource},
     error::deleted_error,
+    shared_type::NifSharedType,
     text::encode_diffs,
-    wrap::NifWrap,
     yinput::{NifXmlIn, NifYInputDelta},
     youtput::NifYOut,
     ENV,
 };
 
-pub type XmlFragmentResource = NifWrap<Hook<XmlFragmentRef>>;
-#[rustler::resource_impl]
-impl rustler::Resource for XmlFragmentResource {}
-
-pub type XmlElementResource = NifWrap<Hook<XmlElementRef>>;
-#[rustler::resource_impl]
-impl rustler::Resource for XmlElementResource {}
-
-pub type XmlTextResource = NifWrap<Hook<XmlTextRef>>;
-#[rustler::resource_impl]
-impl rustler::Resource for XmlTextResource {}
+pub type XmlFragmentId = NifSharedType<XmlFragmentRef>;
+pub type XmlElementId = NifSharedType<XmlElementRef>;
+pub type XmlTextId = NifSharedType<XmlTextRef>;
 
 #[derive(NifStruct)]
 #[module = "Yex.XmlFragment"]
 pub struct NifXmlFragment {
     doc: ResourceArc<DocResource>,
-    reference: ResourceArc<XmlFragmentResource>,
+    reference: XmlFragmentId,
 }
 
 impl NifXmlFragment {
     pub fn new(doc: ResourceArc<DocResource>, xml: XmlFragmentRef) -> Self {
         Self {
             doc,
-            reference: ResourceArc::new(xml.hook().into()),
+            reference: XmlFragmentId::new(xml.hook()),
         }
     }
 }
@@ -48,14 +40,14 @@ impl NifXmlFragment {
 #[module = "Yex.XmlElement"]
 pub struct NifXmlElement {
     doc: ResourceArc<DocResource>,
-    reference: ResourceArc<XmlElementResource>,
+    reference: XmlElementId,
 }
 
 impl NifXmlElement {
     pub fn new(doc: ResourceArc<DocResource>, xml: XmlElementRef) -> Self {
         Self {
             doc,
-            reference: ResourceArc::new(xml.hook().into()),
+            reference: XmlElementId::new(xml.hook()),
         }
     }
 }
@@ -64,14 +56,14 @@ impl NifXmlElement {
 #[module = "Yex.XmlText"]
 pub struct NifXmlText {
     doc: ResourceArc<DocResource>,
-    reference: ResourceArc<XmlTextResource>,
+    reference: XmlTextId,
 }
 
 impl NifXmlText {
     pub fn new(doc: ResourceArc<DocResource>, xml: XmlTextRef) -> Self {
         Self {
             doc,
-            reference: ResourceArc::new(xml.hook().into()),
+            reference: XmlTextId::new(xml.hook()),
         }
     }
 }

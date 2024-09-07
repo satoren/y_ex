@@ -158,4 +158,16 @@ defmodule Yex.TextTest do
     assert [%{insert: "1"}, %{insert: "234", attributes: %{"bold" => true}}, %{insert: "56"}] ==
              Text.to_delta(text)
   end
+
+  test "compare" do
+    doc = Doc.new()
+
+    text1 = Doc.get_text(doc, "text")
+    text2 = Doc.get_text(doc, "text")
+
+    assert text1 == text2
+    text3 = Doc.get_text(doc, "text2")
+
+    assert text1 != text3
+  end
 end

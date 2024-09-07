@@ -27,7 +27,6 @@ defmodule Yex.XmlText do
     index = if index < 0, do: __MODULE__.length(xml_text) + index, else: index
 
     Yex.Nif.xml_text_delete(xml_text, cur_txn(xml_text), index, length)
-    |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
   @spec format(t, integer(), integer(), map()) :: :ok | :error

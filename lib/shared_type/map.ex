@@ -22,7 +22,7 @@ defmodule Yex.Map do
   """
   @spec set(t, term(), term()) :: term()
   def set(%__MODULE__{} = map, key, content) do
-    Yex.Nif.map_set(map, cur_txn(map), key, content) |> Yex.Nif.Util.unwrap_tuple()
+    Yex.Nif.map_set(map, cur_txn(map), key, content)
   end
 
   @doc """
@@ -36,7 +36,7 @@ defmodule Yex.Map do
   """
   @spec delete(t, term()) :: :ok
   def delete(%__MODULE__{} = map, key) do
-    Yex.Nif.map_delete(map, cur_txn(map), key) |> Yex.Nif.Util.unwrap_tuple()
+    Yex.Nif.map_delete(map, cur_txn(map), key)
   end
 
   @doc """
@@ -69,7 +69,7 @@ defmodule Yex.Map do
   """
   @spec fetch(t, binary()) :: {:ok, term()} | :error
   def fetch(%__MODULE__{} = map, key) do
-    Yex.Nif.map_get(map, cur_txn(map), key) |> Yex.Nif.Util.unwrap_tuple()
+    Yex.Nif.map_get(map, cur_txn(map), key)
   end
 
   @spec fetch(t, binary()) :: {:ok, term()} | :error
