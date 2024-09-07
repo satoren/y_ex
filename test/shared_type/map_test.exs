@@ -52,6 +52,19 @@ defmodule Yex.MapTest do
     assert :error == Map.fetch(map, "key2")
   end
 
+  test "raise error when access deleted array" do
+    doc = Doc.new()
+
+    map = Doc.get_map(doc, "map")
+    Map.set(map, "key", MapPrelim.from(%{"key" => "Hello"}))
+    m = Map.fetch!(map, "key")
+    Map.delete(map, "key")
+
+    assert_raise Yex.DeletedSharedTypeError, "Map has been deleted", fn ->
+      Map.set(m, "key", "Hello")
+    end
+  end
+
   test "MapPrelim" do
     doc = Doc.new()
 

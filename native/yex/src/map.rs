@@ -1,13 +1,13 @@
+use crate::atoms;
 use crate::doc::TransactionResource;
-use crate::{
-    doc::DocResource, error::NifError, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny,
-};
-use rustler::{Env, NifStruct, ResourceArc};
-use std::{collections::HashMap, ops::Deref};
+use crate::error::deleted_error;
+use crate::{doc::DocResource, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny};
+use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
+use std::collections::HashMap;
 use yrs::types::ToJson;
 use yrs::*;
 
-pub type MapRefResource = NifWrap<MapRef>;
+pub type MapRefResource = NifWrap<Hook<MapRef>>;
 #[rustler::resource_impl]
 impl rustler::Resource for MapRefResource {}
 
@@ -21,14 +21,8 @@ impl NifMap {
     pub fn new(doc: ResourceArc<DocResource>, map: MapRef) -> Self {
         NifMap {
             doc,
-            reference: ResourceArc::new(map.into()),
+            reference: ResourceArc::new(map.hook().into()),
         }
-    }
-}
-impl Deref for NifMap {
-    type Target = MapRef;
-    fn deref(&self) -> &Self::Target {
-        &self.reference.0
     }
 }
 
@@ -39,28 +33,44 @@ fn map_set(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     key: &str,
     value: NifYInput,
-) -> Result<(), NifError> {
+) -> NifResult<Atom> {
     map.doc.mutably(env, current_transaction, |txn| {
-        map.reference.insert(txn, key, value);
-        Ok(())
+        let map = map
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Map has been deleted".to_string()))?;
+        map.insert(txn, key, value);
+        Ok(atoms::ok())
     })
 }
 #[rustler::nif]
-fn map_size(map: NifMap, current_transaction: Option<ResourceArc<TransactionResource>>) -> u32 {
-    map.doc
-        .readonly(current_transaction, |txn| map.reference.len(txn))
+fn map_size(
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<u32> {
+    map.doc.readonly(current_transaction, |txn| {
+        let map = map
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Map has been deleted".to_string()))?;
+        Ok(map.len(txn))
+    })
 }
 #[rustler::nif]
 fn map_get(
     map: NifMap,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     key: &str,
-) -> Result<NifYOut, ()> {
-    map.doc.readonly(current_transaction, |txn| {
-        map.reference
-            .get(txn, key)
-            .map(|b| NifYOut::from_native(b, map.doc.clone()))
-            .ok_or(())
+) -> NifResult<(Atom, NifYOut)> {
+    let doc = map.doc;
+    doc.readonly(current_transaction, |txn| {
+        let map = map
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Map has been deleted".to_string()))?;
+        map.get(txn, key)
+            .map(|b| (atoms::ok(), NifYOut::from_native(b, doc.clone())))
+            .ok_or(rustler::Error::Atom("error"))
     })
 }
 #[rustler::nif]
@@ -69,29 +79,43 @@ fn map_delete(
     map: NifMap,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     key: &str,
-) -> Result<(), NifError> {
+) -> NifResult<Atom> {
     map.doc.mutably(env, current_transaction, |txn| {
-        map.reference.remove(txn, key);
-        Ok(())
+        let map = map
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Map has been deleted".to_string()))?;
+        map.remove(txn, key);
+        Ok(atoms::ok())
     })
 }
 #[rustler::nif]
 fn map_to_map(
     map: NifMap,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> HashMap<String, NifYOut> {
-    map.doc.readonly(current_transaction, |txn| {
-        map.reference
+) -> NifResult<HashMap<String, NifYOut>> {
+    let doc = map.doc;
+    doc.readonly(current_transaction, |txn| {
+        let map = map
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Map has been deleted".to_string()))?;
+        Ok(map
             .iter(txn)
-            .map(|(key, value)| (key.into(), NifYOut::from_native(value, map.doc.clone())))
-            .collect()
+            .map(|(key, value)| (key.into(), NifYOut::from_native(value, doc.clone())))
+            .collect())
     })
 }
 #[rustler::nif]
 fn map_to_json(
     map: NifMap,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifAny {
-    map.doc
-        .readonly(current_transaction, |txn| map.reference.to_json(txn).into())
+) -> NifResult<NifAny> {
+    map.doc.readonly(current_transaction, |txn| {
+        let map = map
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Map has been deleted".to_string()))?;
+        Ok(map.to_json(txn).into())
+    })
 }
