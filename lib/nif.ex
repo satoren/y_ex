@@ -148,7 +148,4 @@ defmodule Yex.Nif.Util do
   @moduledoc false
   def unwrap_ok_tuple({:ok, {}}), do: :ok
   def unwrap_ok_tuple(other), do: other
-  def unwrap_tuple({:ok, {}}), do: :ok
-  def unwrap_tuple({:error, {}}), do: :error
-  def unwrap_tuple(other), do: other
 end

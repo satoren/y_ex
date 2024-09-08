@@ -5,6 +5,7 @@ mod awareness;
 mod doc;
 mod error;
 mod map;
+mod shared_type;
 mod subscription;
 mod sync;
 mod text;

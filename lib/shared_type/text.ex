@@ -29,7 +29,7 @@ defmodule Yex.Text do
   @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{} = text, index, length) do
     index = if index < 0, do: __MODULE__.length(text) + index, else: index
-    Yex.Nif.text_delete(text, cur_txn(text), index, length) |> Yex.Nif.Util.unwrap_ok_tuple()
+    Yex.Nif.text_delete(text, cur_txn(text), index, length)
   end
 
   @spec format(t, integer(), integer(), map()) :: :ok | :error

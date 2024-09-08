@@ -1,27 +1,25 @@
 use crate::atoms;
 use crate::doc::TransactionResource;
 use crate::error::deleted_error;
-use crate::{doc::DocResource, wrap::NifWrap, yinput::NifYInput, youtput::NifYOut, NifAny};
+use crate::shared_type::NifSharedType;
+use crate::{doc::DocResource, yinput::NifYInput, youtput::NifYOut, NifAny};
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
 use std::collections::HashMap;
 use yrs::types::ToJson;
 use yrs::*;
 
-pub type MapRefResource = NifWrap<Hook<MapRef>>;
-#[rustler::resource_impl]
-impl rustler::Resource for MapRefResource {}
-
+pub type MapRefId = NifSharedType<MapRef>;
 #[derive(NifStruct)]
 #[module = "Yex.Map"]
 pub struct NifMap {
     doc: ResourceArc<DocResource>,
-    reference: ResourceArc<MapRefResource>,
+    reference: MapRefId,
 }
 impl NifMap {
     pub fn new(doc: ResourceArc<DocResource>, map: MapRef) -> Self {
         NifMap {
             doc,
-            reference: ResourceArc::new(map.hook().into()),
+            reference: MapRefId::new(map.hook()),
         }
     }
 }

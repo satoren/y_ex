@@ -13,6 +13,15 @@ defmodule Yex.ArrayTest do
     assert 1 == Array.length(array)
   end
 
+  test "insert_after" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "array")
+
+    Array.insert(array, 0, "Hello")
+    assert 1 == Array.length(array)
+  end
+
   test "push" do
     doc = Doc.new()
 
@@ -52,6 +61,15 @@ defmodule Yex.ArrayTest do
     end
 
     assert "Hello2" == Array.fetch!(array, -1)
+  end
+
+  test "compare" do
+    doc = Doc.new()
+
+    array1 = Doc.get_array(doc, "array")
+    array2 = Doc.get_array(doc, "array")
+
+    assert array1 == array2
   end
 
   test "unshift" do

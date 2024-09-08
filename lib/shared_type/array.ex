@@ -49,7 +49,6 @@ defmodule Yex.Array do
     index = if index < 0, do: __MODULE__.length(array) + index, else: index
 
     Yex.Nif.array_delete_range(array, cur_txn(array), index, length)
-    |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
   @doc """
@@ -73,7 +72,7 @@ defmodule Yex.Array do
   @spec fetch(t, integer()) :: {:ok, term()} | :error
   def fetch(%__MODULE__{} = array, index) do
     index = if index < 0, do: __MODULE__.length(array) + index, else: index
-    Yex.Nif.array_get(array, cur_txn(array), index) |> Yex.Nif.Util.unwrap_tuple()
+    Yex.Nif.array_get(array, cur_txn(array), index)
   end
 
   @spec fetch!(t, integer()) :: term()

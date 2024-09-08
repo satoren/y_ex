@@ -6,28 +6,26 @@ use crate::{
     atoms,
     doc::{DocResource, TransactionResource},
     error::deleted_error,
-    wrap::NifWrap,
+    shared_type::NifSharedType,
     yinput::NifYInput,
     youtput::NifYOut,
     NifAny,
 };
 
-pub type ArrayRefResource = NifWrap<Hook<ArrayRef>>;
-#[rustler::resource_impl]
-impl rustler::Resource for ArrayRefResource {}
+pub type ArrayRefId = NifSharedType<ArrayRef>;
 
 #[derive(NifStruct)]
 #[module = "Yex.Array"]
 pub struct NifArray {
     doc: ResourceArc<DocResource>,
-    reference: ResourceArc<ArrayRefResource>,
+    reference: ArrayRefId,
 }
 
 impl NifArray {
     pub fn new(doc: ResourceArc<DocResource>, array: ArrayRef) -> Self {
         NifArray {
             doc,
-            reference: ResourceArc::new(array.hook().into()),
+            reference: ArrayRefId::new(array.hook()),
         }
     }
 }
