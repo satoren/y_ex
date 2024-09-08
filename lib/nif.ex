@@ -9,7 +9,8 @@ defmodule Yex.Nif do
     crate: "yex",
     base_url: "https://github.com/satoren/y_ex/releases/download/v#{version}",
     force_build: System.get_env("RUSTLER_PRECOMPILATION_YEX_BUILD") in ["1", "true"],
-    version: version
+    version: version,
+    nif_versions: ["2.15", "2.16"]
 
   def doc_new(), do: :erlang.nif_error(:nif_not_loaded)
   def doc_with_options(_option), do: :erlang.nif_error(:nif_not_loaded)

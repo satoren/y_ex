@@ -86,6 +86,7 @@ jobs:
       - name: Install dependencies
         run: |
           mix deps.get
+          mix compile --force
 
       - name: download checksum files
         run: mix rustler_precompiled.download Yex.Nif --all --print
