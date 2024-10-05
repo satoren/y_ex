@@ -215,13 +215,13 @@ impl NifDoc {
         self.observe_update_v1(move |txn, event| {
             let doc_ref = doc_ref.clone();
             ENV.with(|env| {
-                let origin: Option<_> = txn.origin().map(|s| s.to_string());
                 let _ = env.send(
                     &pid,
                     (
                         atoms::update_v1(),
                         encode_binary_slice_to_term(*env, event.update.as_slice()),
-                        origin,
+                        txn.origin()
+                            .map(|s| encode_binary_slice_to_term(*env, s.as_ref())),
                         NifDoc { reference: doc_ref },
                     ),
                 );
@@ -239,14 +239,13 @@ impl NifDoc {
         self.observe_update_v2(move |txn, event| {
             let doc_ref = doc_ref.clone();
             ENV.with(|env| {
-                let origin: Option<_> = txn.origin().map(|s| s.to_string());
-
                 let _ = env.send(
                     &pid,
                     (
                         atoms::update_v2(),
                         encode_binary_slice_to_term(*env, event.update.as_slice()),
-                        origin,
+                        txn.origin()
+                            .map(|s| encode_binary_slice_to_term(*env, s.as_ref())),
                         NifDoc { reference: doc_ref },
                     ),
                 );
