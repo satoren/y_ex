@@ -74,6 +74,9 @@ defmodule Yex.XmlText do
     Yex.Nif.xml_text_prev_sibling(xml_text, cur_txn(xml_text))
   end
 
+  @doc """
+  The parent that holds this type. Is null if this xml is a top-level XML type.
+  """
   @spec parent(t) :: Yex.XmlElement.t() | Yex.XmlFragment.t() | nil
   def parent(%__MODULE__{} = xml_text) do
     Yex.Nif.xml_text_parent(xml_text, cur_txn(xml_text))

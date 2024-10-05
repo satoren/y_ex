@@ -32,6 +32,9 @@ defmodule Yex.XmlFragment do
     end)
   end
 
+  @doc """
+  The parent that holds this type. Is null if this xml is a top-level XML type.
+  """
   @spec parent(t) :: Yex.XmlElement.t() | Yex.XmlFragment.t() | nil
   def parent(%__MODULE__{} = xml_fragment) do
     Yex.Nif.xml_fragment_parent(xml_fragment, cur_txn(xml_fragment))
