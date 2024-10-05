@@ -117,7 +117,7 @@ defmodule Yex.XmlFragmentPrelim do
       "<div></div>"
 
   """
-  defstruct [:tag, :attributes, :children]
+  defstruct [:children]
 
   @type t :: %__MODULE__{
           children: [Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()]
