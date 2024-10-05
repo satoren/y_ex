@@ -32,6 +32,11 @@ defmodule Yex.XmlFragment do
     end)
   end
 
+  @spec parent(t) :: Yex.XmlElement.t() | Yex.XmlFragment.t() | nil
+  def parent(%__MODULE__{} = xml_fragment) do
+    Yex.Nif.xml_fragment_parent(xml_fragment, cur_txn(xml_fragment))
+  end
+
   def length(%__MODULE__{} = xml_fragment) do
     Yex.Nif.xml_fragment_length(xml_fragment, cur_txn(xml_fragment))
   end
@@ -93,5 +98,31 @@ defmodule Yex.XmlFragment do
 
   defp cur_txn(%__MODULE__{doc: doc_ref}) do
     Process.get(doc_ref, nil)
+  end
+end
+
+defmodule Yex.XmlFragmentPrelim do
+  @moduledoc """
+  A preliminary xml fragment. It can be used to early initialize the contents of a XmlFragment.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.insert(array, 0,  Yex.XmlFragmentPrelim.new([Yex.XmlElementPrelim.empty("div")]))
+      iex> {:ok, %Yex.XmlFragment{} = fragment} = Yex.Array.fetch(array, 0)
+      iex> Yex.XmlFragment.to_string(fragment)
+      "<div></div>"
+
+  """
+  defstruct [:tag, :attributes, :children]
+
+  @type t :: %__MODULE__{
+          children: [Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()]
+        }
+
+  def new(children) do
+    %__MODULE__{
+      children: Enum.to_list(children)
+    }
   end
 end
