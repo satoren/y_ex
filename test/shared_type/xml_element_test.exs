@@ -96,6 +96,12 @@ defmodule YexXmlElementTest do
       assert %{"width" => "12"} == XmlElement.get_attributes(xml1)
     end
 
+    test "parent", %{xml_element: e, xml_fragment: xml_fragment} do
+      parent = Yex.Xml.parent(e)
+
+      assert parent == xml_fragment
+    end
+
     test "first_child", %{xml_element: e} do
       assert nil == XmlElement.first_child(e)
       XmlElement.push(e, XmlTextPrelim.from(""))

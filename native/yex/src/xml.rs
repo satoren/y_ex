@@ -151,6 +151,22 @@ fn xml_fragment_to_string(
 }
 
 #[rustler::nif]
+fn xml_fragment_parent(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Option<NifYOut>> {
+    let doc = xml.doc;
+    doc.readonly(current_transaction, |txn| {
+        let xml = xml
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+
+        Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
+    })
+}
+
+#[rustler::nif]
 fn xml_element_insert(
     env: Env<'_>,
     xml: NifXmlElement,
@@ -334,6 +350,22 @@ fn xml_element_prev_sibling(
 }
 
 #[rustler::nif]
+fn xml_element_parent(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Option<NifYOut>> {
+    let doc = xml.doc;
+    doc.readonly(current_transaction, |txn| {
+        let xml = xml
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+
+        Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
+    })
+}
+
+#[rustler::nif]
 fn xml_text_insert(
     env: Env<'_>,
     text: NifXmlText,
@@ -500,5 +532,21 @@ fn xml_text_to_string(
             .get(txn)
             .ok_or(deleted_error("Xml has been deleted".to_string()))?;
         Ok(text.get_string(txn).into())
+    })
+}
+
+#[rustler::nif]
+fn xml_text_parent(
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Option<NifYOut>> {
+    let doc = xml.doc;
+    doc.readonly(current_transaction, |txn| {
+        let xml = xml
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+
+        Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
     })
 }

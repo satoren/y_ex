@@ -2,6 +2,7 @@ defmodule YexXmlFragmentTest do
   use ExUnit.Case
   alias Yex.{Doc, XmlFragment, XmlElement, XmlElementPrelim, XmlText, XmlTextPrelim}
   doctest XmlFragment
+  doctest Yex.XmlFragmentPrelim
 
   setup do
     doc = Doc.with_options(%Doc.Options{client_id: 1})
@@ -113,6 +114,10 @@ defmodule YexXmlFragmentTest do
         end)
 
       assert 6 === stream |> Enum.to_list() |> Enum.count()
+    end
+
+    test "parent", %{xml_fragment: f} do
+      assert nil == XmlFragment.parent(f)
     end
 
     test "children", %{xml_fragment: f} do

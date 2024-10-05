@@ -68,6 +68,8 @@ defmodule Yex.Nif do
   def xml_fragment_to_string(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_fragment_length(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
+  def xml_fragment_parent(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
   def xml_element_insert(_xml_element, _cur_txn, _index, _content),
     do: :erlang.nif_error(:nif_not_loaded)
 
@@ -92,6 +94,8 @@ defmodule Yex.Nif do
   def xml_element_prev_sibling(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_element_to_string(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
+  def xml_element_parent(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
   def xml_text_insert(_xml_text, _cur_txn, _index, _content),
     do: :erlang.nif_error(:nif_not_loaded)
 
@@ -111,6 +115,8 @@ defmodule Yex.Nif do
   def xml_text_prev_sibling(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_text_to_delta(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_text_to_string(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_parent(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def encode_state_vector_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def encode_state_as_update_v1(_doc, _cur_txn, _diff), do: :erlang.nif_error(:nif_not_loaded)
