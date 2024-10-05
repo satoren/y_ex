@@ -170,4 +170,113 @@ defmodule Yex.TextTest do
 
     assert text1 != text3
   end
+
+  describe "observe" do
+    test "set " do
+      doc = Doc.new()
+
+      text = Doc.get_text(doc, "text")
+
+      ref = Text.observe(text)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Text.insert(text, 0, "Hello")
+          Text.insert(text, 6, " World", %{"bold" => true})
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.TextEvent{
+                        target: ^text,
+                        delta: [
+                          %{insert: "Hello"},
+                          %{attributes: %{"bold" => true}, insert: " World"}
+                        ]
+                      }, "origin_value"}
+    end
+
+    test "delete " do
+      doc = Doc.new()
+
+      text = Doc.get_text(doc, "text")
+      Text.insert(text, 0, "Hello World")
+
+      ref = Text.observe(text)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Text.delete(text, 3, 4)
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.TextEvent{
+                        target: ^text,
+                        delta: [%{retain: 3}, %{delete: 4}]
+                      }, "origin_value"}
+    end
+
+    test "unobserve" do
+      doc = Doc.new()
+
+      text = Doc.get_text(doc, "text")
+      Text.insert(text, 0, "Hello World")
+
+      ref = Text.observe(text)
+      assert :ok = Text.unobserve(ref)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Text.delete(text, 3, 4)
+        end)
+
+      refute_receive {:observe_event, ^ref, %Yex.TextEvent{}, _}
+
+      # noop but return ok
+      assert :ok = Text.unobserve(make_ref())
+    end
+  end
+
+  test "observe_deep" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+
+    Text.insert(text, 0, "Hello World")
+
+    ref = Text.observe_deep(text)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Text.insert(text, 0, "Hello")
+        Text.insert(text, 5, " World")
+      end)
+
+    assert_receive {:observe_deep_event, ^ref,
+                    [
+                      %Yex.TextEvent{
+                        path: [],
+                        target: ^text,
+                        delta: [%{insert: "Hello World"}]
+                      }
+                    ], "origin_value"}
+  end
+
+  test "unobserve_deep" do
+    doc = Doc.new()
+
+    text = Doc.get_text(doc, "text")
+
+    ref = Text.observe_deep(text)
+    assert :ok = Text.unobserve_deep(ref)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Text.insert(text, 0, "Hello")
+        Text.insert(text, 6, " World")
+      end)
+
+    refute_receive {:observe_deep_event, _, %Yex.TextEvent{}, _}
+
+    # noop but return ok
+    assert :ok = Text.unobserve_deep(make_ref())
+  end
 end

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
+use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc, Term};
 use types::text::YChange;
 use yrs::*;
 
@@ -8,7 +8,9 @@ use crate::{
     any::NifAttr,
     atoms,
     doc::{DocResource, TransactionResource},
+    event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifXmlEvent, NifXmlTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
+    subscription::SubscriptionResource,
     text::encode_diffs,
     yinput::{NifXmlIn, NifYInputDelta},
     youtput::NifYOut,
@@ -47,6 +49,10 @@ impl NifSharedType for NifXmlFragment {
 
     const DELETED_ERROR: &'static str = "XmlFragment has been deleted";
 }
+impl NifSharedTypeDeepObservable for NifXmlFragment {}
+impl NifSharedTypeObservable for NifXmlFragment {
+    type Event = NifXmlEvent;
+}
 
 #[derive(NifStruct)]
 #[module = "Yex.XmlElement"]
@@ -62,6 +68,10 @@ impl NifXmlElement {
             reference: XmlElementId::new(xml.hook()),
         }
     }
+}
+impl NifSharedTypeDeepObservable for NifXmlElement {}
+impl NifSharedTypeObservable for NifXmlElement {
+    type Event = NifXmlEvent;
 }
 
 impl NifSharedType for NifXmlElement {
@@ -92,6 +102,7 @@ impl NifXmlText {
         }
     }
 }
+
 impl NifSharedType for NifXmlText {
     type RefType = XmlTextRef;
 
@@ -103,6 +114,11 @@ impl NifSharedType for NifXmlText {
     }
 
     const DELETED_ERROR: &'static str = "XmlText has been deleted";
+}
+
+impl NifSharedTypeDeepObservable for NifXmlText {}
+impl NifSharedTypeObservable for NifXmlText {
+    type Event = NifXmlTextEvent;
 }
 
 #[rustler::nif]
@@ -183,6 +199,25 @@ fn xml_fragment_parent(
 
         Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
     })
+}
+#[rustler::nif]
+fn xml_fragment_observe(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    xml.observe(current_transaction, pid, term)
+}
+
+#[rustler::nif]
+fn xml_fragment_observe_deep(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    xml.observe_deep(current_transaction, pid, term)
 }
 
 #[rustler::nif]
@@ -351,6 +386,25 @@ fn xml_element_parent(
         Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
     })
 }
+#[rustler::nif]
+fn xml_element_observe(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    xml.observe(current_transaction, pid, term)
+}
+
+#[rustler::nif]
+fn xml_element_observe_deep(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    xml.observe_deep(current_transaction, pid, term)
+}
 
 #[rustler::nif]
 fn xml_text_insert(
@@ -500,7 +554,26 @@ fn xml_text_parent(
     let doc = xml.doc();
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-
         Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
     })
+}
+
+#[rustler::nif]
+fn xml_text_observe(
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    xml.observe(current_transaction, pid, term)
+}
+
+#[rustler::nif]
+fn xml_text_observe_deep(
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    xml.observe_deep(current_transaction, pid, term)
 }
