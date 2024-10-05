@@ -1,6 +1,6 @@
 defmodule Yex.MapTest do
   use ExUnit.Case
-  alias Yex.{Doc, Map, MapPrelim}
+  alias Yex.{Doc, Map, MapPrelim, SharedType}
   doctest Map
   doctest MapPrelim
 
@@ -110,5 +110,134 @@ defmodule Yex.MapTest do
       end)
 
     assert 2 == Map.size(map)
+  end
+
+  describe "observe" do
+    test "set " do
+      doc = Doc.new()
+
+      map = Doc.get_map(doc, "map")
+
+      ref = SharedType.observe(map)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Map.set(map, "0", "Hello")
+          Map.set(map, "1", " World")
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.MapEvent{
+                        target: ^map,
+                        keys: %{
+                          "0" => %{action: :add, new_value: "Hello"},
+                          "1" => %{action: :add, new_value: " World"}
+                        }
+                      }, "origin_value", nil}
+    end
+
+    test "delete " do
+      doc = Doc.new()
+
+      map = Doc.get_map(doc, "map")
+      Map.set(map, "0", "Hello")
+      Map.set(map, "1", " World")
+
+      ref = SharedType.observe(map)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Map.delete(map, "0")
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.MapEvent{
+                        target: ^map,
+                        keys: %{"0" => %{action: :delete, old_value: "Hello"}}
+                      }, "origin_value", nil}
+    end
+
+    test "unobserve" do
+      doc = Doc.new()
+
+      map = Doc.get_map(doc, "text")
+
+      ref = SharedType.observe(map)
+      assert :ok = SharedType.unobserve(ref)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Map.set(map, "0", "Hello")
+        end)
+
+      refute_receive {:observe_event, _, %Yex.MapEvent{}, _}
+
+      # noop but return ok
+      assert :ok = SharedType.unobserve(make_ref())
+    end
+  end
+
+  test "observe_deep" do
+    doc = Doc.new()
+    map = Doc.get_map(doc, "data")
+
+    Map.set(
+      map,
+      "key1",
+      Yex.MapPrelim.from(%{
+        "key2" => Yex.MapPrelim.from(%{"key3" => Yex.ArrayPrelim.from([1, 2, 3, 4])})
+      })
+    )
+
+    ref = SharedType.observe_deep(map)
+
+    child_map = Yex.Map.fetch!(map, "key1")
+    child_map2 = Yex.Map.fetch!(child_map, "key2")
+    child_array = Yex.Map.fetch!(child_map2, "key3")
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Yex.Array.push(child_array, 5)
+        Yex.Map.set(child_map, "set1", "value1")
+        Yex.Map.set(map, "set2", "value2")
+      end)
+
+    assert_receive {:observe_deep_event, ^ref,
+                    [
+                      %Yex.MapEvent{
+                        path: [],
+                        target: ^map,
+                        keys: %{"set2" => %{action: :add, new_value: "value2"}}
+                      },
+                      %Yex.MapEvent{
+                        path: ["key1"],
+                        target: ^child_map,
+                        keys: %{"set1" => %{action: :add, new_value: "value1"}}
+                      },
+                      %Yex.ArrayEvent{
+                        change: [%{retain: 4}, %{insert: [5]}],
+                        path: ["key1", "key2", "key3"],
+                        target: ^child_array
+                      }
+                    ], "origin_value", _metadata}
+  end
+
+  test "unobserve_deep" do
+    doc = Doc.new()
+
+    map = Doc.get_map(doc, "text")
+
+    ref = SharedType.observe_deep(map)
+    assert :ok = SharedType.unobserve_deep(ref)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Map.set(map, "0", "Hello")
+      end)
+
+    refute_receive {:observe_deep_event, _, %Yex.MapEvent{}, _, _}
+
+    # noop but return ok
+    assert :ok = SharedType.unobserve_deep(make_ref())
   end
 end

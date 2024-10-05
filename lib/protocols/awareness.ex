@@ -1,10 +1,7 @@
 defmodule Yex.Awareness do
   @moduledoc """
+  Awareness is an optional feature that works well together with Yjs.
 
-
-  ## Examples
-      iex> doc = Yex.Doc.new()
-      iex> {:ok, _awareness} = Yex.Awareness.new(doc)
   """
 
   defstruct [

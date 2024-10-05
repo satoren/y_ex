@@ -41,7 +41,7 @@ defmodule Yex.Map do
 
   @doc """
   get a key from the map.
-  ## Examples
+    ## Examples
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "plane", ["Hello", "World"])
@@ -114,6 +114,11 @@ defmodule Yex.Map do
   def to_json(%__MODULE__{} = map) do
     Yex.Nif.map_to_json(map, cur_txn(map))
   end
+
+  defdelegate observe(t), to: Yex.SharedType
+  defdelegate observe(t, option), to: Yex.SharedType
+  defdelegate observe_deep(t), to: Yex.SharedType
+  defdelegate observe_deep(t, option), to: Yex.SharedType
 
   defp cur_txn(%__MODULE__{doc: doc_ref}) do
     Process.get(doc_ref, nil)

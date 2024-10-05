@@ -2,8 +2,12 @@ use std::collections::HashMap;
 
 use crate::{
     any::{NifAny, NifAttr},
+    array::NifArray,
     atoms,
+    map::NifMap,
+    text::NifText,
     wrap::NifWrap,
+    xml::{NifXmlElement, NifXmlFragment, NifXmlText},
 };
 use rustler::*;
 use yrs::{
@@ -323,4 +327,14 @@ impl<'de, 'a: 'de> rustler::Encoder for NifYInputDelta {
             .collect::<Vec<Term<'b>>>();
         deltas.encode(env)
     }
+}
+
+#[derive(NifUntaggedEnum)]
+pub enum NifSharedTypeInput {
+    Text(NifText),
+    Map(NifMap),
+    Array(NifArray),
+    XmlText(NifXmlText),
+    XmlElement(NifXmlElement),
+    XmlFragment(NifXmlFragment),
 }

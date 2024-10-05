@@ -80,6 +80,11 @@ defmodule Yex.Text do
     Yex.Nif.text_to_delta(text, cur_txn(text))
   end
 
+  defdelegate observe(t), to: Yex.SharedType
+  defdelegate observe(t, option), to: Yex.SharedType
+  defdelegate observe_deep(t), to: Yex.SharedType
+  defdelegate observe_deep(t, option), to: Yex.SharedType
+
   defp cur_txn(%__MODULE__{doc: doc_ref}) do
     Process.get(doc_ref, nil)
   end
