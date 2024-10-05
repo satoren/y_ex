@@ -141,4 +141,20 @@ defmodule Yex.DocTest do
       )
     end
   end
+
+  test "monitor_update with transaction origin" do
+    doc = Doc.new()
+    {:ok, monitor_ref} = Doc.monitor_update(doc)
+
+    text1 = Doc.get_text(doc, "text")
+
+    Doc.transaction(doc, "origin", fn ->
+      Text.insert(text1, 0, "World")
+      Text.insert(text1, 0, "Hello")
+    end)
+
+    assert Text.to_string(text1) == "HelloWorld"
+    assert_receive {:update_v1, _update, "origin", ^doc}
+    Doc.demonitor_update(monitor_ref)
+  end
 end
