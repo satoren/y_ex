@@ -156,4 +156,19 @@ defmodule Yex.ArrayTest do
     #    assert "HelloHello" == Array.to_string(array)
     assert 2 == Array.length(array)
   end
+
+  test "observe" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "text")
+
+    ref = Array.observe(array)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Array.insert(array, 0, "Hello")
+      end)
+
+    assert_receive {:observe_event, ^ref, %Yex.ArrayEvent{}, "origin_value"}
+  end
 end

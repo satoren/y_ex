@@ -130,6 +130,17 @@ defmodule Yex.Array do
     Yex.Nif.array_to_json(array, cur_txn(array))
   end
 
+  def observe(%__MODULE__{} = array) do
+    ref = make_ref()
+    sub = Yex.Nif.array_observe(array, cur_txn(array), self(), ref)
+    Process.put(ref, sub)
+    ref
+  end
+
+  def unobserve(observe_ref) do
+    Yex.Nif.sub_unsubscribe(Process.get(observe_ref))
+  end
+
   defp cur_txn(%__MODULE__{doc: doc_ref}) do
     Process.get(doc_ref, nil)
   end
@@ -160,4 +171,19 @@ defmodule Yex.ArrayPrelim do
   def from(enumerable) do
     %__MODULE__{list: Enum.to_list(enumerable)}
   end
+end
+
+defmodule Yex.ArrayEvent do
+  @moduledoc """
+
+  """
+  defstruct [
+    :path,
+    :target
+  ]
+
+  @type t :: %__MODULE__{
+          path: list(number() | String.t()),
+          target: Yex.Array.t()
+        }
 end

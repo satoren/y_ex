@@ -8,7 +8,7 @@ rustler::atoms! {
     update_v1,
     update_v2,
 
-
+    observe_event,
 
 // messages types
   sync,
