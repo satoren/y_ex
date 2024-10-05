@@ -122,6 +122,11 @@ defmodule Yex.XmlElement do
     Yex.Nif.xml_element_prev_sibling(xml_element, cur_txn(xml_element))
   end
 
+  @spec parent(t) :: Yex.XmlElement.t() | Yex.XmlFragment.t() | nil
+  def parent(%__MODULE__{} = xml_element) do
+    Yex.Nif.xml_element_parent(xml_element, cur_txn(xml_element))
+  end
+
   @spec to_string(t) :: binary()
   def to_string(%__MODULE__{} = xml_element) do
     Yex.Nif.xml_element_to_string(xml_element, cur_txn(xml_element))

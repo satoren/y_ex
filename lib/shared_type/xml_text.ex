@@ -10,6 +10,11 @@ defmodule Yex.XmlText do
     :reference
   ]
 
+  @type t :: %__MODULE__{
+          doc: reference(),
+          reference: reference()
+        }
+
   @type delta :: Yex.Text.delta()
 
   @spec insert(t, integer(), Yex.input_type()) :: :ok | :error
@@ -53,16 +58,19 @@ defmodule Yex.XmlText do
     Yex.Nif.xml_text_length(xml_text, cur_txn(xml_text))
   end
 
-  @type t :: %__MODULE__{
-          doc: reference(),
-          reference: reference()
-        }
+  @spec next_sibling(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def next_sibling(%__MODULE__{} = xml_text) do
     Yex.Nif.xml_text_next_sibling(xml_text, cur_txn(xml_text))
   end
 
+  @spec prev_sibling(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def prev_sibling(%__MODULE__{} = xml_text) do
     Yex.Nif.xml_text_prev_sibling(xml_text, cur_txn(xml_text))
+  end
+
+  @spec parent(t) :: Yex.XmlElement.t() | Yex.XmlFragment.t() | nil
+  def parent(%__MODULE__{} = xml_text) do
+    Yex.Nif.xml_text_parent(xml_text, cur_txn(xml_text))
   end
 
   defp cur_txn(%__MODULE__{doc: doc_ref}) do
