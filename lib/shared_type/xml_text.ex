@@ -58,11 +58,17 @@ defmodule Yex.XmlText do
     Yex.Nif.xml_text_length(xml_text, cur_txn(xml_text))
   end
 
+  @doc """
+  The next sibling of this type. Is null if this is the last child of its parent.
+  """
   @spec next_sibling(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def next_sibling(%__MODULE__{} = xml_text) do
     Yex.Nif.xml_text_next_sibling(xml_text, cur_txn(xml_text))
   end
 
+  @doc """
+  The previous sibling of this type. Is null if this is the first child of its parent.
+  """
   @spec prev_sibling(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def prev_sibling(%__MODULE__{} = xml_text) do
     Yex.Nif.xml_text_prev_sibling(xml_text, cur_txn(xml_text))
