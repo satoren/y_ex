@@ -8,9 +8,15 @@ use crate::{
     any::NifAttr,
     atoms,
     doc::{DocResource, TransactionResource},
-    shared_type::{NifSharedType, SharedTypeId},
+    event::{NifEvent, NifTextEvent},
+    shared_type::NifSharedType,
+    shared_type::SharedTypeId,
+    subscription::SubscriptionResource,
+    term_box::TermBox,
+    wrap::SliceIntoBinary,
     yinput::NifYInputDelta,
     youtput::NifYOut,
+    ENV,
 };
 
 pub type TextRefId = SharedTypeId<TextRef>;
@@ -204,4 +210,78 @@ pub fn encode_diff<'a>(
             .unwrap();
     }
     Ok(map)
+}
+
+#[rustler::nif]
+fn text_observe(
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    let doc = text.doc();
+
+    let term_value = TermBox::new(term);
+
+    doc.readonly(current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
+
+        let doc_ref = doc.clone();
+        let sub = text.observe(move |txn, event| {
+            let doc_ref = doc_ref.clone();
+            ENV.with(|env| {
+                let v = term_value.get(*env);
+                let _ = env.send(
+                    &pid,
+                    (
+                        atoms::observe_event(),
+                        v,
+                        NifTextEvent::new(&doc_ref, event, txn),
+                        txn.origin().map(|s| SliceIntoBinary::new(s.as_ref())),
+                    ),
+                );
+            })
+        });
+
+        Ok(SubscriptionResource::arc(sub))
+    })
+}
+
+#[rustler::nif]
+fn text_observe_deep(
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    let doc = text.doc();
+
+    let term_value = TermBox::new(term);
+
+    doc.readonly(current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
+
+        let doc_ref = doc.clone();
+        let sub = text.observe_deep(move |txn, events| {
+            let doc_ref = doc_ref.clone();
+            ENV.with(|env| {
+                let v = term_value.get(*env);
+                let events: Vec<NifEvent> = events
+                    .iter()
+                    .map(|event| NifEvent::new(doc_ref.clone(), event, txn))
+                    .collect();
+                let _ = env.send(
+                    &pid,
+                    (
+                        atoms::observe_deep_event(),
+                        v,
+                        events,
+                        txn.origin().map(|s| SliceIntoBinary::new(s.as_ref())),
+                    ),
+                );
+            })
+        });
+
+        Ok(SubscriptionResource::arc(sub))
+    })
 }

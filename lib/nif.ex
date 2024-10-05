@@ -40,6 +40,9 @@ defmodule Yex.Nif do
   def text_to_string(_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def text_length(_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
+  def text_observe(_text, _cur_txn, _pid, _ref), do: :erlang.nif_error(:nif_not_loaded)
+  def text_observe_deep(_text, _cur_txn, _pid, _ref), do: :erlang.nif_error(:nif_not_loaded)
+
   def array_insert(_array, _cur_txn, _index, _value), do: :erlang.nif_error(:nif_not_loaded)
   def array_insert_list(_array, _cur_txn, _index, _values), do: :erlang.nif_error(:nif_not_loaded)
   def array_length(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -51,12 +54,18 @@ defmodule Yex.Nif do
 
   def array_to_json(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
+  def array_observe(_array, _cur_txn, _pid, _ref), do: :erlang.nif_error(:nif_not_loaded)
+  def array_observe_deep(_array, _cur_txn, _pid, _ref), do: :erlang.nif_error(:nif_not_loaded)
+
   def map_set(_map, _cur_txn, _key, _value), do: :erlang.nif_error(:nif_not_loaded)
   def map_size(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_get(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_delete(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_map(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_json(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def map_observe(_map, _cur_txn, _pid, _ref), do: :erlang.nif_error(:nif_not_loaded)
+  def map_observe_deep(_map, _cur_txn, _pid, _ref), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_insert(_xml_fragment, _cur_txn, _index, _content),
     do: :erlang.nif_error(:nif_not_loaded)
