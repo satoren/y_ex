@@ -271,8 +271,8 @@ defmodule Yex.Sync.SharedDoc do
     {:noreply, state}
   end
 
-  defp handle_yjs_message({:awareness, message}, _from, state) do
-    Awareness.apply_update(state.awareness, message)
+  defp handle_yjs_message({:awareness, message}, from, state) do
+    Awareness.apply_update(state.awareness, message, "#{inspect(from)}")
     {:noreply, state}
   end
 
@@ -281,8 +281,9 @@ defmodule Yex.Sync.SharedDoc do
     {:noreply, state}
   end
 
-  defp broadcast_to_users(message, _origin, state) do
+  defp broadcast_to_users(message, origin, state) do
     state.observer_process
+    |> Enum.filter(fn {pid, _} -> "#{inspect(pid)}" != origin end)
     |> Enum.each(fn {pid, _} ->
       send(pid, {:yjs, message, self()})
     end)
