@@ -15,12 +15,24 @@ defmodule Yex.Awareness do
           reference: any()
         }
 
+  @doc """
+  create a new awareness instance
+  """
   def new(doc), do: Yex.Nif.awareness_new(doc)
 
   # crdt api
 
   @spec client_id(t) :: integer()
   def client_id(%__MODULE__{} = awareness), do: Yex.Nif.awareness_client_id(awareness)
+
+  @doc """
+  get local state of the current client
+  ## Examples
+      iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{ client_id: 100 }))
+      iex> Yex.Awareness.get_states(awareness)
+      %{}
+  """
+  @spec get_local_state(t) :: map
   def get_local_state(%__MODULE__{} = awareness), do: Yex.Nif.awareness_get_local_state(awareness)
 
   @doc """
@@ -32,6 +44,7 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.get_states(awareness)
       %{100 => %{"key" => "value"}}
   """
+  @spec set_local_state(t, map) :: :ok
   def set_local_state(%__MODULE__{} = awareness, map),
     do: Yex.Nif.awareness_set_local_state(awareness, map)
 
@@ -44,6 +57,7 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.get_client_ids(awareness)
       []
   """
+  @spec clean_local_state(t) :: :ok
   def clean_local_state(%__MODULE__{} = awareness),
     do: Yex.Nif.awareness_clean_local_state(awareness)
 
@@ -51,12 +65,12 @@ defmodule Yex.Awareness do
 
 
   ## Examples
-  ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.new())
       iex> Yex.Awareness.apply_update(awareness, <<1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>)
       iex> Yex.Awareness.get_client_ids(awareness)
       [2230489810]
   """
+  @spec get_client_ids(t) :: [integer()]
   def get_client_ids(%__MODULE__{} = awareness),
     do: Yex.Nif.awareness_get_client_ids(awareness)
 
@@ -69,6 +83,7 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.get_states(awareness)
       %{100 => %{"key" => "value"}}
   """
+  @spec get_states(t) :: %{integer() => term()}
   def get_states(%__MODULE__{} = awareness),
     do: Yex.Nif.awareness_get_states(awareness)
 
@@ -81,6 +96,7 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.set_local_state(awareness, %{ "key" => "value" })
       iex> receive do {:awareness_update, %{removed: [], added: [10], updated: []}, _origin, _awareness} -> :ok end
   """
+  @spec monitor_update(t) :: reference()
   def monitor_update(%__MODULE__{} = awareness) do
     ref = Yex.Nif.awareness_monitor_update(awareness, self())
 
@@ -89,6 +105,7 @@ defmodule Yex.Awareness do
     ref
   end
 
+  @spec demonitor_update(reference()) :: :ok
   def demonitor_update(sub) do
     Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
     Yex.Nif.sub_unsubscribe(sub)
@@ -103,6 +120,7 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.apply_update(awareness, <<1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>)
       iex> receive do {:awareness_change, %{removed: [], added: [2230489810], updated: []}, _origin, _awareness} -> :ok end
   """
+  @spec monitor_change(t) :: reference()
   def monitor_change(%__MODULE__{} = awareness) do
     ref = Yex.Nif.awareness_monitor_change(awareness, self())
 
@@ -112,6 +130,7 @@ defmodule Yex.Awareness do
     ref
   end
 
+  @spec demonitor_change(reference()) :: :ok
   def demonitor_change(sub) do
     Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
     Yex.Nif.sub_unsubscribe(sub)
@@ -128,6 +147,7 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.encode_update(awareness, [10])
       {:ok, <<1, 10, 1, 15, 123, 34, 107, 101, 121, 34, 58, 34, 118, 97, 108, 117, 101, 34, 125>>}
   """
+  @spec encode_update(t, [integer()]) :: {:ok, binary()}
   def encode_update(awareness, clients) do
     Yex.Nif.awareness_encode_update_v1(awareness, clients)
   end
@@ -143,8 +163,9 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.get_client_ids(awareness)
       [2230489810]
   """
-  def apply_update(awareness, update) do
-    Yex.Nif.awareness_apply_update_v1(awareness, update, nil) |> Yex.Nif.Util.unwrap_ok_tuple()
+  @spec apply_update(t, binary(), String.t() | nil) :: :ok
+  def apply_update(awareness, update, origin \\ nil) do
+    Yex.Nif.awareness_apply_update_v1(awareness, update, origin) |> Yex.Nif.Util.unwrap_ok_tuple()
   end
 
   @doc """
@@ -153,6 +174,7 @@ defmodule Yex.Awareness do
   ## Examples
       iex> {:ok, _awareness} = Yex.Awareness.new(Yex.Doc.new())
   """
+  @spec remove_states(t, [integer()]) :: :ok
   def remove_states(awareness, clients) do
     Yex.Nif.awareness_remove_states(awareness, clients)
   end

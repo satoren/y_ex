@@ -52,4 +52,13 @@ defmodule Yex.AwarenessTest do
     Awareness.remove_states(awareness, [10])
     assert [] === Awareness.get_client_ids(awareness)
   end
+
+  test "apply_update with origin" do
+    {:ok, awareness} = Yex.Awareness.new(Yex.Doc.new())
+    Yex.Awareness.monitor_change(awareness)
+    Yex.Awareness.apply_update(awareness, <<1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>, "origin")
+
+    assert_receive {:awareness_change, %{removed: [], added: [2_230_489_810], updated: []},
+                    "origin", _awareness}
+  end
 end
