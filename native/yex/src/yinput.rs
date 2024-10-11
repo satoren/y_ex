@@ -158,7 +158,7 @@ impl Prelim for NifYInput {
                 (ItemContent::Type(inner), Some(self))
             }
             NifYInput::XmlFragmentPrelim(_) => {
-                let inner = Branch::new(TypeRef::XmlText);
+                let inner = Branch::new(TypeRef::XmlFragment);
                 (ItemContent::Type(inner), Some(self))
             }
         }

@@ -142,5 +142,11 @@ defmodule YexXmlTextTest do
 
       assert "content" == XmlText.to_string(next_prev)
     end
+
+    test "parent", %{xml_text: text, xml_fragment: xml_fragment} do
+      parent = Yex.Xml.parent(text)
+
+      assert parent == xml_fragment
+    end
   end
 end
