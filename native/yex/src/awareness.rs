@@ -164,7 +164,7 @@ fn awareness_monitor_change(
                     updated: summary.updated.clone(),
                     removed: summary.removed.clone(),
                 };
-                let origin = origin.map(|origin| origin.clone()).map(|o| o.to_string());
+
                 let awareness_ref = awareness_ref.clone();
                 ENV.with(|env| {
                     let _ = env.send(
@@ -172,7 +172,7 @@ fn awareness_monitor_change(
                         (
                             atoms::awareness_change(),
                             summary,
-                            origin,
+                            origin.map(|s| encode_binary_slice_to_term(*env, s.as_ref())),
                             NifAwareness {
                                 reference: awareness_ref,
                             },
