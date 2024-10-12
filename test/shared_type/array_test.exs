@@ -162,7 +162,7 @@ defmodule Yex.ArrayTest do
 
     array = Doc.get_array(doc, "text")
 
-    {:ok, ref} = Array.observe(array)
+    ref = Array.observe(array)
 
     :ok =
       Doc.transaction(doc, "origin_value", fn ->
@@ -177,7 +177,7 @@ defmodule Yex.ArrayTest do
 
     array = Doc.get_array(doc, "text")
 
-    {:ok, ref} = Array.observe(array)
+    ref = Array.observe(array)
     Array.unobserve(ref)
 
     :ok =
@@ -200,7 +200,7 @@ defmodule Yex.ArrayTest do
       })
     )
 
-    {:ok, ref} = Array.observe_deep(array)
+    ref = Array.observe_deep(array)
 
     :ok =
       Doc.transaction(doc, "origin_value", fn ->
@@ -221,7 +221,7 @@ defmodule Yex.ArrayTest do
 
     array = Doc.get_array(doc, "text")
 
-    {:ok, ref} = Array.observe_deep(array)
+    ref = Array.observe_deep(array)
     Array.unobserve_deep(ref)
 
     :ok =

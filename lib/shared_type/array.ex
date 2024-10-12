@@ -130,38 +130,36 @@ defmodule Yex.Array do
     Yex.Nif.array_to_json(array, cur_txn(array))
   end
 
+  @spec observe(t) :: reference()
   def observe(%__MODULE__{} = array) do
     ref = make_ref()
+    sub = Yex.Nif.array_observe(array, cur_txn(array), self(), ref)
+    Process.put(ref, sub)
+    ref
+  end
 
-    case Yex.Nif.array_observe(array, cur_txn(array), self(), ref) do
-      {:ok, sub} ->
-        Process.put(ref, sub)
-        {:ok, ref}
-
-      error ->
-        error
+  @spec unobserve(t) :: :ok
+  def unobserve(observe_ref) do
+    case Process.get(observe_ref) do
+      nil -> :ok
+      sub -> Yex.Nif.sub_unsubscribe(sub)
     end
   end
 
-  def unobserve(observe_ref) do
-    Yex.Nif.sub_unsubscribe(Process.get(observe_ref))
-  end
-
+  @spec observe_deep(t) :: reference()
   def observe_deep(%__MODULE__{} = array) do
     ref = make_ref()
-
-    case Yex.Nif.array_observe_deep(array, cur_txn(array), self(), ref) do
-      {:ok, sub} ->
-        Process.put(ref, sub)
-        {:ok, ref}
-
-      error ->
-        error
-    end
+    sub = Yex.Nif.array_observe_deep(array, cur_txn(array), self(), ref)
+    Process.put(ref, sub)
+    ref
   end
 
+  @spec unobserve_deep(t) :: :ok
   def unobserve_deep(observe_ref) do
-    Yex.Nif.sub_unsubscribe(Process.get(observe_ref))
+    case Process.get(observe_ref) do
+      nil -> :ok
+      sub -> Yex.Nif.sub_unsubscribe(sub)
+    end
   end
 
   defp cur_txn(%__MODULE__{doc: doc_ref}) do

@@ -7,7 +7,7 @@ use yrs::*;
 use crate::{
     atoms,
     doc::{DocResource, TransactionResource},
-    error::{deleted_error, NifError},
+    error::deleted_error,
     event::{NifArrayEvent, NifEvent},
     shared_type::NifSharedType,
     subscription::SubscriptionResource,
@@ -140,7 +140,7 @@ fn array_observe(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     pid: rustler::LocalPid,
     term: Term<'_>,
-) -> Result<ResourceArc<SubscriptionResource>, NifError> {
+) -> NifResult<ResourceArc<SubscriptionResource>> {
     let doc = array.doc;
 
     let term_value = TermBox::new(term);
@@ -179,7 +179,7 @@ fn array_observe_deep(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     pid: rustler::LocalPid,
     term: Term<'_>,
-) -> Result<ResourceArc<SubscriptionResource>, NifError> {
+) -> NifResult<ResourceArc<SubscriptionResource>> {
     let doc = array.doc;
 
     let term_value = TermBox::new(term);
