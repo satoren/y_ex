@@ -171,4 +171,32 @@ defmodule Yex.ArrayTest do
 
     assert_receive {:observe_event, ^ref, %Yex.ArrayEvent{}, "origin_value"}
   end
+
+  test "observe_deep" do
+    doc = Doc.new()
+    array = Doc.get_array(doc, "data")
+
+    Array.insert(
+      array,
+      0,
+      Yex.MapPrelim.from(%{
+        "key" => Yex.MapPrelim.from(%{"key" => ArrayPrelim.from([1, 2, 3, 4])})
+      })
+    )
+
+    ref = Array.observe_deep(array)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        map = Yex.Array.fetch!(array, 0)
+        child_map = Yex.Map.fetch!(map, "key")
+
+        Yex.Array.push(array, "array_value")
+        Yex.Map.set(child_map, "key2", "value")
+        Yex.Map.set(map, "key2", "value")
+      end)
+
+    assert_receive {:observe_event, ^ref, [%Yex.ArrayEvent{}, %Yex.MapEvent{}, %Yex.MapEvent{}],
+                    "origin_value"}
+  end
 end

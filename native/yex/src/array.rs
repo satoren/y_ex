@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use rustler::{Atom, Env, NifResult, NifStruct,  ResourceArc, Term};
+use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc, Term};
 use yrs::types::ToJson;
 use yrs::*;
 
@@ -195,7 +195,10 @@ fn array_observe_deep(
             let doc_ref = doc_ref.clone();
             ENV.with(|env| {
                 let v = term_value.get(*env);
-                let events: Vec<NifEvent> = events.iter().map(|event| NifEvent::new(doc_ref.clone(), event)).collect();
+                let events: Vec<NifEvent> = events
+                    .iter()
+                    .map(|event| NifEvent::new(doc_ref.clone(), event))
+                    .collect();
                 let _ = env.send(
                     &pid,
                     (

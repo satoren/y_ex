@@ -1,7 +1,15 @@
-use rustler::{Decoder, Encoder, Env, ListIterator, NifResult, NifStruct, NifUntaggedEnum, ResourceArc, Term};
-use yrs::types::{array::ArrayEvent, map::MapEvent, text::TextEvent, xml::{XmlEvent, XmlTextEvent}, Delta};
+use rustler::{NifStruct, NifUntaggedEnum, ResourceArc};
+use yrs::types::{
+    array::ArrayEvent,
+    map::MapEvent,
+    text::TextEvent,
+    xml::{XmlEvent, XmlTextEvent},
+};
 
-use crate::{array::NifArray, doc::DocResource, map::NifMap, text::NifText, wrap::NifWrap, xml::{NifXmlFragment, NifXmlText}, youtput::NifYOut};
+use crate::{
+    array::NifArray, doc::DocResource, map::NifMap, text::NifText, xml::NifXmlText,
+    youtput::NifYOut,
+};
 
 #[derive(NifUntaggedEnum)]
 pub enum PathSegment {
@@ -33,7 +41,6 @@ impl From<yrs::types::Path> for NifPath {
     }
 }
 
-
 #[derive(NifStruct)]
 #[module = "Yex.ArrayEvent"]
 pub struct NifArrayEvent {
@@ -44,14 +51,11 @@ pub struct NifArrayEvent {
 impl NifArrayEvent {
     pub fn new(doc: ResourceArc<DocResource>, event: &ArrayEvent) -> Self {
         NifArrayEvent {
-            path: event
-                .path().into(),
+            path: event.path().into(),
             target: NifArray::new(doc, event.target().clone()),
         }
     }
 }
-
-
 
 #[derive(NifStruct)]
 #[module = "Yex.TextEvent"]
@@ -63,8 +67,7 @@ pub struct NifTextEvent {
 impl NifTextEvent {
     pub fn new(doc: ResourceArc<DocResource>, event: &TextEvent) -> Self {
         NifTextEvent {
-            path: event
-            .path().into(),
+            path: event.path().into(),
             target: NifText::new(doc, event.target().clone()),
         }
     }
@@ -80,13 +83,11 @@ pub struct NifMapEvent {
 impl NifMapEvent {
     pub fn new(doc: ResourceArc<DocResource>, event: &MapEvent) -> Self {
         NifMapEvent {
-            path: event
-            .path().into(),
+            path: event.path().into(),
             target: NifMap::new(doc, event.target().clone()),
         }
     }
 }
-
 
 #[derive(NifStruct)]
 #[module = "Yex.XmlEvent"]
@@ -98,14 +99,11 @@ pub struct NifXmlEvent {
 impl NifXmlEvent {
     pub fn new(doc: ResourceArc<DocResource>, event: &XmlEvent) -> Self {
         NifXmlEvent {
-            path: event
-            .path().into(),
-            target: NifYOut::from_xml_out( event.target().clone(), doc),
+            path: event.path().into(),
+            target: NifYOut::from_xml_out(event.target().clone(), doc),
         }
     }
 }
-
-
 
 #[derive(NifStruct)]
 #[module = "Yex.XmlTextEvent"]
@@ -117,13 +115,11 @@ pub struct NifXmlTextEvent {
 impl NifXmlTextEvent {
     pub fn new(doc: ResourceArc<DocResource>, event: &XmlTextEvent) -> Self {
         NifXmlTextEvent {
-            path: event
-            .path().into(),
+            path: event.path().into(),
             target: NifXmlText::new(doc, event.target().clone()),
         }
     }
 }
-
 
 #[derive(NifUntaggedEnum)]
 pub enum NifEvent {
@@ -135,13 +131,17 @@ pub enum NifEvent {
 }
 
 impl NifEvent {
-    pub fn new(doc: ResourceArc<DocResource>, event: & yrs::types::Event) -> Self {
+    pub fn new(doc: ResourceArc<DocResource>, event: &yrs::types::Event) -> Self {
         match event {
             yrs::types::Event::Text(event) => NifEvent::Text(NifTextEvent::new(doc, &event)),
             yrs::types::Event::Array(event) => NifEvent::Array(NifArrayEvent::new(doc, &event)),
             yrs::types::Event::Map(event) => NifEvent::Map(NifMapEvent::new(doc, &event)),
-            yrs::types::Event::XmlFragment(event) => NifEvent::XmlFragment(NifXmlEvent::new(doc, &event)),
-            yrs::types::Event::XmlText(event) => NifEvent::XmlText(NifXmlTextEvent::new(doc, &event)),
+            yrs::types::Event::XmlFragment(event) => {
+                NifEvent::XmlFragment(NifXmlEvent::new(doc, &event))
+            }
+            yrs::types::Event::XmlText(event) => {
+                NifEvent::XmlText(NifXmlTextEvent::new(doc, &event))
+            }
         }
     }
 }
