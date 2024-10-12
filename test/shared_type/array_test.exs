@@ -178,7 +178,7 @@ defmodule Yex.ArrayTest do
     array = Doc.get_array(doc, "text")
 
     ref = Array.observe(array)
-    Array.unobserve(ref)
+    assert :ok = Array.unobserve(ref)
 
     :ok =
       Doc.transaction(doc, "origin_value", fn ->
@@ -186,6 +186,9 @@ defmodule Yex.ArrayTest do
       end)
 
     refute_receive {:observe_event, _, %Yex.ArrayEvent{}, _}
+
+    # noop but return ok
+    assert :ok = Array.unobserve(make_ref())
   end
 
   test "observe_deep" do
@@ -222,7 +225,7 @@ defmodule Yex.ArrayTest do
     array = Doc.get_array(doc, "text")
 
     ref = Array.observe_deep(array)
-    Array.unobserve_deep(ref)
+    assert :ok = Array.unobserve_deep(ref)
 
     :ok =
       Doc.transaction(doc, "origin_value", fn ->
@@ -230,5 +233,8 @@ defmodule Yex.ArrayTest do
       end)
 
     refute_receive {:observe_event, _, %Yex.ArrayEvent{}, _}
+
+    # noop but return ok
+    assert :ok = Array.unobserve_deep(make_ref())
   end
 end

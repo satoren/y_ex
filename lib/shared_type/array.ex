@@ -141,8 +141,12 @@ defmodule Yex.Array do
   @spec unobserve(t) :: :ok
   def unobserve(observe_ref) do
     case Process.get(observe_ref) do
-      nil -> :ok
-      sub -> Yex.Nif.sub_unsubscribe(sub)
+      nil ->
+        :ok
+
+      sub ->
+        Process.delete(observe_ref)
+        Yex.Nif.sub_unsubscribe(sub)
     end
   end
 
@@ -157,8 +161,12 @@ defmodule Yex.Array do
   @spec unobserve_deep(t) :: :ok
   def unobserve_deep(observe_ref) do
     case Process.get(observe_ref) do
-      nil -> :ok
-      sub -> Yex.Nif.sub_unsubscribe(sub)
+      nil ->
+        :ok
+
+      sub ->
+        Process.delete(observe_ref)
+        Yex.Nif.sub_unsubscribe(sub)
     end
   end
 
