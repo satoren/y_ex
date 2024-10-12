@@ -162,7 +162,7 @@ defmodule Yex.ArrayTest do
 
     array = Doc.get_array(doc, "text")
 
-    ref = Array.observe(array)
+    {:ok, ref} = Array.observe(array)
 
     :ok =
       Doc.transaction(doc, "origin_value", fn ->
@@ -170,6 +170,22 @@ defmodule Yex.ArrayTest do
       end)
 
     assert_receive {:observe_event, ^ref, %Yex.ArrayEvent{}, "origin_value"}
+  end
+
+  test "unobserve" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "text")
+
+    {:ok, ref} = Array.observe(array)
+    Array.unobserve(ref)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Array.insert(array, 0, "Hello")
+      end)
+
+    refute_receive {:observe_event, _, %Yex.ArrayEvent{}, _}
   end
 
   test "observe_deep" do
@@ -184,7 +200,7 @@ defmodule Yex.ArrayTest do
       })
     )
 
-    ref = Array.observe_deep(array)
+    {:ok, ref} = Array.observe_deep(array)
 
     :ok =
       Doc.transaction(doc, "origin_value", fn ->
@@ -198,5 +214,21 @@ defmodule Yex.ArrayTest do
 
     assert_receive {:observe_event, ^ref, [%Yex.ArrayEvent{}, %Yex.MapEvent{}, %Yex.MapEvent{}],
                     "origin_value"}
+  end
+
+  test "unobserve_deep" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "text")
+
+    {:ok, ref} = Array.observe_deep(array)
+    Array.unobserve_deep(ref)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Array.insert(array, 0, "Hello")
+      end)
+
+    refute_receive {:observe_event, _, %Yex.ArrayEvent{}, _}
   end
 end

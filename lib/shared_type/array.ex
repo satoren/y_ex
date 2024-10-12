@@ -132,9 +132,15 @@ defmodule Yex.Array do
 
   def observe(%__MODULE__{} = array) do
     ref = make_ref()
-    sub = Yex.Nif.array_observe(array, cur_txn(array), self(), ref)
-    Process.put(ref, sub)
-    ref
+
+    case Yex.Nif.array_observe(array, cur_txn(array), self(), ref) do
+      {:ok, sub} ->
+        Process.put(ref, sub)
+        {:ok, ref}
+
+      error ->
+        error
+    end
   end
 
   def unobserve(observe_ref) do
@@ -143,9 +149,15 @@ defmodule Yex.Array do
 
   def observe_deep(%__MODULE__{} = array) do
     ref = make_ref()
-    sub = Yex.Nif.array_observe_deep(array, cur_txn(array), self(), ref)
-    Process.put(ref, sub)
-    ref
+
+    case Yex.Nif.array_observe_deep(array, cur_txn(array), self(), ref) do
+      {:ok, sub} ->
+        Process.put(ref, sub)
+        {:ok, ref}
+
+      error ->
+        error
+    end
   end
 
   def unobserve_deep(observe_ref) do
