@@ -34,22 +34,39 @@ defmodule YexTest do
     end
   end
 
-  describe "encode_state_vector" do
-    test "encode_state_vector" do
+  describe "encode_state_as_update" do
+    test "encode_state_as_update" do
       doc = Yex.Doc.new()
       {:ok, _binary} = Yex.encode_state_as_update(doc)
     end
 
-    test "encode_state_vector!" do
+    test "encode_state_as_update!" do
       doc = Yex.Doc.new()
       assert is_binary(Yex.encode_state_as_update!(doc))
 
       assert_raise ArgumentError, fn -> Yex.encode_state_as_update!(doc, <<11>>) end
     end
 
-    test "encode_state_vector_v2" do
+    test "encode_state_as_update_v2" do
       doc = Yex.Doc.new()
       {:ok, _binary} = Yex.encode_state_as_update_v2(doc)
+    end
+  end
+
+  describe "encode_state_vector" do
+    test "encode_state_vector" do
+      doc = Yex.Doc.new()
+      {:ok, _binary} = Yex.encode_state_vector(doc)
+    end
+
+    test "encode_state_vector!" do
+      doc = Yex.Doc.new()
+      assert is_binary(Yex.encode_state_vector!(doc))
+    end
+
+    test "encode_state_vector_v2" do
+      doc = Yex.Doc.new()
+      {:ok, _binary} = Yex.encode_state_vector_v2(doc)
     end
   end
 end
