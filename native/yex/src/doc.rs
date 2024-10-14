@@ -3,10 +3,10 @@ use std::ops::Deref;
 use std::sync::Mutex;
 
 use crate::subscription::SubscriptionResource;
-use crate::wrap::encode_binary_slice_to_term;
+use crate::wrap::SliceIntoBinary;
 use crate::xml::NifXmlFragment;
 use crate::{atoms, ENV};
-use rustler::{Binary, Env, LocalPid, NifStruct, NifUnitEnum, ResourceArc, Term};
+use rustler::{Binary, Encoder, Env, LocalPid, NifStruct, NifUnitEnum, ResourceArc, Term};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::*;
@@ -219,9 +219,8 @@ impl NifDoc {
                     &pid,
                     (
                         atoms::update_v1(),
-                        encode_binary_slice_to_term(*env, event.update.as_slice()),
-                        txn.origin()
-                            .map(|s| encode_binary_slice_to_term(*env, s.as_ref())),
+                        SliceIntoBinary::new(event.update.as_slice()),
+                        txn.origin().map(|s| SliceIntoBinary::new(s.as_ref())),
                         NifDoc { reference: doc_ref },
                     ),
                 );
@@ -243,9 +242,8 @@ impl NifDoc {
                     &pid,
                     (
                         atoms::update_v2(),
-                        encode_binary_slice_to_term(*env, event.update.as_slice()),
-                        txn.origin()
-                            .map(|s| encode_binary_slice_to_term(*env, s.as_ref())),
+                        SliceIntoBinary::new(event.update.as_slice()),
+                        txn.origin().map(|s| SliceIntoBinary::new(s.as_ref())),
                         NifDoc { reference: doc_ref },
                     ),
                 );
@@ -379,7 +377,7 @@ fn encode_state_vector_v1(
 ) -> Result<Term<'_>, NifError> {
     doc.reference.readonly(current_transaction, |txn| {
         let vec = txn.state_vector().encode_v1();
-        Ok(encode_binary_slice_to_term(env, vec.as_slice()))
+        Ok(SliceIntoBinary::new(vec.as_slice()).encode(env))
     })
 }
 
@@ -399,7 +397,7 @@ fn encode_state_as_update_v1<'a>(
 
     doc.reference
         .readonly(current_transaction, |txn| Ok(txn.encode_diff_v1(&sv)))
-        .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
+        .map(|vec| SliceIntoBinary::new(vec.as_slice()).encode(env))
 }
 
 #[rustler::nif]
@@ -411,7 +409,7 @@ fn encode_state_vector_v2(
     let vec = doc
         .reference
         .readonly(current_transaction, |txn| txn.state_vector().encode_v2());
-    Ok(encode_binary_slice_to_term(env, vec.as_slice()))
+    Ok(SliceIntoBinary::new(vec.as_slice()).encode(env))
 }
 #[rustler::nif]
 fn encode_state_as_update_v2<'a>(
@@ -429,5 +427,5 @@ fn encode_state_as_update_v2<'a>(
 
     doc.reference
         .readonly(current_transaction, |txn| Ok(txn.encode_diff_v2(&sv)))
-        .map(|vec| encode_binary_slice_to_term(env, vec.as_slice()))
+        .map(|vec| SliceIntoBinary::new(vec.as_slice()).encode(env))
 }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use yrs::Hook;
 
-use crate::wrap::encode_binary_slice_to_term;
+use crate::wrap::SliceIntoBinary;
 
 pub struct NifSharedType<T> {
     hook: Hook<T>,
@@ -25,7 +25,7 @@ impl<'de, 'a: 'de, T> Encoder for NifSharedType<T> {
         let mut s = flexbuffers::FlexbufferSerializer::new();
 
         self.hook.serialize(&mut s).unwrap();
-        encode_binary_slice_to_term(env, s.view())
+        SliceIntoBinary::new(s.view()).encode(env)
     }
 }
 impl<'a, T: 'a> Decoder<'a> for NifSharedType<T> {

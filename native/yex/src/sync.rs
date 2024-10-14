@@ -1,4 +1,5 @@
-use crate::{atoms, encode_binary_slice_to_term, error::NifError};
+use crate::wrap::SliceIntoBinary;
+use crate::{atoms, error::NifError};
 use rustler::{Atom, Binary, Encoder as NifEncoder, Env, Term};
 
 use yrs::encoding::read::Cursor;
@@ -17,15 +18,15 @@ fn decode_sync_message<'a, D: Decoder>(
     match tag {
         MSG_SYNC_STEP_1 => {
             let buf = decoder.read_buf()?;
-            Ok((atoms::sync_step1(), encode_binary_slice_to_term(env, buf)).encode(env))
+            Ok((atoms::sync_step1(), SliceIntoBinary::new(buf)).encode(env))
         }
         MSG_SYNC_STEP_2 => {
             let buf = decoder.read_buf()?;
-            Ok((atoms::sync_step2(), encode_binary_slice_to_term(env, buf)).encode(env))
+            Ok((atoms::sync_step2(), SliceIntoBinary::new(buf)).encode(env))
         }
         MSG_SYNC_UPDATE => {
             let buf = decoder.read_buf()?;
-            Ok((atoms::sync_update(), encode_binary_slice_to_term(env, buf)).encode(env))
+            Ok((atoms::sync_update(), SliceIntoBinary::new(buf)).encode(env))
         }
         _ => Err(NifError::Message(format!("Unexpected tag value: {}", tag))),
     }
@@ -62,7 +63,7 @@ fn decode_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<
         }
         MSG_AWARENESS => {
             let data = decoder.read_buf()?;
-            Ok((atoms::awareness(), encode_binary_slice_to_term(env, data)).encode(env))
+            Ok((atoms::awareness(), SliceIntoBinary::new(data)).encode(env))
         }
         MSG_AUTH => {
             let reason = if decoder.read_var::<u8>()? == PERMISSION_DENIED {
@@ -75,7 +76,7 @@ fn decode_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<
         MSG_QUERY_AWARENESS => Ok(atoms::query_awareness().encode(env)),
         tag => {
             let data = decoder.read_buf()?;
-            Ok((atoms::custom(), tag, encode_binary_slice_to_term(env, data)).encode(env))
+            Ok((atoms::custom(), tag, SliceIntoBinary::new(data)).encode(env))
         }
     }
 }
@@ -121,10 +122,7 @@ fn sync_message_decode_v1<'a>(env: Env<'a>, msg: Binary<'a>) -> Result<Term<'a>,
 fn sync_message_encode_v1<'a>(env: Env<'a>, msg: Term<'a>) -> Result<Term<'a>, NifError> {
     let mut encoder = EncoderV1::new();
     encode_message(msg, &mut encoder)?;
-    Ok(encode_binary_slice_to_term(
-        env,
-        encoder.to_vec().as_slice(),
-    ))
+    Ok(SliceIntoBinary::new(encoder.to_vec().as_slice()).encode(env))
 }
 
 #[rustler::nif]
@@ -137,8 +135,5 @@ fn sync_message_decode_v2<'a>(env: Env<'a>, msg: Binary<'a>) -> Result<Term<'a>,
 fn sync_message_encode_v2<'a>(env: Env<'a>, msg: Term<'a>) -> Result<Term<'a>, NifError> {
     let mut encoder = EncoderV2::new();
     encode_message(msg, &mut encoder)?;
-    Ok(encode_binary_slice_to_term(
-        env,
-        encoder.to_vec().as_slice(),
-    ))
+    Ok(SliceIntoBinary::new(encoder.to_vec().as_slice()).encode(env))
 }
