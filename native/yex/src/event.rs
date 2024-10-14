@@ -1,4 +1,4 @@
-use rustler::{NifStruct, NifUntaggedEnum, ResourceArc};
+use rustler::{Env, NifStruct, NifUntaggedEnum, ResourceArc, Term};
 use yrs::types::{
     array::ArrayEvent,
     map::MapEvent,
@@ -7,8 +7,7 @@ use yrs::types::{
 };
 
 use crate::{
-    array::NifArray, doc::DocResource, map::NifMap, text::NifText, xml::NifXmlText,
-    youtput::NifYOut,
+    array::NifArray, doc::DocResource, map::NifMap, text::NifText, wrap::NifWrap, xml::NifXmlText, youtput::NifYOut
 };
 
 #[derive(NifUntaggedEnum)]
@@ -30,16 +29,43 @@ impl From<yrs::types::PathSegment> for PathSegment {
         }
     }
 }
-#[derive(NifUntaggedEnum)]
-pub enum NifPath {
-    Path(Vec<PathSegment>),
-}
-impl From<yrs::types::Path> for NifPath {
-    #[inline]
-    fn from(value: yrs::types::Path) -> Self {
-        NifPath::Path(value.into_iter().map(|segment| segment.into()).collect())
+
+
+type NifPath = NifWrap<yrs::types::Path>;
+
+
+impl rustler::Encoder for NifPath {
+    fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
+        let segments: Vec<Term> = self.0.iter().map(|segment| 
+        match segment {
+            yrs::types::PathSegment::Key(key) => {
+                key.encode(env)
+            },
+            yrs::types::PathSegment::Index(index) => {
+                index.encode(env)
+            }
+        }
+        ).collect();
+        segments.encode(env)
     }
 }
+
+impl<'a> rustler::Decoder<'a> for NifPath {
+    fn decode(term: Term<'a>) -> rustler::NifResult<Self> {
+        let segments: Vec<Term> = term.decode()?;
+        let path = segments.iter().map(|segment| {
+            if let Ok(key) = segment.decode::<&str>() {
+                Ok(yrs::types::PathSegment::Key(key.into()))
+            } else if let Ok(index) = segment.decode::<u32>() {
+                Ok(yrs::types::PathSegment::Index(index))
+            } else {
+                Err(rustler::Error::BadArg)
+            }
+        }).collect::<Result<Vec<yrs::types::PathSegment>, rustler::Error>>()?;
+        Ok(NifWrap(yrs::types::Path::from(path)))
+    }
+}
+
 
 #[derive(NifStruct)]
 #[module = "Yex.ArrayEvent"]
