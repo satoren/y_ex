@@ -41,6 +41,7 @@ defmodule Yex.Nif do
   def text_length(_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def array_insert(_array, _cur_txn, _index, _value), do: :erlang.nif_error(:nif_not_loaded)
+  def array_insert_list(_array, _cur_txn, _index, _values), do: :erlang.nif_error(:nif_not_loaded)
   def array_length(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def array_to_list(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def array_get(_array, _cur_txn, _index), do: :erlang.nif_error(:nif_not_loaded)
