@@ -5,17 +5,7 @@ use yrs::types::ToJson;
 use yrs::*;
 
 use crate::{
-    atoms,
-    doc::{DocResource, TransactionResource},
-    error::deleted_error,
-    event::{NifArrayEvent, NifEvent},
-    shared_type::NifSharedType,
-    subscription::SubscriptionResource,
-    term_box::TermBox,
-    wrap::encode_binary_slice_to_term,
-    yinput::NifYInput,
-    youtput::NifYOut,
-    NifAny, ENV,
+    atoms, doc::{DocResource, TransactionResource}, error::deleted_error, event::{NifArrayEvent, NifEvent}, shared_type::NifSharedType, subscription::SubscriptionResource, term_box::TermBox, wrap::SliceIntoBinary, yinput::NifYInput, youtput::NifYOut, NifAny, ENV
 };
 
 pub type ArrayRefId = NifSharedType<ArrayRef>;
@@ -163,7 +153,7 @@ fn array_observe(
                         v,
                         NifArrayEvent::new(doc_ref, event),
                         txn.origin()
-                            .map(|s| encode_binary_slice_to_term(*env, s.as_ref())),
+                            .map(|s| SliceIntoBinary::new( s.as_ref())),
                     ),
                 );
             })
@@ -206,7 +196,7 @@ fn array_observe_deep(
                         v,
                         events,
                         txn.origin()
-                            .map(|s| encode_binary_slice_to_term(*env, s.as_ref())),
+                            .map(|s| SliceIntoBinary::new( s.as_ref())),
                     ),
                 );
             })
