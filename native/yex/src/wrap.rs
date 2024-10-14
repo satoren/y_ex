@@ -18,8 +18,19 @@ impl<T> Deref for NifWrap<T> {
     }
 }
 
-pub fn encode_binary_slice_to_term<'a>(env: Env<'a>, vec: &[u8]) -> Term<'a> {
-    let mut bin = rustler::NewBinary::new(env, vec.len());
-    bin.as_mut_slice().copy_from_slice(vec);
-    bin.into()
+pub struct SliceIntoBinary<'a> {
+    bytes: &'a [u8],
+}
+impl<'a> SliceIntoBinary<'a> {
+    pub fn new(bytes: &'a [u8]) -> Self {
+        SliceIntoBinary { bytes }
+    }
+}
+
+impl<'a> rustler::Encoder for SliceIntoBinary<'a> {
+    fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
+        let mut bin = rustler::NewBinary::new(env, self.bytes.len());
+        bin.as_mut_slice().copy_from_slice(self.bytes);
+        bin.into()
+    }
 }

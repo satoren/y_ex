@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Mutex};
 use crate::{
     atoms,
     subscription::SubscriptionResource,
-    wrap::{encode_binary_slice_to_term, NifWrap},
+    wrap::{NifWrap, SliceIntoBinary},
     NifAny, NifDoc, NifError, ENV,
 };
 use rustler::{Binary, Encoder, Env, LocalPid, NifMap, NifStruct, ResourceArc, Term};
@@ -172,7 +172,7 @@ fn awareness_monitor_change(
                         (
                             atoms::awareness_change(),
                             summary,
-                            origin.map(|s| encode_binary_slice_to_term(*env, s.as_ref())),
+                            origin.map(|s| SliceIntoBinary::new(s.as_ref())),
                             NifAwareness {
                                 reference: awareness_ref,
                             },
@@ -202,10 +202,7 @@ pub fn awareness_encode_update_v1(
             .map_err(|e| NifError::Message(e.to_string()))?
     };
 
-    Ok(encode_binary_slice_to_term(
-        env,
-        update.encode_v1().as_slice(),
-    ))
+    Ok(SliceIntoBinary::new(update.encode_v1().as_slice()).encode(env))
 }
 #[rustler::nif]
 pub fn awareness_apply_update_v1(

@@ -22,7 +22,6 @@ use map::NifMap;
 use rustler::{Env, NifStruct, ResourceArc};
 use scoped_thread_local::scoped_thread_local;
 use text::NifText;
-use wrap::encode_binary_slice_to_term;
 
 scoped_thread_local!(
   pub static ENV: for<'a> Env<'a>
