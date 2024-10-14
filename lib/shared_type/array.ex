@@ -20,6 +20,21 @@ defmodule Yex.Array do
   end
 
   @doc """
+  Insert contents at the specified index.
+
+  ## Example
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.insert_list(array, 0, [1,2,3,4,5])
+      iex> Yex.Array.to_json(array)
+      [1, 2, 3, 4, 5]
+  """
+  @spec insert_list(t, integer(), list()) :: :ok
+  def insert_list(%__MODULE__{} = array, index, contents) do
+    Yex.Nif.array_insert_list(array, cur_txn(array), index, contents)
+  end
+
+  @doc """
   Push content to the end of the array.
   """
   def push(%__MODULE__{} = array, content) do

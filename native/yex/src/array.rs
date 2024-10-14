@@ -48,6 +48,23 @@ fn array_insert(
     })
 }
 #[rustler::nif]
+fn array_insert_list(
+    env: Env<'_>,
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: u32,
+    values: Vec<NifAny>,
+) -> NifResult<Atom> {
+    array.doc.mutably(env, current_transaction, |txn| {
+        let array = array
+            .reference
+            .get(txn)
+            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+        array.insert_range(txn, index, values.into_iter().map(|a| a.0.clone()));
+        Ok(atoms::ok())
+    })
+}
+#[rustler::nif]
 fn array_length(
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,
