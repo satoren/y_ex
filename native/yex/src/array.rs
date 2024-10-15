@@ -5,7 +5,17 @@ use yrs::types::ToJson;
 use yrs::*;
 
 use crate::{
-    atoms, doc::{DocResource, TransactionResource}, error::deleted_error, event::{NifArrayEvent, NifEvent}, shared_type::NifSharedType, subscription::SubscriptionResource, term_box::TermBox, wrap::SliceIntoBinary, yinput::NifYInput, youtput::NifYOut, NifAny, ENV
+    atoms,
+    doc::{DocResource, TransactionResource},
+    error::deleted_error,
+    event::{NifArrayEvent, NifEvent},
+    shared_type::NifSharedType,
+    subscription::SubscriptionResource,
+    term_box::TermBox,
+    wrap::SliceIntoBinary,
+    yinput::NifYInput,
+    youtput::NifYOut,
+    NifAny, ENV,
 };
 
 pub type ArrayRefId = NifSharedType<ArrayRef>;
@@ -151,9 +161,8 @@ fn array_observe(
                     (
                         atoms::observe_event(),
                         v,
-                        NifArrayEvent::new(doc_ref, event),
-                        txn.origin()
-                            .map(|s| SliceIntoBinary::new( s.as_ref())),
+                        NifArrayEvent::new(&doc_ref, event, txn),
+                        txn.origin().map(|s| SliceIntoBinary::new(s.as_ref())),
                     ),
                 );
             })
@@ -187,7 +196,7 @@ fn array_observe_deep(
                 let v = term_value.get(*env);
                 let events: Vec<NifEvent> = events
                     .iter()
-                    .map(|event| NifEvent::new(doc_ref.clone(), event))
+                    .map(|event| NifEvent::new(doc_ref.clone(), event, txn))
                     .collect();
                 let _ = env.send(
                     &pid,
@@ -195,8 +204,7 @@ fn array_observe_deep(
                         atoms::observe_event(),
                         v,
                         events,
-                        txn.origin()
-                            .map(|s| SliceIntoBinary::new( s.as_ref())),
+                        txn.origin().map(|s| SliceIntoBinary::new(s.as_ref())),
                     ),
                 );
             })
