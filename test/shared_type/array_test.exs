@@ -156,4 +156,85 @@ defmodule Yex.ArrayTest do
     #    assert "HelloHello" == Array.to_string(array)
     assert 2 == Array.length(array)
   end
+
+  test "observe" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "text")
+
+    ref = Array.observe(array)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Array.insert(array, 0, "Hello")
+      end)
+
+    assert_receive {:observe_event, ^ref, %Yex.ArrayEvent{}, "origin_value"}
+  end
+
+  test "unobserve" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "text")
+
+    ref = Array.observe(array)
+    assert :ok = Array.unobserve(ref)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Array.insert(array, 0, "Hello")
+      end)
+
+    refute_receive {:observe_event, _, %Yex.ArrayEvent{}, _}
+
+    # noop but return ok
+    assert :ok = Array.unobserve(make_ref())
+  end
+
+  test "observe_deep" do
+    doc = Doc.new()
+    array = Doc.get_array(doc, "data")
+
+    Array.insert(
+      array,
+      0,
+      Yex.MapPrelim.from(%{
+        "key" => Yex.MapPrelim.from(%{"key" => ArrayPrelim.from([1, 2, 3, 4])})
+      })
+    )
+
+    ref = Array.observe_deep(array)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        map = Yex.Array.fetch!(array, 0)
+        child_map = Yex.Map.fetch!(map, "key")
+
+        Yex.Array.push(array, "array_value")
+        Yex.Map.set(child_map, "key2", "value")
+        Yex.Map.set(map, "key2", "value")
+      end)
+
+    assert_receive {:observe_event, ^ref, [%Yex.ArrayEvent{}, %Yex.MapEvent{}, %Yex.MapEvent{}],
+                    "origin_value"}
+  end
+
+  test "unobserve_deep" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "text")
+
+    ref = Array.observe_deep(array)
+    assert :ok = Array.unobserve_deep(ref)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Array.insert(array, 0, "Hello")
+      end)
+
+    refute_receive {:observe_event, _, %Yex.ArrayEvent{}, _}
+
+    # noop but return ok
+    assert :ok = Array.unobserve_deep(make_ref())
+  end
 end
