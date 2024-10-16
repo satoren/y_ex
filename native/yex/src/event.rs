@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use rustler::{Env, NifStruct, NifUntaggedEnum, ResourceArc, Term};
 use yrs::{
@@ -7,7 +7,7 @@ use yrs::{
         map::MapEvent,
         text::TextEvent,
         xml::{XmlEvent, XmlTextEvent},
-        Change, Delta,
+        Change, Delta, EntryChange,
     },
     TransactionMut,
 };
@@ -111,7 +111,7 @@ impl rustler::Encoder for NifYArrayChange {
 }
 
 impl<'a> rustler::Decoder<'a> for NifYArrayChange {
-    fn decode(term: Term<'a>) -> rustler::NifResult<Self> {
+    fn decode(_term: Term<'a>) -> rustler::NifResult<Self> {
         unimplemented!()
     }
 }
@@ -220,18 +220,77 @@ impl NifTextEvent {
     }
 }
 
+pub struct NifYMapChange {
+    doc: ResourceArc<DocResource>,
+    change: HashMap<Arc<str>, EntryChange>,
+}
+
+impl rustler::Encoder for NifYMapChange {
+    fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
+        let v: HashMap<String, Term> = self
+            .change
+            .clone()
+            .into_iter()
+            .map(|(key, change)| match change {
+                EntryChange::Inserted(content) => {
+                    let content = NifYOut::from_native(content, self.doc.clone());
+                    let map = Term::map_new(env)
+                        .map_put(atoms::action(), atoms::add())
+                        .unwrap()
+                        .map_put(atoms::new_value(), content)
+                        .unwrap();
+                    (key.to_string(), map)
+                }
+                EntryChange::Removed(old_value) => {
+                    let old_value = NifYOut::from_native(old_value, self.doc.clone());
+                    let map = Term::map_new(env)
+                        .map_put(atoms::action(), atoms::delete())
+                        .unwrap()
+                        .map_put(atoms::old_value(), old_value)
+                        .unwrap();
+                    (key.to_string(), map)
+                }
+                EntryChange::Updated(old_value, new_value) => {
+                    let old_value = NifYOut::from_native(old_value, self.doc.clone());
+                    let new_value = NifYOut::from_native(new_value, self.doc.clone());
+                    let map = Term::map_new(env)
+                        .map_put(atoms::action(), atoms::update())
+                        .unwrap()
+                        .map_put(atoms::old_value(), old_value)
+                        .unwrap()
+                        .map_put(atoms::new_value(), new_value)
+                        .unwrap();
+                    (key.to_string(), map)
+                }
+            })
+            .collect();
+        v.encode(env)
+    }
+}
+
+impl<'a> rustler::Decoder<'a> for NifYMapChange {
+    fn decode(_term: Term<'a>) -> rustler::NifResult<Self> {
+        unimplemented!()
+    }
+}
+
 #[derive(NifStruct)]
 #[module = "Yex.MapEvent"]
 pub struct NifMapEvent {
     pub path: NifPath,
     pub target: NifMap,
+    pub keys: NifYMapChange,
 }
 
 impl NifMapEvent {
-    pub fn new(doc: ResourceArc<DocResource>, event: &MapEvent, txn: &TransactionMut<'_>) -> Self {
+    pub fn new(doc: &ResourceArc<DocResource>, event: &MapEvent, txn: &TransactionMut<'_>) -> Self {
         NifMapEvent {
             path: event.path().into(),
-            target: NifMap::new(doc, event.target().clone()),
+            target: NifMap::new(doc.clone(), event.target().clone()),
+            keys: NifYMapChange {
+                doc: doc.clone(),
+                change: event.keys(txn).clone(),
+            },
         }
     }
 }
@@ -241,13 +300,25 @@ impl NifMapEvent {
 pub struct NifXmlEvent {
     pub path: NifPath,
     pub target: NifYOut, // XmlFragment or XmlText or XmlElement
+
+    pub delta: NifYArrayChange,
+
+    pub change: NifYMapChange,
 }
 
 impl NifXmlEvent {
-    pub fn new(doc: ResourceArc<DocResource>, event: &XmlEvent, txn: &TransactionMut<'_>) -> Self {
+    pub fn new(doc: &ResourceArc<DocResource>, event: &XmlEvent, txn: &TransactionMut<'_>) -> Self {
         NifXmlEvent {
             path: event.path().into(),
-            target: NifYOut::from_xml_out(event.target().clone(), doc),
+            target: NifYOut::from_xml_out(event.target().clone(), doc.clone()),
+            change: NifYMapChange {
+                doc: doc.clone(),
+                change: event.keys(txn).clone(),
+            },
+            delta: NifYArrayChange {
+                doc: doc.clone(),
+                change: event.delta(txn).to_vec(),
+            },
         }
     }
 }
@@ -257,17 +328,22 @@ impl NifXmlEvent {
 pub struct NifXmlTextEvent {
     pub path: NifPath,
     pub target: NifXmlText,
+    pub delta: NifYTextDelta,
 }
 
 impl NifXmlTextEvent {
     pub fn new(
-        doc: ResourceArc<DocResource>,
+        doc: &ResourceArc<DocResource>,
         event: &XmlTextEvent,
         txn: &TransactionMut<'_>,
     ) -> Self {
         NifXmlTextEvent {
             path: event.path().into(),
-            target: NifXmlText::new(doc, event.target().clone()),
+            target: NifXmlText::new(doc.clone(), event.target().clone()),
+            delta: NifYTextDelta {
+                doc: doc.clone(),
+                delta: event.delta(txn).to_vec(),
+            },
         }
     }
 }
@@ -292,12 +368,12 @@ impl NifEvent {
             yrs::types::Event::Array(event) => {
                 NifEvent::Array(NifArrayEvent::new(&doc, &event, txn))
             }
-            yrs::types::Event::Map(event) => NifEvent::Map(NifMapEvent::new(doc, &event, txn)),
+            yrs::types::Event::Map(event) => NifEvent::Map(NifMapEvent::new(&doc, &event, txn)),
             yrs::types::Event::XmlFragment(event) => {
-                NifEvent::XmlFragment(NifXmlEvent::new(doc, &event, txn))
+                NifEvent::XmlFragment(NifXmlEvent::new(&doc, &event, txn))
             }
             yrs::types::Event::XmlText(event) => {
-                NifEvent::XmlText(NifXmlTextEvent::new(doc, &event, txn))
+                NifEvent::XmlText(NifXmlTextEvent::new(&doc, &event, txn))
             }
         }
     }
