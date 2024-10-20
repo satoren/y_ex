@@ -8,13 +8,12 @@ use crate::{
     any::NifAttr,
     atoms,
     doc::{DocResource, TransactionResource},
-    error::deleted_error,
-    shared_type::NifSharedType,
+    shared_type::{NifSharedType, SharedTypeId},
     yinput::NifYInputDelta,
     youtput::NifYOut,
 };
 
-pub type TextRefId = NifSharedType<TextRef>;
+pub type TextRefId = SharedTypeId<TextRef>;
 
 #[derive(NifStruct)]
 #[module = "Yex.Text"]
@@ -31,6 +30,19 @@ impl NifText {
     }
 }
 
+impl NifSharedType for NifText {
+    type RefType = TextRef;
+
+    fn doc(&self) -> &ResourceArc<DocResource> {
+        &self.doc
+    }
+    fn reference(&self) -> &SharedTypeId<Self::RefType> {
+        &self.reference
+    }
+
+    const DELETED_ERROR: &'static str = "Text has been deleted";
+}
+
 #[rustler::nif]
 fn text_insert(
     env: Env<'_>,
@@ -39,11 +51,8 @@ fn text_insert(
     index: u32,
     chunk: &str,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Text has been deleted".to_string()))?;
+    text.mutably(env, current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
         text.insert(txn, index, chunk);
         Ok(atoms::ok())
     })
@@ -58,11 +67,8 @@ fn text_insert_with_attributes(
     chunk: &str,
     attr: NifAttr,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Text has been deleted".to_string()))?;
+    text.mutably(env, current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
         text.insert_with_attributes(txn, index, chunk, attr.0);
         Ok(atoms::ok())
     })
@@ -76,11 +82,8 @@ fn text_delete(
     index: u32,
     len: u32,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Text has been deleted".to_string()))?;
+    text.mutably(env, current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
         text.remove_range(txn, index, len);
         Ok(atoms::ok())
     })
@@ -95,11 +98,8 @@ fn text_format(
     len: u32,
     attr: NifAttr,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Text has been deleted".to_string()))?;
+    text.mutably(env, current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
         text.format(txn, index, len, attr.0);
         Ok(atoms::ok())
     })
@@ -110,11 +110,8 @@ fn text_to_string(
     text: NifText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<String> {
-    text.doc.readonly(current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Text has been deleted".to_string()))?;
+    text.readonly(current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
         Ok(text.get_string(txn))
     })
 }
@@ -123,11 +120,8 @@ fn text_length(
     text: NifText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<u32> {
-    text.doc.readonly(current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Text has been deleted".to_string()))?;
+    text.readonly(current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
         Ok(text.len(txn))
     })
 }
@@ -138,11 +132,8 @@ fn text_to_delta(
     text: NifText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<rustler::Term<'_>> {
-    let diff = text.doc.readonly(current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Text has been deleted".to_string()))?;
+    let diff = text.readonly(current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
         Ok(text.diff(txn, YChange::identity))
     })?;
     encode_diffs(diff, &text.doc, env)
@@ -155,11 +146,8 @@ fn text_apply_delta(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     delta: NifYInputDelta,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Text has been deleted".to_string()))?;
+    text.mutably(env, current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
         text.apply_delta(txn, delta.0);
         Ok(atoms::ok())
     })

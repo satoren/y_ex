@@ -1,39 +1,98 @@
-use rustler::{Decoder, Encoder, Env, NifResult, Term};
+use rustler::{Decoder, Encoder, Env, NifException, NifResult, ResourceArc, Term};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
-use yrs::Hook;
+use yrs::{Hook, ReadTxn, SharedRef, TransactionMut};
 
-use crate::wrap::SliceIntoBinary;
+use crate::{
+    atoms,
+    doc::{DocResource, ReadTransaction, TransactionResource},
+    wrap::SliceIntoBinary,
+};
 
-pub struct NifSharedType<T> {
+pub struct SharedTypeId<T> {
     hook: Hook<T>,
 }
-impl<T> NifSharedType<T> {
+impl<T> SharedTypeId<T> {
     pub fn new(v: Hook<T>) -> Self {
         Self { hook: v }
     }
 }
-impl<T> Deref for NifSharedType<T> {
+impl<T> Deref for SharedTypeId<T> {
     type Target = Hook<T>;
 
     fn deref(&self) -> &Self::Target {
         &self.hook
     }
 }
-impl<'de, 'a: 'de, T> Encoder for NifSharedType<T> {
+impl<'de, 'a: 'de, T> Encoder for SharedTypeId<T> {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
         let mut s = flexbuffers::FlexbufferSerializer::new();
 
-        self.hook.serialize(&mut s).unwrap();
+        if let Err(err) = self.hook.serialize(&mut s) {
+            return (atoms::error(), err.to_string()).encode(env);
+        }
         SliceIntoBinary::new(s.view()).encode(env)
     }
 }
-impl<'a, T: 'a> Decoder<'a> for NifSharedType<T> {
+impl<'a, T: 'a> Decoder<'a> for SharedTypeId<T> {
     fn decode(term: Term<'a>) -> NifResult<Self> {
         let bin = term.decode_as_binary()?;
         let r =
             flexbuffers::Reader::get_root(bin.as_slice()).map_err(|_e| rustler::Error::BadArg)?;
         let hook = Hook::<T>::deserialize(r).map_err(|_e| rustler::Error::BadArg)?;
-        Ok(NifSharedType::new(hook))
+        Ok(SharedTypeId::new(hook))
     }
+}
+
+pub trait NifSharedType
+where
+    Self: Sized,
+    Self::RefType: SharedRef,
+{
+    type RefType;
+    const DELETED_ERROR: &'static str;
+
+    fn doc(&self) -> &ResourceArc<DocResource>;
+    fn reference(&self) -> &SharedTypeId<Self::RefType>;
+
+    fn get_ref<T: ReadTxn>(&self, txn: &T) -> NifResult<Self::RefType> {
+        self.reference()
+            .get(txn)
+            .ok_or_else(|| deleted_error(Self::DELETED_ERROR))
+    }
+
+    fn mutably<F, T>(
+        &self,
+        env: Env<'_>,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+        f: F,
+    ) -> T
+    where
+        F: FnOnce(&mut TransactionMut<'_>) -> T,
+    {
+        self.doc().mutably(env, current_transaction, f)
+    }
+
+    fn readonly<F, T>(
+        &self,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+        f: F,
+    ) -> T
+    where
+        F: FnOnce(&ReadTransaction) -> T,
+    {
+        self.doc().readonly(current_transaction, f)
+    }
+}
+
+#[derive(Debug, NifException)]
+#[module = "Yex.DeletedSharedTypeError"]
+pub struct DeletedSharedTypeError {
+    message: String,
+}
+
+pub fn deleted_error(message: &str) -> rustler::Error {
+    rustler::Error::RaiseTerm(Box::new(DeletedSharedTypeError {
+        message: message.to_string(),
+    }))
 }

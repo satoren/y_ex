@@ -5,14 +5,13 @@ use yrs::*;
 use crate::{
     atoms,
     doc::{DocResource, TransactionResource},
-    error::deleted_error,
-    shared_type::NifSharedType,
+    shared_type::{NifSharedType, SharedTypeId},
     yinput::NifYInput,
     youtput::NifYOut,
     NifAny,
 };
 
-pub type ArrayRefId = NifSharedType<ArrayRef>;
+pub type ArrayRefId = SharedTypeId<ArrayRef>;
 
 #[derive(NifStruct)]
 #[module = "Yex.Array"]
@@ -29,6 +28,17 @@ impl NifArray {
         }
     }
 }
+impl NifSharedType for NifArray {
+    type RefType = ArrayRef;
+
+    fn doc(&self) -> &ResourceArc<DocResource> {
+        &self.doc
+    }
+    fn reference(&self) -> &SharedTypeId<Self::RefType> {
+        &self.reference
+    }
+    const DELETED_ERROR: &'static str = "Array has been deleted";
+}
 
 #[rustler::nif]
 fn array_insert(
@@ -38,11 +48,8 @@ fn array_insert(
     index: u32,
     value: NifYInput,
 ) -> NifResult<Atom> {
-    array.doc.mutably(env, current_transaction, |txn| {
-        let array = array
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+    array.mutably(env, current_transaction, |txn| {
+        let array = array.get_ref(txn)?;
         array.insert(txn, index, value);
         Ok(atoms::ok())
     })
@@ -55,11 +62,8 @@ fn array_insert_list(
     index: u32,
     values: Vec<NifAny>,
 ) -> NifResult<Atom> {
-    array.doc.mutably(env, current_transaction, |txn| {
-        let array = array
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+    array.mutably(env, current_transaction, |txn| {
+        let array = array.get_ref(txn)?;
         array.insert_range(txn, index, values.into_iter().map(|a| a.0.clone()));
         Ok(atoms::ok())
     })
@@ -69,11 +73,8 @@ fn array_length(
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<u32> {
-    array.doc.readonly(current_transaction, |txn| {
-        let array = array
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+    array.readonly(current_transaction, |txn| {
+        let array = array.get_ref(txn)?;
         Ok(array.len(txn))
     })
 }
@@ -83,12 +84,9 @@ fn array_get(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
 ) -> NifResult<(Atom, NifYOut)> {
-    let doc = array.doc;
-    doc.readonly(current_transaction, |txn| {
-        let array = array
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+    let doc = array.doc();
+    array.readonly(current_transaction, |txn| {
+        let array = array.get_ref(txn)?;
         array
             .get(txn, index)
             .map(|b| (atoms::ok(), NifYOut::from_native(b, doc.clone())))
@@ -103,12 +101,8 @@ fn array_delete_range(
     index: u32,
     length: u32,
 ) -> NifResult<Atom> {
-    let doc = array.doc;
-    doc.mutably(env, current_transaction, |txn| {
-        let array = array
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+    array.mutably(env, current_transaction, |txn| {
+        let array = array.get_ref(txn)?;
         array.remove_range(txn, index, length);
         Ok(atoms::ok())
     })
@@ -118,12 +112,9 @@ fn array_to_list(
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Vec<NifYOut>> {
-    let doc = array.doc;
-    doc.readonly(current_transaction, |txn| {
-        let array = array
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+    let doc = array.doc();
+    array.readonly(current_transaction, |txn| {
+        let array = array.get_ref(txn)?;
         Ok(array
             .iter(txn)
             .map(|b| NifYOut::from_native(b, doc.clone()))
@@ -135,12 +126,8 @@ fn array_to_json(
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<NifAny> {
-    let doc = array.doc;
-    doc.readonly(current_transaction, |txn| {
-        let array = array
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Array has been deleted".to_string()))?;
+    array.readonly(current_transaction, |txn| {
+        let array = array.get_ref(txn)?;
         Ok(array.to_json(txn).into())
     })
 }

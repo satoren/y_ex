@@ -8,17 +8,16 @@ use crate::{
     any::NifAttr,
     atoms,
     doc::{DocResource, TransactionResource},
-    error::deleted_error,
-    shared_type::NifSharedType,
+    shared_type::{NifSharedType, SharedTypeId},
     text::encode_diffs,
     yinput::{NifXmlIn, NifYInputDelta},
     youtput::NifYOut,
     ENV,
 };
 
-pub type XmlFragmentId = NifSharedType<XmlFragmentRef>;
-pub type XmlElementId = NifSharedType<XmlElementRef>;
-pub type XmlTextId = NifSharedType<XmlTextRef>;
+pub type XmlFragmentId = SharedTypeId<XmlFragmentRef>;
+pub type XmlElementId = SharedTypeId<XmlElementRef>;
+pub type XmlTextId = SharedTypeId<XmlTextRef>;
 
 #[derive(NifStruct)]
 #[module = "Yex.XmlFragment"]
@@ -34,6 +33,19 @@ impl NifXmlFragment {
             reference: XmlFragmentId::new(xml.hook()),
         }
     }
+}
+
+impl NifSharedType for NifXmlFragment {
+    type RefType = XmlFragmentRef;
+
+    fn doc(&self) -> &ResourceArc<DocResource> {
+        &self.doc
+    }
+    fn reference(&self) -> &SharedTypeId<Self::RefType> {
+        &self.reference
+    }
+
+    const DELETED_ERROR: &'static str = "XmlFragment has been deleted";
 }
 
 #[derive(NifStruct)]
@@ -52,6 +64,19 @@ impl NifXmlElement {
     }
 }
 
+impl NifSharedType for NifXmlElement {
+    type RefType = XmlElementRef;
+
+    fn doc(&self) -> &ResourceArc<DocResource> {
+        &self.doc
+    }
+    fn reference(&self) -> &SharedTypeId<Self::RefType> {
+        &self.reference
+    }
+
+    const DELETED_ERROR: &'static str = "XmlElement has been deleted";
+}
+
 #[derive(NifStruct)]
 #[module = "Yex.XmlText"]
 pub struct NifXmlText {
@@ -67,6 +92,18 @@ impl NifXmlText {
         }
     }
 }
+impl NifSharedType for NifXmlText {
+    type RefType = XmlTextRef;
+
+    fn doc(&self) -> &ResourceArc<DocResource> {
+        &self.doc
+    }
+    fn reference(&self) -> &SharedTypeId<Self::RefType> {
+        &self.reference
+    }
+
+    const DELETED_ERROR: &'static str = "XmlText has been deleted";
+}
 
 #[rustler::nif]
 fn xml_fragment_insert(
@@ -77,11 +114,8 @@ fn xml_fragment_insert(
     value: NifXmlIn,
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        xml.doc.mutably(env, current_transaction, |txn| {
-            let xml = xml
-                .reference
-                .get(txn)
-                .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+        xml.mutably(env, current_transaction, |txn| {
+            let xml = xml.get_ref(txn)?;
             xml.insert(txn, index, value);
             Ok(atoms::ok())
         })
@@ -93,11 +127,8 @@ fn xml_fragment_length(
     xml: NifXmlFragment,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<u32> {
-    xml.doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         Ok(xml.len(txn))
     })
 }
@@ -107,12 +138,9 @@ fn xml_fragment_get(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
 ) -> NifResult<(Atom, NifYOut)> {
-    let doc = xml.doc;
-    doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         xml.get(txn, index)
             .map(|b| (atoms::ok(), NifYOut::from_xml_out(b, doc.clone())))
             .ok_or(rustler::Error::Atom("error"))
@@ -126,11 +154,8 @@ fn xml_fragment_delete_range(
     index: u32,
     length: u32,
 ) -> NifResult<Atom> {
-    xml.doc.mutably(env, current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         xml.remove_range(txn, index, length);
         Ok(atoms::ok())
     })
@@ -141,11 +166,8 @@ fn xml_fragment_to_string(
     xml: NifXmlFragment,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<String> {
-    xml.doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         Ok(xml.get_string(txn).into())
     })
 }
@@ -155,12 +177,9 @@ fn xml_fragment_parent(
     xml: NifXmlFragment,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Option<NifYOut>> {
-    let doc = xml.doc;
-    doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
 
         Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
     })
@@ -175,11 +194,8 @@ fn xml_element_insert(
     value: NifXmlIn,
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        xml.doc.mutably(env, current_transaction, |txn| {
-            let xml = xml
-                .reference
-                .get(txn)
-                .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+        xml.mutably(env, current_transaction, |txn| {
+            let xml = xml.get_ref(txn)?;
             xml.insert(txn, index, value);
             Ok(atoms::ok())
         })
@@ -190,11 +206,8 @@ fn xml_element_length(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<u32> {
-    xml.doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         Ok(xml.len(txn))
     })
 }
@@ -204,12 +217,9 @@ fn xml_element_get(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
 ) -> NifResult<(Atom, NifYOut)> {
-    let doc = xml.doc;
-    doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         xml.get(txn, index)
             .map(|b| (atoms::ok(), NifYOut::from_xml_out(b, doc.clone())))
             .ok_or(rustler::Error::Atom("error"))
@@ -223,11 +233,8 @@ fn xml_element_delete_range(
     index: u32,
     length: u32,
 ) -> NifResult<Atom> {
-    xml.doc.mutably(env, current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         xml.remove_range(txn, index, length);
         Ok(atoms::ok())
     })
@@ -238,11 +245,8 @@ fn xml_element_to_string(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<String> {
-    xml.doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         Ok(xml.get_string(txn).into())
     })
 }
@@ -255,11 +259,8 @@ fn xml_element_insert_attribute(
     key: &str,
     value: &str,
 ) -> NifResult<Atom> {
-    xml.doc.mutably(env, current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         xml.insert_attribute(txn, key, value);
         Ok(atoms::ok())
     })
@@ -270,12 +271,10 @@ fn xml_element_get_attribute(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     key: &str,
 ) -> NifResult<Option<String>> {
-    xml.doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        Ok(xml.get_attribute(txn, key))
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        let attr = xml.get_attribute(txn, key);
+        Ok(attr)
     })
 }
 
@@ -286,11 +285,8 @@ fn xml_element_remove_attribute(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     key: &str,
 ) -> NifResult<Atom> {
-    xml.doc.mutably(env, current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         xml.remove_attribute(txn, &key);
         Ok(atoms::ok())
     })
@@ -301,15 +297,15 @@ fn xml_element_get_attributes(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<HashMap<String, String>> {
-    xml.doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        Ok(xml
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+
+        let attr = xml
             .attributes(txn)
             .map(|(key, value)| (key.into(), value))
-            .collect())
+            .collect();
+
+        Ok(attr)
     })
 }
 
@@ -318,12 +314,9 @@ fn xml_element_next_sibling(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Option<NifYOut>> {
-    let doc = xml.doc;
-    doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         Ok(xml
             .siblings(txn)
             .next()
@@ -336,12 +329,9 @@ fn xml_element_prev_sibling(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Option<NifYOut>> {
-    let doc = xml.doc;
-    doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         Ok(xml
             .siblings(txn)
             .next_back()
@@ -354,12 +344,9 @@ fn xml_element_parent(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Option<NifYOut>> {
-    let doc = xml.doc;
-    doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
 
         Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
     })
@@ -368,17 +355,14 @@ fn xml_element_parent(
 #[rustler::nif]
 fn xml_text_insert(
     env: Env<'_>,
-    text: NifXmlText,
+    xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     chunk: &str,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        text.insert(txn, index, chunk);
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        xml.insert(txn, index, chunk);
         Ok(atoms::ok())
     })
 }
@@ -386,18 +370,15 @@ fn xml_text_insert(
 #[rustler::nif]
 fn xml_text_insert_with_attributes(
     env: Env<'_>,
-    text: NifXmlText,
+    xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     chunk: &str,
     attr: NifAttr,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        text.insert_with_attributes(txn, index, chunk, attr.0);
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        xml.insert_with_attributes(txn, index, chunk, attr.0);
         Ok(atoms::ok())
     })
 }
@@ -405,49 +386,40 @@ fn xml_text_insert_with_attributes(
 #[rustler::nif]
 fn xml_text_delete(
     env: Env<'_>,
-    text: NifXmlText,
+    xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     len: u32,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        text.remove_range(txn, index, len);
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        xml.remove_range(txn, index, len);
         Ok(atoms::ok())
     })
 }
 #[rustler::nif]
 fn xml_text_length(
-    text: NifXmlText,
+    xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<u32> {
-    text.doc.readonly(current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        Ok(text.len(txn))
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(xml.len(txn))
     })
 }
 
 #[rustler::nif]
 fn xml_text_format(
     env: Env<'_>,
-    text: NifXmlText,
+    xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     index: u32,
     len: u32,
     attr: NifAttr,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        text.format(txn, index, len, attr.0);
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        xml.format(txn, index, len, attr.0);
         Ok(atoms::ok())
     })
 }
@@ -455,16 +427,13 @@ fn xml_text_format(
 #[rustler::nif]
 fn xml_text_apply_delta(
     env: Env<'_>,
-    text: NifXmlText,
+    xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     delta: NifYInputDelta,
 ) -> NifResult<Atom> {
-    text.doc.mutably(env, current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        text.apply_delta(txn, delta.0);
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        xml.apply_delta(txn, delta.0);
         Ok(atoms::ok())
     })
 }
@@ -474,12 +443,9 @@ fn xml_text_next_sibling(
     xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Option<NifYOut>> {
-    let doc = xml.doc;
-    doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         Ok(xml
             .siblings(txn)
             .next()
@@ -492,12 +458,9 @@ fn xml_text_prev_sibling(
     xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Option<NifYOut>> {
-    let doc = xml.doc;
-    doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
         Ok(xml
             .siblings(txn)
             .next_back()
@@ -508,30 +471,24 @@ fn xml_text_prev_sibling(
 #[rustler::nif]
 fn xml_text_to_delta(
     env: Env<'_>,
-    text: NifXmlText,
+    xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<rustler::Term<'_>> {
-    let diff = text.doc.readonly(current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        Ok(text.diff(txn, YChange::identity))
+    let diff = xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(xml.diff(txn, YChange::identity))
     })?;
-    encode_diffs(diff, &text.doc, env)
+    encode_diffs(diff, xml.doc(), env)
 }
 
 #[rustler::nif]
 fn xml_text_to_string(
-    text: NifXmlText,
+    xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<String> {
-    text.doc.readonly(current_transaction, |txn| {
-        let text = text
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
-        Ok(text.get_string(txn).into())
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(xml.get_string(txn).into())
     })
 }
 
@@ -540,12 +497,9 @@ fn xml_text_parent(
     xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Option<NifYOut>> {
-    let doc = xml.doc;
-    doc.readonly(current_transaction, |txn| {
-        let xml = xml
-            .reference
-            .get(txn)
-            .ok_or(deleted_error("Xml has been deleted".to_string()))?;
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
 
         Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
     })
