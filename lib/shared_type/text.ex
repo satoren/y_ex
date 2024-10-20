@@ -80,6 +80,46 @@ defmodule Yex.Text do
     Yex.Nif.text_to_delta(text, cur_txn(text))
   end
 
+  @spec observe(t) :: reference()
+  def observe(%__MODULE__{} = text) do
+    ref = make_ref()
+    sub = Yex.Nif.text_observe(text, cur_txn(text), self(), ref)
+    Process.put(ref, sub)
+    ref
+  end
+
+  @spec unobserve(t) :: :ok
+  def unobserve(observe_ref) do
+    case Process.get(observe_ref) do
+      nil ->
+        :ok
+
+      sub ->
+        Process.delete(observe_ref)
+        Yex.Nif.sub_unsubscribe(sub)
+    end
+  end
+
+  @spec observe_deep(t) :: reference()
+  def observe_deep(%__MODULE__{} = text) do
+    ref = make_ref()
+    sub = Yex.Nif.text_observe_deep(text, cur_txn(text), self(), ref)
+    Process.put(ref, sub)
+    ref
+  end
+
+  @spec unobserve_deep(t) :: :ok
+  def unobserve_deep(observe_ref) do
+    case Process.get(observe_ref) do
+      nil ->
+        :ok
+
+      sub ->
+        Process.delete(observe_ref)
+        Yex.Nif.sub_unsubscribe(sub)
+    end
+  end
+
   defp cur_txn(%__MODULE__{doc: doc_ref}) do
     Process.get(doc_ref, nil)
   end
