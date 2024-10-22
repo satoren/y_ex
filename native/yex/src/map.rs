@@ -1,8 +1,11 @@
 use crate::atoms;
 use crate::doc::TransactionResource;
-use crate::shared_type::{NifSharedType, SharedTypeId};
+use crate::event::{NifMapEvent, NifSharedTypeDeepObservable, NifSharedTypeObservable};
+use crate::shared_type::NifSharedType;
+use crate::shared_type::SharedTypeId;
+use crate::subscription::SubscriptionResource;
 use crate::{doc::DocResource, yinput::NifYInput, youtput::NifYOut, NifAny};
-use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
+use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc, Term};
 use std::collections::HashMap;
 use yrs::types::ToJson;
 use yrs::*;
@@ -33,6 +36,10 @@ impl NifSharedType for NifMap {
         &self.reference
     }
     const DELETED_ERROR: &'static str = "Map has been deleted";
+}
+impl NifSharedTypeDeepObservable for NifMap {}
+impl NifSharedTypeObservable for NifMap {
+    type Event = NifMapEvent;
 }
 
 #[rustler::nif]
@@ -109,4 +116,24 @@ fn map_to_json(
         let map = map.get_ref(txn)?;
         Ok(map.to_json(txn).into())
     })
+}
+
+#[rustler::nif]
+fn map_observe(
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    map.observe(current_transaction, pid, term)
+}
+
+#[rustler::nif]
+fn map_observe_deep(
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    map.observe_deep(current_transaction, pid, term)
 }

@@ -1,11 +1,13 @@
-use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
+use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc, Term};
 use yrs::types::ToJson;
 use yrs::*;
 
 use crate::{
     atoms,
     doc::{DocResource, TransactionResource},
+    event::{NifArrayEvent, NifSharedTypeDeepObservable, NifSharedTypeObservable},
     shared_type::{NifSharedType, SharedTypeId},
+    subscription::SubscriptionResource,
     yinput::NifYInput,
     youtput::NifYOut,
     NifAny,
@@ -38,6 +40,10 @@ impl NifSharedType for NifArray {
         &self.reference
     }
     const DELETED_ERROR: &'static str = "Array has been deleted";
+}
+impl NifSharedTypeDeepObservable for NifArray {}
+impl NifSharedTypeObservable for NifArray {
+    type Event = NifArrayEvent;
 }
 
 #[rustler::nif]
@@ -130,4 +136,24 @@ fn array_to_json(
         let array = array.get_ref(txn)?;
         Ok(array.to_json(txn).into())
     })
+}
+
+#[rustler::nif]
+fn array_observe(
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    array.observe(current_transaction, pid, term)
+}
+
+#[rustler::nif]
+fn array_observe_deep(
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    array.observe_deep(current_transaction, pid, term)
 }

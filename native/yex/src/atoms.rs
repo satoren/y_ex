@@ -8,7 +8,8 @@ rustler::atoms! {
     update_v1,
     update_v2,
 
-
+    observe_event,
+    observe_deep_event,
 
 // messages types
   sync,
@@ -24,6 +25,11 @@ rustler::atoms! {
   awareness_update,
   awareness_change,
 
+  action,
+  old_value,
+  new_value,
+  add,
+  update,
   insert,
   delete,
   retain,

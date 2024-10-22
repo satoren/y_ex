@@ -8,7 +8,9 @@ use crate::{
     any::NifAttr,
     atoms,
     doc::{DocResource, TransactionResource},
+    event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
+    subscription::SubscriptionResource,
     yinput::NifYInputDelta,
     youtput::NifYOut,
 };
@@ -41,6 +43,10 @@ impl NifSharedType for NifText {
     }
 
     const DELETED_ERROR: &'static str = "Text has been deleted";
+}
+impl NifSharedTypeDeepObservable for NifText {}
+impl NifSharedTypeObservable for NifText {
+    type Event = NifTextEvent;
 }
 
 #[rustler::nif]
@@ -204,4 +210,24 @@ pub fn encode_diff<'a>(
             .unwrap();
     }
     Ok(map)
+}
+
+#[rustler::nif]
+fn text_observe(
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    text.observe(current_transaction, pid, term)
+}
+
+#[rustler::nif]
+fn text_observe_deep(
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: rustler::LocalPid,
+    term: Term<'_>,
+) -> NifResult<ResourceArc<SubscriptionResource>> {
+    text.observe_deep(current_transaction, pid, term)
 }
