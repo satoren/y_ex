@@ -12,7 +12,7 @@ defmodule Yex.Awareness do
   ]
 
   @type t :: %__MODULE__{
-          reference: any()
+          reference: reference()
         }
 
   @doc """
@@ -147,7 +147,7 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.encode_update(awareness, [10])
       {:ok, <<1, 10, 1, 15, 123, 34, 107, 101, 121, 34, 58, 34, 118, 97, 108, 117, 101, 34, 125>>}
   """
-  @spec encode_update(t, [integer()]) :: {:ok, binary()}
+  @spec encode_update(t, [integer()]) :: {:ok, binary()} | {:error, term()}
   def encode_update(awareness, clients) do
     Yex.Nif.awareness_encode_update_v1(awareness, clients)
   end

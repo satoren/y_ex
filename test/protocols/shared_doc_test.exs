@@ -1,6 +1,6 @@
 defmodule Yex.Sync.SharedDocTest do
   use ExUnit.Case
-  alias Yex.{Doc, Array, Sync}
+  alias Yex.{Doc, Array, Sync, Sync}
   alias Yex.Sync.SharedDoc
 
   setup_all do
@@ -17,7 +17,7 @@ defmodule Yex.Sync.SharedDocTest do
                 :ok
 
               {:ok, reply} ->
-                send(proc, {:yjs, Sync.message_encode!({:sync, reply}), self()})
+                SharedDoc.send_yjs_message(proc, Sync.message_encode!({:sync, reply}))
             end
         end
 
