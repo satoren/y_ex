@@ -17,7 +17,7 @@ defmodule Yex.Sync.SharedDocTest do
                 :ok
 
               {:ok, reply} ->
-                send(proc, {:yjs, Sync.message_encode!({:sync, reply}), self()})
+                SharedDoc.send_yjs_message(proc, Sync.message_encode!({:sync, reply}))
             end
         end
 
