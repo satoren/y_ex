@@ -36,13 +36,12 @@ pub struct NifAwarenessUpdateSummary {
 }
 
 #[rustler::nif]
-fn awareness_new<'a>(env: Env<'a>, doc: NifDoc) -> Result<Term<'a>, NifError> {
+fn awareness_new(doc: NifDoc) -> NifAwareness {
     let awareness = Awareness::new(doc.clone());
     let resource = AwarenessResource::from(awareness);
-    let nif_awareness = NifAwareness {
+    NifAwareness {
         reference: ResourceArc::new(resource),
-    };
-    Ok(nif_awareness.encode(env))
+    }
 }
 
 #[rustler::nif]
