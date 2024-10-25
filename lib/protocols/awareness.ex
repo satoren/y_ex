@@ -163,7 +163,7 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.get_client_ids(awareness)
       [2230489810]
   """
-  @spec apply_update(t, binary(), String.t() | nil) :: :ok
+  @spec apply_update(t, binary(), origin :: term() | nil) :: :ok
   def apply_update(awareness, update, origin \\ nil) do
     Yex.Nif.awareness_apply_update_v1(awareness, update, origin) |> Yex.Nif.Util.unwrap_ok_tuple()
   end

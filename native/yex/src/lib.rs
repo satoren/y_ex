@@ -9,6 +9,7 @@ mod shared_type;
 mod subscription;
 mod sync;
 mod text;
+mod utils;
 mod wrap;
 mod xml;
 mod yinput;

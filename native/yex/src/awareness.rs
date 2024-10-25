@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Mutex};
 
+use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::{
     atoms,
     subscription::SubscriptionResource,
@@ -126,7 +127,6 @@ fn awareness_monitor_update(
                     updated: summary.updated.clone(),
                     removed: summary.removed.clone(),
                 };
-                let origin = origin.map(|origin| (*origin).to_string());
                 let awareness_ref = awareness_ref.clone();
                 ENV.with(|env| {
                     let _ = env.send(
@@ -134,7 +134,7 @@ fn awareness_monitor_update(
                         (
                             atoms::awareness_update(),
                             summary,
-                            origin,
+                            origin_to_term(env, origin),
                             NifAwareness {
                                 reference: awareness_ref,
                             },
@@ -172,7 +172,7 @@ fn awareness_monitor_change(
                         (
                             atoms::awareness_change(),
                             summary,
-                            origin.map(|s| SliceIntoBinary::new(s.as_ref())),
+                            origin_to_term(env, origin),
                             NifAwareness {
                                 reference: awareness_ref,
                             },
@@ -209,15 +209,15 @@ pub fn awareness_apply_update_v1(
     env: Env<'_>,
     awareness: NifAwareness,
     update: Binary,
-    origin: Option<&str>,
+    origin: Term<'_>,
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         let update = AwarenessUpdate::decode_v1(update.as_slice())?;
 
-        if let Some(origin) = origin {
+        if let Some(origin) = term_to_origin_binary(origin) {
             awareness
                 .reference
-                .apply_update_with(update, origin)
+                .apply_update_with(update, origin.as_slice())
                 .map_err(|e| NifError::Message(e.to_string()))
         } else {
             awareness

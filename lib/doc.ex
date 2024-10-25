@@ -92,7 +92,7 @@ defmodule Yex.Doc do
       iex> refute_receive {:update_v1, _, nil, _} # only one update message
 
   """
-  @spec transaction(t, fun()) :: :ok | {:error, term()}
+  @spec transaction(t, origin :: term(), fun()) :: :ok | {:error, term()}
   def transaction(%__MODULE__{reference: ref} = doc, origin \\ nil, exec) do
     if cur_txn(doc) do
       raise "Transaction already in progress"
