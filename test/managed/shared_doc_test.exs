@@ -19,7 +19,7 @@ defmodule Yex.Managed.SharedDocTest do
       {:yjs, reply, proc} ->
         case Yex.Sync.message_decode(reply) do
           {:ok, {:sync, sync_message}} ->
-            case Sync.read_sync_message(sync_message, doc, "#{inspect(proc)}") do
+            case Sync.read_sync_message(sync_message, doc, proc) do
               :ok ->
                 :ok
 

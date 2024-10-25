@@ -157,4 +157,29 @@ defmodule Yex.DocTest do
     assert_receive {:update_v1, _update, "origin", ^doc}
     Doc.demonitor_update(monitor_ref)
   end
+
+  test "origin accepts any types" do
+    doc = Doc.new()
+    {:ok, monitor_ref} = Doc.monitor_update(doc)
+
+    text1 = Doc.get_text(doc, "text")
+
+    update_and_check_origin = fn origin ->
+      Doc.transaction(doc, origin, fn ->
+        Text.insert(text1, 0, "World")
+      end)
+
+      assert_receive {:update_v1, _update, ^origin, ^doc}
+    end
+
+    update_and_check_origin.("origin")
+    update_and_check_origin.(self())
+    update_and_check_origin.(1000)
+    update_and_check_origin.(<<1, 2, 3>>)
+    update_and_check_origin.([1, 2, 3, 4])
+    update_and_check_origin.(:an_atom)
+    update_and_check_origin.(%{key: "value"})
+    update_and_check_origin.({:ok, "value"})
+    Doc.demonitor_update(monitor_ref)
+  end
 end

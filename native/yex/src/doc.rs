@@ -3,15 +3,15 @@ use std::ops::Deref;
 use std::sync::Mutex;
 
 use crate::subscription::SubscriptionResource;
+use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::wrap::SliceIntoBinary;
 use crate::xml::NifXmlFragment;
 use crate::{atoms, ENV};
+use crate::{wrap::NifWrap, NifArray, NifError, NifMap, NifText};
 use rustler::{Binary, Encoder, Env, LocalPid, NifStruct, NifUnitEnum, ResourceArc, Term};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::*;
-
-use crate::{wrap::NifWrap, NifArray, NifError, NifMap, NifText};
 pub struct DocInner {
     pub doc: Doc,
 }
@@ -220,7 +220,7 @@ impl NifDoc {
                     (
                         atoms::update_v1(),
                         SliceIntoBinary::new(event.update.as_slice()),
-                        txn.origin().map(|s| SliceIntoBinary::new(s.as_ref())),
+                        origin_to_term(env, txn.origin()),
                         NifDoc { reference: doc_ref },
                     ),
                 );
@@ -243,7 +243,7 @@ impl NifDoc {
                     (
                         atoms::update_v2(),
                         SliceIntoBinary::new(event.update.as_slice()),
-                        txn.origin().map(|s| SliceIntoBinary::new(s.as_ref())),
+                        origin_to_term(env, txn.origin()),
                         NifDoc { reference: doc_ref },
                     ),
                 );
@@ -301,9 +301,10 @@ fn doc_get_or_insert_xml_fragment(env: Env<'_>, doc: NifDoc, name: &str) -> NifX
 }
 
 #[rustler::nif]
-fn doc_begin_transaction(doc: NifDoc, origin: Option<&str>) -> ResourceArc<TransactionResource> {
-    if let Some(origin) = origin {
-        let txn: TransactionMut = yrs::Transact::transact_mut_with(&doc.reference.doc, origin);
+fn doc_begin_transaction(doc: NifDoc, origin: Term<'_>) -> ResourceArc<TransactionResource> {
+    if let Some(origin) = term_to_origin_binary(origin) {
+        let txn: TransactionMut =
+            yrs::Transact::transact_mut_with(&doc.reference.doc, origin.as_slice());
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
 
         TransactionResource(RefCell::new(Some(txn))).into()

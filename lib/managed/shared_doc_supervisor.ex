@@ -31,7 +31,7 @@ defmodule Yex.Managed.SharedDocSupervisor do
     end
 
     def monitor(doc_name) do
-      {:ok, _} = Registry.register(__MODULE__, doc_name, "#{inspect(self())}")
+      {:ok, _} = Registry.register(__MODULE__, doc_name, self())
       :ok
     end
 

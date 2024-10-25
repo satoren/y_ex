@@ -147,7 +147,7 @@ defmodule Yex.Sync.SharedDoc do
   @impl true
   def handle_info({:start_sync, message, from}, state) when is_binary(message) do
     with {:ok, {:sync, sync_message}} <- Sync.message_decode(message),
-         {:ok, reply} <- Sync.read_sync_message(sync_message, state.doc, "#{inspect(from)}"),
+         {:ok, reply} <- Sync.read_sync_message(sync_message, state.doc, from),
          {:ok, sync_message} <- Sync.message_encode({:sync, reply}) do
       send(from, {:yjs, sync_message, self()})
 
@@ -260,7 +260,7 @@ defmodule Yex.Sync.SharedDoc do
   end
 
   defp handle_yjs_message({:sync, sync_message}, from, state) do
-    with {:ok, reply} <- Sync.read_sync_message(sync_message, state.doc, "#{inspect(from)}"),
+    with {:ok, reply} <- Sync.read_sync_message(sync_message, state.doc, from),
          {:ok, sync_message} <- Sync.message_encode({:sync, reply}) do
       send(from, {:yjs, sync_message, self()})
     else
@@ -272,7 +272,7 @@ defmodule Yex.Sync.SharedDoc do
   end
 
   defp handle_yjs_message({:awareness, message}, from, state) do
-    Awareness.apply_update(state.awareness, message, "#{inspect(from)}")
+    Awareness.apply_update(state.awareness, message, from)
     {:noreply, state}
   end
 
@@ -283,7 +283,7 @@ defmodule Yex.Sync.SharedDoc do
 
   defp broadcast_to_users(message, origin, state) do
     state.observer_process
-    |> Enum.filter(fn {pid, _} -> "#{inspect(pid)}" != origin end)
+    |> Enum.filter(fn {pid, _} -> pid != origin end)
     |> Enum.each(fn {pid, _} ->
       send(pid, {:yjs, message, self()})
     end)

@@ -120,7 +120,7 @@ defmodule Yex.Managed.SharedDoc do
   @impl true
   def handle_info({:start_sync, message, from}, state) when is_binary(message) do
     with {:ok, {:sync, sync_message}} <- Sync.message_decode(message),
-         {:ok, reply} <- Sync.read_sync_message(sync_message, state.doc, "#{inspect(from)}"),
+         {:ok, reply} <- Sync.read_sync_message(sync_message, state.doc, from),
          {:ok, sync_message} <- Sync.message_encode({:sync, reply}) do
       send(from, {:yjs, sync_message, self()})
 
@@ -246,7 +246,7 @@ defmodule Yex.Managed.SharedDoc do
   end
 
   defp handle_yjs_message({:sync, sync_message}, from, state) do
-    with {:ok, reply} <- Sync.read_sync_message(sync_message, state.doc, "#{inspect(from)}"),
+    with {:ok, reply} <- Sync.read_sync_message(sync_message, state.doc, from),
          {:ok, sync_message} <- Sync.message_encode({:sync, reply}) do
       send(from, {:yjs, sync_message, self()})
     else
