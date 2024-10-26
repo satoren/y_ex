@@ -5,7 +5,7 @@ use rustler::{Atom, Binary, Encoder as NifEncoder, Env, Term};
 use yrs::encoding::read::Cursor;
 use yrs::sync::protocol::{
     MSG_AUTH, MSG_AWARENESS, MSG_QUERY_AWARENESS, MSG_SYNC, MSG_SYNC_STEP_1, MSG_SYNC_STEP_2,
-    MSG_SYNC_UPDATE, PERMISSION_DENIED,
+    MSG_SYNC_UPDATE, PERMISSION_DENIED, PERMISSION_GRANTED,
 };
 use yrs::updates::decoder::{Decoder, DecoderV1, DecoderV2};
 use yrs::updates::encoder::{Encoder, EncoderV1, EncoderV2};
@@ -93,7 +93,15 @@ fn encode_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Result<(),
             encoder.write_buf(binary.as_slice());
             return Ok(());
         } else if atom == atoms::auth() {
+            let reason = value.decode::<Option<String>>()?;
             encoder.write_var(MSG_AUTH);
+
+            if let Some(reason) = reason {
+                encoder.write_var(PERMISSION_DENIED);
+                encoder.write_string(&reason);
+            } else {
+                encoder.write_var(PERMISSION_GRANTED);
+            }
             return Ok(());
         }
     } else if let Ok((atom, tag, value)) = term.decode::<(Atom, u32, Term<'a>)>() {

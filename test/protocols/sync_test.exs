@@ -3,45 +3,106 @@ defmodule Yex.SyncTest do
   alias Yex.{Doc, Sync, Array}
   doctest Yex.Sync
 
-  test "message_decode" do
-    {:ok, {:sync, {:sync_step1, <<0>>}}} = Sync.message_decode(<<0, 0, 1, 0>>)
-    {:ok, :query_awareness} = Sync.message_decode(<<3>>)
+  describe "message_decode" do
+    test "sync_step1" do
+      {:ok, {:sync, {:sync_step1, <<0>>}}} = Sync.message_decode(<<0, 0, 1, 0>>)
 
-    {:ok, {:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}}} =
-      Sync.message_decode(<<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>)
+      {:ok, {:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}}} =
+        Sync.message_decode(<<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>)
+    end
 
-    {:error,
-     "while trying to read more data (expected: 10 bytes), an unexpected end of buffer was reached"} =
-      Sync.message_decode(<<0, 0, 10, 1, 217, 239, 244, 171, 5, 13>>)
-  end
+    test "sync_step2" do
+      {:ok, {:sync, {:sync_step2, <<0>>}}} = Sync.message_decode(<<0, 1, 1, 0>>)
+    end
 
-  test "message_decode!" do
-    {:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}} =
-      Sync.message_decode!(<<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>)
+    test "sync_update" do
+      {:ok, {:sync, {:sync_update, <<0>>}}} = Sync.message_decode(<<0, 2, 1, 0>>)
+    end
 
-    assert_raise RuntimeError, fn ->
-      Sync.message_decode!(<<0, 0, 10, 1, 217, 239, 244, 171, 5, 13>>)
+    test "auth" do
+      {:ok, {:auth, "test"}} = Sync.message_decode(<<2, 0, 4, 116, 101, 115, 116>>)
+    end
+
+    test "query_awareness" do
+      {:ok, :query_awareness} = Sync.message_decode(<<3>>)
+    end
+
+    test "awareness" do
+      {:ok, {:awareness, <<1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>}} =
+        Sync.message_decode(<<1, 10, 1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>)
+    end
+
+    test "custom" do
+      {:ok, <<100, 7, 1, 2, 3, 4, 5, 6, 7>>} =
+        Sync.message_encode({:custom, 100, <<1, 2, 3, 4, 5, 6, 7>>})
+    end
+
+    test "error" do
+      {:error,
+       "while trying to read more data (expected: 10 bytes), an unexpected end of buffer was reached"} =
+        Sync.message_decode(<<0, 0, 10, 1, 217, 239, 244, 171, 5, 13>>)
+    end
+
+    test "message_decode!" do
+      {:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}} =
+        Sync.message_decode!(<<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>)
+
+      assert_raise RuntimeError, fn ->
+        Sync.message_decode!(<<0, 0, 10, 1, 217, 239, 244, 171, 5, 13>>)
+      end
+    end
+
+    test "message_decode_v1" do
+      {:ok, {:sync, {:sync_step1, <<0>>}}} = Sync.message_decode_v1(<<0, 0, 1, 0>>)
+      {:ok, :query_awareness} = Sync.message_decode_v1(<<3>>)
+
+      {:ok, {:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}}} =
+        Sync.message_decode_v1(<<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>)
+    end
+
+    test "decode error" do
+      {:error, "failed to decode variable length integer"} =
+        Sync.message_decode_v2(<<0, 0, 1, 0>>)
     end
   end
 
-  test "message_decode_v1" do
-    {:ok, {:sync, {:sync_step1, <<0>>}}} = Sync.message_decode_v1(<<0, 0, 1, 0>>)
-    {:ok, :query_awareness} = Sync.message_decode_v1(<<3>>)
+  describe "message_encode" do
+    test "sync_step1" do
+      {:ok, <<0, 0, 1, 0>>} = Sync.message_encode({:sync, {:sync_step1, <<0>>}})
+    end
 
-    {:ok, {:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}}} =
-      Sync.message_decode_v1(<<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>)
-  end
+    test "sync_step2" do
+      {:ok, <<0, 1, 1, 0>>} = Sync.message_encode({:sync, {:sync_step2, <<0>>}})
+    end
 
-  test "message_decode_v2" do
-    {:error, "failed to decode variable length integer"} = Sync.message_decode_v2(<<0, 0, 1, 0>>)
-  end
+    test "sync_update" do
+      {:ok, <<0, 2, 1, 0>>} = Sync.message_encode({:sync, {:sync_update, <<0>>}})
+    end
 
-  test "message_encode" do
-    {:ok, <<0, 0, 1, 0>>} = Sync.message_encode({:sync, {:sync_step1, <<0>>}})
-    {:ok, <<3>>} = Sync.message_encode(:query_awareness)
+    test "auth" do
+      {:ok, <<2, 0, 4, 116, 101, 115, 116>>} = Sync.message_encode({:auth, "test"})
+    end
 
-    {:ok, <<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>} =
-      Sync.message_encode({:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}})
+    test "query_awareness" do
+      {:ok, <<3>>} = Sync.message_encode(:query_awareness)
+    end
+
+    test "awareness" do
+      {:ok, <<1, 10, 1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>} =
+        Sync.message_encode({:awareness, <<1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>})
+    end
+
+    test "custom" do
+      {:ok, <<100, 7, 1, 2, 3, 4, 5, 6, 7>>} =
+        Sync.message_encode({:custom, 100, <<1, 2, 3, 4, 5, 6, 7>>})
+    end
+
+    test "message_encode" do
+      {:ok, <<3>>} = Sync.message_encode(:query_awareness)
+
+      {:ok, <<0, 0, 7, 1, 217, 239, 244, 171, 5, 13>>} =
+        Sync.message_encode({:sync, {:sync_step1, <<1, 217, 239, 244, 171, 5, 13>>}})
+    end
   end
 
   test "get_sync_step1" do
