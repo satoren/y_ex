@@ -157,7 +157,8 @@ defmodule Yex.Sync.SharedDocTest do
         def unbind(_state, _doc_name, doc) do
           case Yex.encode_state_as_update(doc) do
             {:ok, update} ->
-              File.write!("test/managed/test_output_file", update, [:write, :binary])
+              File.mkdir_p!("tmp/test")
+              File.write!("tmp/test/test_output_file", update, [:write, :binary])
 
             _ ->
               []
@@ -192,7 +193,7 @@ defmodule Yex.Sync.SharedDocTest do
       Process.monitor(remote_shared_doc)
 
       assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}
-      data = File.read!("test/managed/test_output_file")
+      data = File.read!("tmp/test/test_output_file")
       assert byte_size(data) > 0
 
       doc = Doc.new()
