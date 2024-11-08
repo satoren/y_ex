@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Mutex};
 
+use crate::term_box::TermBox;
 use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::{
     atoms,
@@ -111,77 +112,68 @@ fn awareness_clean_local_state(env: Env<'_>, awareness: NifAwareness) -> Result<
 
 #[rustler::nif]
 fn awareness_monitor_update(
-    env: Env<'_>,
     awareness: NifAwareness,
     pid: LocalPid,
+    metadata: Term<'_>,
 ) -> ResourceArc<SubscriptionResource> {
-    ENV.set(&mut env.clone(), || {
-        let awareness_ref = awareness.reference.clone();
-        let sub = awareness
-            .reference
-            .on_update(move |_awareness, event, origin| {
-                let summary = event.summary();
+    let metadata = TermBox::new(metadata);
+    let sub = awareness
+        .reference
+        .on_update(move |_awareness, event, origin| {
+            let summary = event.summary();
 
-                let summary = NifAwarenessUpdateSummary {
-                    added: summary.added.clone(),
-                    updated: summary.updated.clone(),
-                    removed: summary.removed.clone(),
-                };
-                let awareness_ref = awareness_ref.clone();
-                ENV.with(|env| {
-                    let _ = env.send(
-                        &pid,
-                        (
-                            atoms::awareness_update(),
-                            summary,
-                            origin_to_term(env, origin),
-                            NifAwareness {
-                                reference: awareness_ref,
-                            },
-                        ),
-                    );
-                })
-            });
-        ResourceArc::new(Mutex::new(Some(sub)).into())
-    })
+            let summary = NifAwarenessUpdateSummary {
+                added: summary.added.clone(),
+                updated: summary.updated.clone(),
+                removed: summary.removed.clone(),
+            };
+            ENV.with(|env| {
+                let metadata = metadata.get(*env);
+                let _ = env.send(
+                    &pid,
+                    (
+                        atoms::awareness_update(),
+                        summary,
+                        origin_to_term(env, origin),
+                        metadata,
+                    ),
+                );
+            })
+        });
+    ResourceArc::new(Mutex::new(Some(sub)).into())
 }
 
 #[rustler::nif]
 fn awareness_monitor_change(
-    env: Env<'_>,
     awareness: NifAwareness,
     pid: LocalPid,
+    metadata: Term<'_>,
 ) -> ResourceArc<SubscriptionResource> {
-    ENV.set(&mut env.clone(), || {
-        let awareness_ref = awareness.reference.clone();
-        let sub = awareness
-            .reference
-            .on_change(move |_awareness, event, origin| {
-                let summary = event.summary();
+    let metadata = TermBox::new(metadata);
+    let sub = awareness
+        .reference
+        .on_change(move |_awareness, event, origin| {
+            let summary = event.summary();
 
-                let summary = NifAwarenessUpdateSummary {
-                    added: summary.added.clone(),
-                    updated: summary.updated.clone(),
-                    removed: summary.removed.clone(),
-                };
-
-                let awareness_ref = awareness_ref.clone();
-                ENV.with(|env| {
-                    let _ = env.send(
-                        &pid,
-                        (
-                            atoms::awareness_change(),
-                            summary,
-                            origin_to_term(env, origin),
-                            NifAwareness {
-                                reference: awareness_ref,
-                            },
-                        ),
-                    );
-                })
-            });
-        ResourceArc::new(Mutex::new(Some(sub)).into())
-    })
+            let summary = NifAwarenessUpdateSummary {
+                added: summary.added.clone(),
+                updated: summary.updated.clone(),
+                removed: summary.removed.clone(),
+            };
+            ENV.with(|env| {
+                let metadata = metadata.get(*env);
+                let _ = env.send(
+                    &pid,
+                    (
+                        atoms::awareness_change(),
+                        summary,
+                        origin_to_term(env, origin),
+                        metadata,
+                    ),
+                );
+            })
+        });
+    ResourceArc::new(Mutex::new(Some(sub)).into())
 }
 
 #[rustler::nif]

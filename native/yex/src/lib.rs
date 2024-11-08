@@ -8,6 +8,7 @@ mod map;
 mod shared_type;
 mod subscription;
 mod sync;
+mod term_box;
 mod text;
 mod utils;
 mod wrap;

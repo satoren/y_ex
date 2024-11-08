@@ -108,14 +108,15 @@ defmodule Yex.Doc do
 
   @doc """
   Monitor document updates.
+   You can pass metadata as an option. This value is passed as the fourth element of the message.If omitted, it will be passed as a structure of Doc itself.
   """
-  @spec monitor_update(t) :: {:ok, reference()} | {:error, term()}
-  def monitor_update(%__MODULE__{} = doc) do
-    monitor_update_v1(doc)
+  @spec monitor_update(t, keyword) :: {:ok, reference()} | {:error, term()}
+  def monitor_update(%__MODULE__{} = doc, opt \\ []) do
+    monitor_update_v1(doc, opt)
   end
 
-  def monitor_update_v1(%__MODULE__{} = doc) do
-    case Yex.Nif.doc_monitor_update_v1(doc, self()) do
+  def monitor_update_v1(%__MODULE__{} = doc, opt \\ []) do
+    case Yex.Nif.doc_monitor_update_v1(doc, self(), Keyword.get(opt, :metadata, doc)) do
       {:ok, ref} ->
         # Subscription should not be automatically released by gc, so put it in the process dictionary
         Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
@@ -126,8 +127,8 @@ defmodule Yex.Doc do
     end
   end
 
-  def monitor_update_v2(%__MODULE__{} = doc) do
-    case Yex.Nif.doc_monitor_update_v2(doc, self()) do
+  def monitor_update_v2(%__MODULE__{} = doc, opt \\ []) do
+    case Yex.Nif.doc_monitor_update_v2(doc, self(), Keyword.get(opt, :metadata, doc)) do
       {:ok, ref} ->
         # Subscription should not be automatically released by gc, so put it in the process dictionary
         Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])

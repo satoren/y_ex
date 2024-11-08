@@ -3,6 +3,7 @@ use std::ops::Deref;
 use std::sync::Mutex;
 
 use crate::subscription::SubscriptionResource;
+use crate::term_box::TermBox;
 use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::wrap::SliceIntoBinary;
 use crate::xml::NifXmlFragment;
@@ -206,52 +207,6 @@ impl NifDoc {
             self.reference.doc.get_or_insert_xml_fragment(name),
         )
     }
-
-    pub fn monitor_update_v1(
-        &self,
-        pid: LocalPid,
-    ) -> Result<ResourceArc<SubscriptionResource>, NifError> {
-        let doc_ref = self.reference.clone();
-        self.observe_update_v1(move |txn, event| {
-            let doc_ref = doc_ref.clone();
-            ENV.with(|env| {
-                let _ = env.send(
-                    &pid,
-                    (
-                        atoms::update_v1(),
-                        SliceIntoBinary::new(event.update.as_slice()),
-                        origin_to_term(env, txn.origin()),
-                        NifDoc { reference: doc_ref },
-                    ),
-                );
-            })
-        })
-        .map(|sub| ResourceArc::new(Mutex::new(Some(sub)).into()))
-        .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))
-    }
-
-    pub fn monitor_update_v2(
-        &self,
-        pid: LocalPid,
-    ) -> Result<ResourceArc<SubscriptionResource>, NifError> {
-        let doc_ref = self.reference.clone();
-        self.observe_update_v2(move |txn, event| {
-            let doc_ref = doc_ref.clone();
-            ENV.with(|env| {
-                let _ = env.send(
-                    &pid,
-                    (
-                        atoms::update_v2(),
-                        SliceIntoBinary::new(event.update.as_slice()),
-                        origin_to_term(env, txn.origin()),
-                        NifDoc { reference: doc_ref },
-                    ),
-                );
-            })
-        })
-        .map(|sub| ResourceArc::new(Mutex::new(Some(sub)).into()))
-        .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))
-    }
 }
 
 impl Default for NifDoc {
@@ -327,15 +282,49 @@ fn commit_transaction(env: Env<'_>, current_transaction: ResourceArc<Transaction
 fn doc_monitor_update_v1(
     doc: NifDoc,
     pid: LocalPid,
+    metadata: Term<'_>,
 ) -> Result<ResourceArc<SubscriptionResource>, NifError> {
-    doc.monitor_update_v1(pid)
+    let metadata = TermBox::new(metadata);
+    doc.observe_update_v1(move |txn, event| {
+        ENV.with(|env| {
+            let metadata = metadata.get(*env);
+            let _ = env.send(
+                &pid,
+                (
+                    atoms::update_v1(),
+                    SliceIntoBinary::new(event.update.as_slice()),
+                    origin_to_term(env, txn.origin()),
+                    metadata,
+                ),
+            );
+        })
+    })
+    .map(|sub| ResourceArc::new(Mutex::new(Some(sub)).into()))
+    .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))
 }
 #[rustler::nif]
 fn doc_monitor_update_v2(
     doc: NifDoc,
     pid: LocalPid,
+    metadata: Term<'_>,
 ) -> Result<ResourceArc<SubscriptionResource>, NifError> {
-    doc.monitor_update_v2(pid)
+    let metadata = TermBox::new(metadata);
+    doc.observe_update_v2(move |txn, event| {
+        ENV.with(|env| {
+            let metadata = metadata.get(*env);
+            let _ = env.send(
+                &pid,
+                (
+                    atoms::update_v2(),
+                    SliceIntoBinary::new(event.update.as_slice()),
+                    origin_to_term(env, txn.origin()),
+                    metadata,
+                ),
+            );
+        })
+    })
+    .map(|sub| ResourceArc::new(Mutex::new(Some(sub)).into()))
+    .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))
 }
 
 #[rustler::nif]
