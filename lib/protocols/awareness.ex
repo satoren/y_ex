@@ -89,6 +89,7 @@ defmodule Yex.Awareness do
 
   @doc """
    Monitor to remote and local awareness changes. This event is called even when the awareness state does not change but is only updated to notify other users that this client is still online. Use this event if you want to propagate awareness state to other users.
+   You can pass metadata as an option. This value is passed as the fourth element of the message.If omitted, it will be passed as a structure of awareness itself.
 
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{ client_id: 10 }))
@@ -96,9 +97,10 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.set_local_state(awareness, %{ "key" => "value" })
       iex> receive do {:awareness_update, %{removed: [], added: [10], updated: []}, _origin, _awareness} -> :ok end
   """
-  @spec monitor_update(t) :: reference()
-  def monitor_update(%__MODULE__{} = awareness) do
-    ref = Yex.Nif.awareness_monitor_update(awareness, self())
+  @spec monitor_update(t, keyword()) :: reference()
+  def monitor_update(%__MODULE__{} = awareness, opt \\ []) do
+    ref =
+      Yex.Nif.awareness_monitor_update(awareness, self(), Keyword.get(opt, :metadata, awareness))
 
     # Subscription should not be automatically released by gc, so put it in the process dictionary
     Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
@@ -113,16 +115,18 @@ defmodule Yex.Awareness do
 
   @doc """
    Listen to remote and local state changes. Get notified when a state is either added, updated, or removed.
+   You can pass metadata as an option. This value is passed as the fourth element of the message.If omitted, it will be passed as a structure of awareness itself.
 
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{ client_id: 10 }))
-      iex> Yex.Awareness.monitor_change(awareness)
+      iex> Yex.Awareness.monitor_change(awareness, metadata: %{ "key" => "value" })
       iex> Yex.Awareness.apply_update(awareness, <<1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>)
-      iex> receive do {:awareness_change, %{removed: [], added: [2230489810], updated: []}, _origin, _awareness} -> :ok end
+      iex> receive do {:awareness_change, %{removed: [], added: [2230489810], updated: []}, _origin,  %{ "key" => "value" } = _metadata} -> :ok end
   """
-  @spec monitor_change(t) :: reference()
-  def monitor_change(%__MODULE__{} = awareness) do
-    ref = Yex.Nif.awareness_monitor_change(awareness, self())
+  @spec monitor_change(t, keyword()) :: reference()
+  def monitor_change(%__MODULE__{} = awareness, opt \\ []) do
+    ref =
+      Yex.Nif.awareness_monitor_change(awareness, self(), Keyword.get(opt, :metadata, awareness))
 
     # Subscription should not be automatically released by gc, so put it in the process dictionary
     Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])

@@ -17,8 +17,8 @@ defmodule Yex.Nif do
   def doc_get_or_insert_array(_doc, _name), do: :erlang.nif_error(:nif_not_loaded)
   def doc_get_or_insert_map(_doc, _name), do: :erlang.nif_error(:nif_not_loaded)
   def doc_get_or_insert_xml_fragment(_doc, _name), do: :erlang.nif_error(:nif_not_loaded)
-  def doc_monitor_update_v1(_doc, _pid), do: :erlang.nif_error(:nif_not_loaded)
-  def doc_monitor_update_v2(_doc, _pid), do: :erlang.nif_error(:nif_not_loaded)
+  def doc_monitor_update_v1(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
+  def doc_monitor_update_v2(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
 
   def sub_unsubscribe(_sub), do: :erlang.nif_error(:nif_not_loaded)
 
@@ -140,8 +140,12 @@ defmodule Yex.Nif do
   def awareness_get_local_state(_awareness), do: :erlang.nif_error(:nif_not_loaded)
   def awareness_set_local_state(_awareness, _map), do: :erlang.nif_error(:nif_not_loaded)
   def awareness_clean_local_state(_awareness), do: :erlang.nif_error(:nif_not_loaded)
-  def awareness_monitor_update(_awareness, _pid), do: :erlang.nif_error(:nif_not_loaded)
-  def awareness_monitor_change(_awareness, _pid), do: :erlang.nif_error(:nif_not_loaded)
+
+  def awareness_monitor_update(_awareness, _pid, _metadata),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def awareness_monitor_change(_awareness, _pid, _metadata),
+    do: :erlang.nif_error(:nif_not_loaded)
 
   def awareness_encode_update_v1(_awareness, _clients), do: :erlang.nif_error(:nif_not_loaded)
 

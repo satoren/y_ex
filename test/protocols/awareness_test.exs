@@ -31,6 +31,15 @@ defmodule Yex.AwarenessTest do
     refute_received {:awareness_update, _, _origin, _awareness}
   end
 
+  test "monitor_update with metadata" do
+    {:ok, awareness} = Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{client_id: 10}))
+    _monitor_ref = Awareness.monitor_update(awareness, metadata: %{"key" => "value"})
+    Awareness.set_local_state(awareness, %{"key" => "value"})
+
+    assert_received {:awareness_update, %{removed: [], added: [10], updated: []}, _origin,
+                     %{"key" => "value"}}
+  end
+
   test "monitor_change" do
     {:ok, awareness} = Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{client_id: 10}))
     monitor_ref = Awareness.monitor_change(awareness)
@@ -42,6 +51,15 @@ defmodule Yex.AwarenessTest do
     Awareness.demonitor_change(monitor_ref)
     Awareness.set_local_state(awareness, %{"key2" => "value2"})
     refute_received {:awareness_change, _, _origin, _awareness}
+  end
+
+  test "monitor_change with metadata" do
+    {:ok, awareness} = Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{client_id: 10}))
+    _monitor_ref = Awareness.monitor_change(awareness, metadata: %{"key" => "value"})
+    Awareness.set_local_state(awareness, %{"key" => "value"})
+
+    assert_received {:awareness_change, %{removed: [], added: [10], updated: []}, _origin,
+                     %{"key" => "value"}}
   end
 
   test "remove_states" do

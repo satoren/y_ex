@@ -75,6 +75,17 @@ defmodule Yex.DocTest do
     Doc.demonitor_update(monitor_ref)
   end
 
+  test "monitor_update with medatada" do
+    doc = Doc.new()
+    {:ok, monitor_ref} = Doc.monitor_update(doc, metadata: "metadata")
+
+    text1 = Doc.get_text(doc, "text")
+    Text.insert(text1, 0, "HelloWorld")
+
+    assert_receive {:update_v1, _update, nil, "metadata"}
+    Doc.demonitor_update(monitor_ref)
+  end
+
   test "monitor_update_v2" do
     doc = Doc.new()
     {:ok, monitor_ref} = Doc.monitor_update_v2(doc)
@@ -84,6 +95,18 @@ defmodule Yex.DocTest do
 
     assert Text.to_string(text1) == "HelloWorld"
     assert_receive {:update_v2, _update, nil, ^doc}
+    Doc.demonitor_update_v2(monitor_ref)
+  end
+
+  test "monitor_update_v2 with medatada" do
+    doc = Doc.new()
+    {:ok, monitor_ref} = Doc.monitor_update_v2(doc, metadata: "metadata")
+
+    text1 = Doc.get_text(doc, "text")
+    Text.insert(text1, 0, "HelloWorld")
+
+    assert Text.to_string(text1) == "HelloWorld"
+    assert_receive {:update_v2, _update, nil, "metadata"}
     Doc.demonitor_update_v2(monitor_ref)
   end
 
