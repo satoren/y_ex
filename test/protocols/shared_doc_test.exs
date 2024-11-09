@@ -19,6 +19,9 @@ defmodule Yex.Sync.SharedDocTest do
               {:ok, reply} ->
                 SharedDoc.send_yjs_message(proc, Sync.message_encode!({:sync, reply}))
             end
+
+          _ ->
+            :ok
         end
 
         receive_and_handle_reply_with_timeout(doc, timeout)
@@ -96,6 +99,44 @@ defmodule Yex.Sync.SharedDocTest do
     |> Task.await()
 
     assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}
+  end
+
+  test "observe/unobserve" do
+    {:ok, pid} = SharedDoc.start_link(doc_name: random_docname())
+
+    on_exit(fn ->
+      Process.exit(pid, :normal)
+    end)
+
+    SharedDoc.observe(pid)
+
+    doc = Doc.new()
+
+    Doc.get_array(doc, "array")
+    |> Array.insert(0, "local")
+
+    assert {:ok, update} = Yex.encode_state_as_update(doc)
+
+    DocServerTestModule.process_message_v1(
+      pid,
+      Sync.message_encode!({:sync, {:sync_step2, update}})
+    )
+
+    assert_receive {:yjs, _, pid}
+
+    SharedDoc.unobserve(pid)
+
+    Doc.get_array(doc, "array2")
+    |> Array.insert(0, "1")
+
+    assert {:ok, update} = Yex.encode_state_as_update(doc)
+
+    DocServerTestModule.process_message_v1(
+      pid,
+      Sync.message_encode!({:sync, {:sync_step2, update}})
+    )
+
+    refute_receive {:yjs, _, _pid}
   end
 
   describe "Persistence" do
