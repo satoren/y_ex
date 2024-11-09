@@ -18,8 +18,7 @@ pub fn origin_to_term<'a>(
 /// * `term` - Erlang term to convert
 ///
 /// # Returns
-/// Returns Some(OwnedBinary) if the term is not nil and can be converted,
-/// None otherwise.
+/// Returns Some(OwnedBinary) if the term is not nil, None otherwise.
 pub(crate) fn term_to_origin_binary(term: Term<'_>) -> Option<OwnedBinary> {
     if nil().eq(&term) {
         None

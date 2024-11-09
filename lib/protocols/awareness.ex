@@ -12,13 +12,14 @@ defmodule Yex.Awareness do
   ]
 
   @type t :: %__MODULE__{
-          reference: any()
+          reference: reference()
         }
 
   @doc """
   create a new awareness instance
   """
-  def new(doc), do: Yex.Nif.awareness_new(doc)
+  @spec new(Yex.Doc.t()) :: {:ok, Yex.Awareness.t()}
+  def new(doc), do: {:ok, Yex.Nif.awareness_new(doc)}
 
   # crdt api
 
@@ -151,8 +152,8 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.encode_update(awareness, [10])
       {:ok, <<1, 10, 1, 15, 123, 34, 107, 101, 121, 34, 58, 34, 118, 97, 108, 117, 101, 34, 125>>}
   """
-  @spec encode_update(t, [integer()]) :: {:ok, binary()}
-  def encode_update(awareness, clients) do
+  @spec encode_update(t, [integer()] | nil) :: {:ok, binary()} | {:error, term()}
+  def encode_update(awareness, clients \\ nil) do
     Yex.Nif.awareness_encode_update_v1(awareness, clients)
   end
 
