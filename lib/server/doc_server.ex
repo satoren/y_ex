@@ -4,7 +4,7 @@ defmodule Yex.DocServer do
 
   `DocServer` defines a module to handle document update messages by yjs.
 
-  ## Example
+  ## Examples
       defmodule MyDocServer do
         use Yex.DocServer
 

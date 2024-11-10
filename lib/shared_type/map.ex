@@ -103,7 +103,7 @@ defmodule Yex.Map do
   @doc """
   Convert to json-compatible format.
 
-  ## Examples Sync two clients by exchanging the complete document structure
+  ## Examples shows a map being created incrementally then returned
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "array", Yex.ArrayPrelim.from(["Hello", "World"]))
