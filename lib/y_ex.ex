@@ -84,7 +84,7 @@ defmodule Yex do
   @doc """
   Apply a document update on the shared document.
 
-  ## Examples Sync two clients by exchanging the complete document structure
+  ## Examples syncs two clients by exchanging the complete document structure
       iex> doc1 = Yex.Doc.new()
       iex> doc2 = Yex.Doc.new()
       iex> {:ok, state1} = Yex.encode_state_as_update(doc1)

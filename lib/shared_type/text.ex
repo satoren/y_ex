@@ -40,7 +40,7 @@ defmodule Yex.Text do
   @doc """
   Transforms this type to a Quill Delta
 
-  ## Examples Sync two clients by exchanging the complete document structure
+  ## Examples Syncs two clients by exchanging the complete document structure
       iex> doc = Yex.Doc.new()
       iex> text = Yex.Doc.get_text(doc, "text")
       iex> delta = [%{ "retain" => 1}, %{ "delete" => 3}]
@@ -67,7 +67,7 @@ defmodule Yex.Text do
   @doc """
   Transforms this type to a Quill Delta
 
-  ## Examples Sync two clients by exchanging the complete document structure
+  ## Examples creates a few changes, then gets them back as a batch of change maps
       iex> doc = Yex.Doc.new()
       iex> text = Yex.Doc.get_text(doc, "text")
       iex> Yex.Text.insert(text, 0, "12345")

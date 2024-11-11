@@ -22,7 +22,7 @@ defmodule Yex.Array do
   @doc """
   Insert contents at the specified index.
 
-  ## Example
+  ## Examples
       iex> doc = Yex.Doc.new()
       iex> array = Yex.Doc.get_array(doc, "array")
       iex> Yex.Array.insert_list(array, 0, [1,2,3,4,5])
@@ -66,15 +66,6 @@ defmodule Yex.Array do
     Yex.Nif.array_delete_range(array, cur_txn(array), index, length)
   end
 
-  @doc """
-  Get content at the specified index.
-  ## Examples Sync two clients by exchanging the complete document structure
-      iex> doc = Yex.Doc.new()
-      iex> array = Yex.Doc.get_array(doc, "array")
-      iex> Yex.Array.push(array, "Hello")
-      iex> Yex.Array.get(array, 0)
-      {:ok, "Hello"}
-  """
   @deprecated "Rename to `fetch/2`"
   @spec get(t, integer()) :: {:ok, term()} | :error
   def get(array, index) do
@@ -83,6 +74,12 @@ defmodule Yex.Array do
 
   @doc """
   Get content at the specified index.
+  ## Examples pushes a string then fetches it back
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "Hello")
+      iex> Yex.Array.fetch(array, 0)
+      {:ok, "Hello"}
   """
   @spec fetch(t, integer()) :: {:ok, term()} | :error
   def fetch(%__MODULE__{} = array, index) do
@@ -101,7 +98,7 @@ defmodule Yex.Array do
   @doc """
   Returns as list
 
-  ## Examples Sync two clients by exchanging the complete document structure
+  ## Examples adds a few items to an array, then gets them back as Elixir List
       iex> doc = Yex.Doc.new()
       iex> array = Yex.Doc.get_array(doc, "array")
       iex> Yex.Array.push(array, "Hello")
@@ -117,7 +114,7 @@ defmodule Yex.Array do
   @doc """
   Returns the length of the array
 
-  ## Examples Sync two clients by exchanging the complete document structure
+  ## Examples adds a few items to an array and returns its length
       iex> doc = Yex.Doc.new()
       iex> array = Yex.Doc.get_array(doc, "array")
       iex> Yex.Array.push(array, "Hello")
@@ -132,7 +129,7 @@ defmodule Yex.Array do
   @doc """
   Convert to json-compatible format.
 
-  ## Examples Sync two clients by exchanging the complete document structure
+  ## Examples adds a few items to an array and returns as Elixir List
       iex> doc = Yex.Doc.new()
       iex> array = Yex.Doc.get_array(doc, "array")
       iex> Yex.Array.push(array, "Hello")
