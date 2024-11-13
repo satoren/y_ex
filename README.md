@@ -35,7 +35,7 @@ end
 | YMap: weak links                        | &#x2705; <br/> <small>(weak-links branch)</small> |                  &#x2705;                  |                  &#x274C;                  |
 | YArray: insert/delete                   |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | YArray & YText quotations               | &#x2705; <br/> <small>(weak links branch)</small> |                  &#x2705;                  |                  &#x2705;                  |
-| YArray: move                            |    &#x2705; <br/> <small>(move branch)</small>    |                  &#x2705;                  |                  &#x274C;                  |
+| YArray: move                            |    &#x2705; <br/> <small>(move branch)</small>    |                  &#x2705;                  |                  &#x2705;                  |
 | XML Element, Fragment and Text          |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Sub-documents                           |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
 | Shared collections: observers           |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |

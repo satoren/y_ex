@@ -103,7 +103,28 @@ fn array_delete_range(
 ) -> NifResult<Atom> {
     array.mutably(env, current_transaction, |txn| {
         let array = array.get_ref(txn)?;
+        if index + length > array.len(txn) {
+            return Err(rustler::Error::Atom("error"));
+        }
         array.remove_range(txn, index, length);
+        Ok(atoms::ok())
+    })
+}
+#[rustler::nif]
+fn array_move_to(
+    env: Env<'_>,
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    from: u32,
+    to: u32,
+) -> NifResult<Atom> {
+    array.mutably(env, current_transaction, |txn| {
+        let array = array.get_ref(txn)?;
+        let len = array.len(txn);
+        if from >= len || to > len {
+            return Err(rustler::Error::Atom("error"));
+        }
+        array.move_to(txn, from, to);
         Ok(atoms::ok())
     })
 }
