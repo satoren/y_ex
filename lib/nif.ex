@@ -153,6 +153,15 @@ defmodule Yex.Nif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   def awareness_remove_states(_awareness, _clients), do: :erlang.nif_error(:nif_not_loaded)
+
+  def undo_manager_new(_doc, _shared_type, _capture_timeout_millis), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_undo(_manager, _transaction), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_redo(_manager, _transaction), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_can_undo(_manager, _transaction), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_can_redo(_manager, _transaction), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_clear(_manager, _transaction), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_add_tracked_origin(_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_remove_tracked_origin(_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
 end
 
 defmodule Yex.Nif.Util do
