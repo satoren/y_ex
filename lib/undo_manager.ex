@@ -1,40 +1,61 @@
 defmodule Yex.UndoManager do
+  @type t :: %__MODULE__{
+    doc: Yex.Doc.t(),
+    manager: reference(),
+    options: Options.t()
+  }
+
+  defstruct [:doc, :manager, :options]
+
   defmodule Options do
-    @moduledoc """
-    UndoManager options.
-    """
-    defstruct capture_timeout_millis: 500,
-              tracked_origins: []
+    @default_timeout 500
 
     @type t :: %__MODULE__{
-            capture_timeout_millis: non_neg_integer(),
-            tracked_origins: list(term())
-          }
+      capture_timeout_millis: non_neg_integer(),
+      tracked_origins: [String.t()]
+    }
+
+    defstruct capture_timeout_millis: @default_timeout,
+              tracked_origins: []
+
+    def new(opts \\ []) do
+      timeout = Keyword.get(opts, :capture_timeout_millis, @default_timeout)
+      origins = Keyword.get(opts, :tracked_origins, [])
+
+      %__MODULE__{
+        capture_timeout_millis: timeout,
+        tracked_origins: origins |> List.wrap() |> Enum.map(&to_string/1)
+      }
+    end
   end
 
-  defstruct [
-    :doc,
-    :manager
-  ]
+  def new(doc, shared_type, opts \\ []) do
+    options = Options.new(opts)
 
-  @type t :: %__MODULE__{
-          doc: Yex.Doc.t(),
-          manager: reference()
+    case Yex.Nif.undo_manager_new(doc, shared_type, options) do
+      {:ok, undo_manager} ->
+        %__MODULE__{
+          doc: doc,
+          manager: undo_manager.manager,
+          options: options
         }
 
-  @doc """
-  Create a new undo manager for a shared type (text, array, or map).
-  """
-  @spec new(Yex.Doc.t(), shared_type :: term(), Options.t() | keyword()) :: t()
-  def new(%Yex.Doc{} = doc, shared_type, opts \\ []) do
-    options = case opts do
-      %Options{} -> opts
-      keywords when is_list(keywords) -> struct(Options, keywords)
+      {:error, reason} ->
+        raise ArgumentError, message: reason
     end
+  end
 
-    case Yex.Nif.undo_manager_new(doc, shared_type, options.capture_timeout_millis) do
-      {:ok, nif_manager} -> struct(__MODULE__, Map.from_struct(nif_manager))
-      error -> error
+  def include_origin(%{manager: manager} = _undo_manager, origin) when is_binary(origin) do
+    case Yex.Nif.undo_manager_include_origin(manager, origin) do
+      :ok -> :ok
+      {:error, reason} -> raise ArgumentError, message: reason
+    end
+  end
+
+  def exclude_origin(%{manager: manager} = _undo_manager, origin) when is_binary(origin) do
+    case Yex.Nif.undo_manager_exclude_origin(manager, origin) do
+      :ok -> :ok
+      {:error, reason} -> raise ArgumentError, message: reason
     end
   end
 
@@ -42,7 +63,7 @@ defmodule Yex.UndoManager do
   Undo the last change.
   """
   @spec undo(t()) :: :ok | {:error, term()}
-  def undo(%__MODULE__{} = manager) do
+  def undo(%{manager: manager} = _undo_manager) do
     Yex.Doc.transaction(manager.doc, nil, fn ->
       Yex.Nif.undo_manager_undo(manager, nil)
     end)
@@ -52,7 +73,7 @@ defmodule Yex.UndoManager do
   Redo the last undone change.
   """
   @spec redo(t()) :: :ok | {:error, term()}
-  def redo(%__MODULE__{} = manager) do
+  def redo(%{manager: manager} = _undo_manager) do
     Yex.Doc.transaction(manager.doc, nil, fn ->
       Yex.Nif.undo_manager_redo(manager, nil)
     end)
@@ -62,37 +83,31 @@ defmodule Yex.UndoManager do
   Check if there are any changes that can be undone.
   """
   @spec can_undo?(t()) :: boolean()
-  def can_undo?(%__MODULE__{} = manager) do
-    Yex.Doc.transaction(manager.doc, nil, fn ->
-      Yex.Nif.undo_manager_can_undo(manager, nil)
-    end)
+  def can_undo?(%{manager: manager} = _undo_manager) do
+    Yex.Nif.undo_manager_can_undo(manager)
   end
 
   @doc """
   Check if there are any changes that can be redone.
   """
   @spec can_redo?(t()) :: boolean()
-  def can_redo?(%__MODULE__{} = manager) do
-    Yex.Doc.transaction(manager.doc, nil, fn ->
-      Yex.Nif.undo_manager_can_redo(manager, nil)
-    end)
+  def can_redo?(%{manager: manager} = _undo_manager) do
+    Yex.Nif.undo_manager_can_redo(manager)
   end
 
   @doc """
   Clear all undo/redo history.
   """
   @spec clear(t()) :: :ok | {:error, term()}
-  def clear(%__MODULE__{} = manager) do
-    Yex.Doc.transaction(manager.doc, nil, fn ->
-      Yex.Nif.undo_manager_clear(manager, nil)
-    end)
+  def clear(%{manager: manager} = _undo_manager) do
+    Yex.Nif.undo_manager_clear(manager)
   end
 
   @doc """
   Add an origin to track for undo/redo operations.
   """
   @spec add_tracked_origin(t(), term()) :: :ok
-  def add_tracked_origin(%__MODULE__{} = manager, origin) do
+  def add_tracked_origin(%{manager: manager} = _undo_manager, origin) do
     Yex.Nif.undo_manager_add_tracked_origin(manager, origin)
   end
 
@@ -100,7 +115,7 @@ defmodule Yex.UndoManager do
   Remove an origin from tracking.
   """
   @spec remove_tracked_origin(t(), term()) :: :ok
-  def remove_tracked_origin(%__MODULE__{} = manager, origin) do
+  def remove_tracked_origin(%{manager: manager} = _undo_manager, origin) do
     Yex.Nif.undo_manager_remove_tracked_origin(manager, origin)
   end
 end
