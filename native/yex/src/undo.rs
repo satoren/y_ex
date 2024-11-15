@@ -1,45 +1,31 @@
 use crate::{
-    atoms,
     doc::{DocResource, TransactionResource},
     error::NifError,
-    shared_type::{NifSharedType, SharedTypeId},
     ENV,
 };
-use rustler::{Env, LocalPid, NifStruct, ResourceArc, Term};
-use std::collections::HashSet;
+use rustler::{Env, NifStruct, ResourceArc};
+use std::sync::Mutex;
 use yrs::undo::{UndoManager, Options as UndoOptions};
-use yrs::{ReadTxn, SharedRef, Transact};
 
-pub type UndoManagerResource = NifWrap<Mutex<YUndoManager>>;
-
-#[rustler::resource_impl]
-impl rustler::Resource for UndoManagerResource {}
+type YUndoManager = UndoManager<()>;
 
 #[derive(NifStruct)]
 #[module = "Yex.UndoManager"]
 pub struct NifUndoManager {
     doc: ResourceArc<DocResource>,
-    reference: SharedTypeId<UndoManager>,
+    manager: ResourceArc<UndoManagerResource>,
 }
 
-impl NifSharedType for NifUndoManager {
-    type RefType = UndoManager;
-    const DELETED_ERROR: &'static str = "Undo manager has been deleted";
+pub struct UndoManagerResource(pub Mutex<YUndoManager>);
 
-    fn doc(&self) -> &ResourceArc<DocResource> {
-        &self.doc
-    }
-
-    fn reference(&self) -> &SharedTypeId<Self::RefType> {
-        &self.reference
-    }
-}
+#[rustler::resource_impl]
+impl rustler::Resource for UndoManagerResource {}
 
 #[rustler::nif]
-fn undo_manager_new(
+pub fn undo_manager_new(
     env: Env<'_>,
     doc: ResourceArc<DocResource>,
-    scope: SharedTypeId<UndoManager>,
+    _scope: ResourceArc<DocResource>,
     capture_timeout_millis: Option<u64>,
 ) -> Result<NifUndoManager, NifError> {
     ENV.set(&mut env.clone(), || {
@@ -49,84 +35,63 @@ fn undo_manager_new(
         }
 
         let manager = UndoManager::with_options(&doc.0.doc, options);
-        let reference = SharedTypeId::new(manager.hook());
+        let manager_resource = ResourceArc::new(UndoManagerResource(Mutex::new(manager)));
 
-        Ok(NifUndoManager { doc, reference })
+        Ok(NifUndoManager { 
+            doc, 
+            manager: manager_resource 
+        })
     })
 }
 
 #[rustler::nif]
-fn undo_manager_undo(
-    env: Env<'_>,
+pub fn undo_manager_undo(
     manager: NifUndoManager,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
+    _current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> Result<(), NifError> {
-    manager.mutably(env, current_transaction, |txn| {
-        if let Some(manager) = manager.reference.get(txn) {
-            manager.undo(txn);
-            Ok(())
-        } else {
-            Err(NifError::Message(NifUndoManager::DELETED_ERROR.to_string()))
-        }
-    })
+    let mut mgr = manager
+        .manager
+        .0
+        .lock()
+        .map_err(|_| NifError::Message("Failed to lock undo manager".into()))?;
+    mgr.undo_blocking();
+    Ok(())
 }
 
 #[rustler::nif]
-fn undo_manager_redo(
-    env: Env<'_>,
+pub fn undo_manager_redo(
     manager: NifUndoManager,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
+    _current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> Result<(), NifError> {
-    manager.mutably(env, current_transaction, |txn| {
-        if let Some(manager) = manager.reference.get(txn) {
-            manager.redo(txn);
-            Ok(())
-        } else {
-            Err(NifError::Message(NifUndoManager::DELETED_ERROR.to_string()))
-        }
-    })
+    let mut mgr = manager.manager.0.lock().map_err(|_| NifError::Message("Failed to lock undo manager".into()))?;
+    mgr.redo_blocking();
+    Ok(())
 }
 
 #[rustler::nif]
-fn undo_manager_can_undo(
+pub fn undo_manager_can_undo(
     manager: NifUndoManager,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
+    _current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> Result<bool, NifError> {
-    manager.readonly(current_transaction, |txn| {
-        if let Some(manager) = manager.reference.get(txn) {
-            Ok(manager.can_undo())
-        } else {
-            Err(NifError::Message(NifUndoManager::DELETED_ERROR.to_string()))
-        }
-    })
+    let mgr = manager.manager.0.lock().map_err(|_| NifError::Message("Failed to lock undo manager".into()))?;
+    Ok(mgr.can_undo())
 }
 
 #[rustler::nif]
-fn undo_manager_can_redo(
+pub fn undo_manager_can_redo(
     manager: NifUndoManager,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
+    _current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> Result<bool, NifError> {
-    manager.readonly(current_transaction, |txn| {
-        if let Some(manager) = manager.reference.get(txn) {
-            Ok(manager.can_redo())
-        } else {
-            Err(NifError::Message(NifUndoManager::DELETED_ERROR.to_string()))
-        }
-    })
+    let mgr = manager.manager.0.lock().map_err(|_| NifError::Message("Failed to lock undo manager".into()))?;
+    Ok(mgr.can_redo())
 }
 
 #[rustler::nif]
-fn undo_manager_clear(
-    env: Env<'_>,
+pub fn undo_manager_clear(
     manager: NifUndoManager,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
+    _current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> Result<(), NifError> {
-    manager.mutably(env, current_transaction, |txn| {
-        if let Some(manager) = manager.reference.get(txn) {
-            manager.clear();
-            Ok(())
-        } else {
-            Err(NifError::Message(NifUndoManager::DELETED_ERROR.to_string()))
-        }
-    })
+    let mut mgr = manager.manager.0.lock().map_err(|_| NifError::Message("Failed to lock undo manager".into()))?;
+    mgr.clear();
+    Ok(())
 } 

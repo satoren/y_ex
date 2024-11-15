@@ -14,12 +14,12 @@ defmodule Yex.UndoManager do
 
   defstruct [
     :doc,
-    :reference
+    :manager
   ]
 
   @type t :: %__MODULE__{
           doc: Yex.Doc.t(),
-          reference: reference()
+          manager: reference()
         }
 
   @doc """
@@ -32,7 +32,10 @@ defmodule Yex.UndoManager do
       keywords when is_list(keywords) -> struct(Options, keywords)
     end
 
-    Yex.Nif.undo_manager_new(doc, shared_type, options.capture_timeout_millis)
+    case Yex.Nif.undo_manager_new(doc, shared_type, options.capture_timeout_millis) do
+      {:ok, nif_manager} -> struct(__MODULE__, Map.from_struct(nif_manager))
+      error -> error
+    end
   end
 
   @doc """
