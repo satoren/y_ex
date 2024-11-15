@@ -76,9 +76,8 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "tracked origins", %{doc: doc, text: text, manager: manager} do
-    UndoManager.add_tracked_origin(manager, "tracked_change")
+    UndoManager.include_origin(manager, "tracked_change")
 
-    # Changes with tracked origin should be undoable
     Doc.transaction(doc, "tracked_change", fn ->
       Text.insert(text, 0, "Tracked")
     end)
@@ -86,7 +85,6 @@ defmodule Yex.UndoManagerTest do
 
     UndoManager.clear(manager)
 
-    # Changes with untracked origin should not be undoable
     Doc.transaction(doc, "untracked_change", fn ->
       Text.insert(text, 0, "Untracked")
     end)
