@@ -28,9 +28,7 @@ defmodule Yex.MixProject do
         "coveralls.post": :test,
         "coveralls.html": :test,
         "coveralls.cobertura": :test
-      ],
-      rustler_crates: rustler_crates(),
-      elixirc_paths: elixirc_paths(Mix.env())
+      ]
     ]
   end
 
@@ -60,25 +58,13 @@ defmodule Yex.MixProject do
 
   defp deps do
     [
-      {:rustler, "~> 0.34.0", runtime: false},
-      {:rustler_precompiled, "~> 0.6.0", optional: true},
+      {:rustler, ">= 0.0.0", optional: true},
+      {:rustler_precompiled, ">= 0.6.0"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
-      {:benchee, "~> 1.0", only: :dev},
+      {:benchee, "~> 1.0", only: :dev}
     ]
   end
-
-  defp rustler_crates do
-    [
-      yex: [
-        path: "native/yex",
-        mode: if(Mix.env() == :prod, do: :release, else: :debug)
-      ]
-    ]
-  end
-
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_), do: ["lib"]
 end
