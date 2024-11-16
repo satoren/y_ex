@@ -5,7 +5,7 @@ defmodule Yex.UndoManagerTest do
   setup do
     doc = Doc.new()
     text = Doc.get_text(doc, "text")
-    manager = UndoManager.new(doc, text)
+    {:ok, manager} = UndoManager.new(doc)
     {:ok, doc: doc, text: text, manager: manager}
   end
 
@@ -112,8 +112,8 @@ defmodule Yex.UndoManagerTest do
     text1 = Doc.get_text(doc, "text1")
     text2 = Doc.get_text(doc, "text2")
 
-    manager1 = UndoManager.new(doc, text1)
-    manager2 = UndoManager.new(doc, text2)
+    {:ok, manager1} = UndoManager.new(doc)
+    {:ok, manager2} = UndoManager.new(doc)
 
     Text.insert(text1, 0, "Text 1")
     Text.insert(text2, 0, "Text 2")
@@ -131,7 +131,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "undo manager with custom options", %{doc: doc, text: text} do
-    manager = UndoManager.new(doc, text, %UndoManager.Options{
+    {:ok, manager} = UndoManager.new(doc, %UndoManager.Options{
       capture_timeout_millis: 1000,
       tracked_origins: ["origin1", "origin2"]
     })

@@ -2,6 +2,7 @@ use crate::{
     doc::{DocResource},
     error::NifError,
     ENV,
+    NifDoc,
 };
 use rustler::{Env, NifStruct, ResourceArc};
 use std::sync::Mutex;
@@ -32,8 +33,7 @@ pub struct NifUndoManager {
 #[rustler::nif]
 pub fn undo_manager_new(
     env: Env<'_>,
-    doc: ResourceArc<DocResource>,
-    shared_type: ResourceArc<DocResource>,
+    doc: NifDoc,
     options: NifUndoManagerOptions,
 ) -> Result<NifUndoManager, NifError> {
     ENV.set(&mut env.clone(), || {
@@ -46,11 +46,11 @@ pub fn undo_manager_new(
             .collect();
         undo_options.tracked_origins = tracked_origins;
 
-        let manager = UndoManager::with_options(&shared_type.0.doc, undo_options);
+        let manager = UndoManager::with_options(&doc.reference.0.doc, undo_options);
         let manager_resource = ResourceArc::new(UndoManagerResource(Mutex::new(manager)));
 
         Ok(NifUndoManager { 
-            doc, 
+            doc: doc.reference,
             manager: manager_resource,
             options,
         })

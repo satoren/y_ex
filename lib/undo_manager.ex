@@ -29,19 +29,10 @@ defmodule Yex.UndoManager do
     end
   end
 
-  def new(doc, shared_type, opts \\ []) do
-    options = Options.new(opts)
-
-    case Yex.Nif.undo_manager_new(doc, shared_type, options) do
-      {:ok, undo_manager} ->
-        %__MODULE__{
-          doc: doc,
-          manager: undo_manager.manager,
-          options: options
-        }
-
-      {:error, reason} ->
-        raise ArgumentError, message: reason
+  def new(doc, options \\ %Options{}) do
+    case Yex.Nif.undo_manager_new(doc, options) do
+      {:ok, manager} -> {:ok, manager}
+      {:error, reason} -> {:error, reason}
     end
   end
 
