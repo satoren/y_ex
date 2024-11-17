@@ -30,3 +30,8 @@ pub fn undo_manager_include_origin(undo_manager: NifUndoManager, origin: Binary)
     let origin = Origin::from(origin.as_slice());
     undo_manager.reference.0.write().unwrap().include_origin(origin);
 }
+
+#[rustler::nif]
+pub fn undo_manager_undo(undo_manager: NifUndoManager) {
+    undo_manager.reference.0.write().unwrap().undo();
+}
