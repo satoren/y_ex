@@ -1,29 +1,70 @@
 defmodule Yex.UndoManagerTest do
   use ExUnit.Case
+  alias Yex.{Doc, Text, UndoManager}
   doctest Yex.UndoManager
 
   test "can create an undo manager" do
-    doc = Yex.Doc.new()
-    undo_manager = Yex.Nif.undo_manager_new(doc)
+    doc = Doc.new()
+    undo_manager = UndoManager.new(doc)
 
-    assert %Yex.UndoManager{} = undo_manager
+    assert %UndoManager{} = undo_manager
     assert undo_manager.reference != nil
   end
 
   test "can include an origin for tracking" do
-    doc = Yex.Doc.new()
-    undo_manager = Yex.Nif.undo_manager_new(doc)
+    doc = Doc.new()
+    undo_manager = UndoManager.new(doc)
 
-    # Create a simple binary origin
     origin = "test-origin"
-    Yex.Nif.undo_manager_include_origin(undo_manager, origin)
+    UndoManager.include_origin(undo_manager, origin)
   end
 
   test "can undo without failure when stack is empty" do
-    doc = Yex.Doc.new()
-    undo_manager = Yex.Nif.undo_manager_new(doc)
+    doc = Doc.new()
+    undo_manager = UndoManager.new(doc)
 
-    # Just test that it doesn't crash when there's nothing to undo
-    Yex.Nif.undo_manager_undo(undo_manager)
+    UndoManager.undo(undo_manager)
+  end
+
+  test "can undo text changes from tracked origin" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+    undo_manager = UndoManager.new(doc)
+    origin = "test-origin"
+
+    # Include our origin for tracking
+    UndoManager.include_origin(undo_manager, origin)
+
+    # Make changes within a transaction with our tracked origin
+    Doc.transaction(doc, origin, fn ->
+      Text.insert(text, 0, "Hello World")
+    end)
+
+    # Verify text was changed
+    assert Text.to_string(text) == "Hello World"
+
+    # Undo the change and check if it was successful
+    assert UndoManager.undo(undo_manager) == true
+
+    # Verify text was reverted
+    assert Text.to_string(text) == ""
+  end
+
+  test "attempts to undo direct changes without transaction" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+    undo_manager = UndoManager.new(doc)
+
+    # Try to make changes directly
+    Text.insert(text, 0, "Hello World")
+
+    # Verify text was changed
+    assert Text.to_string(text) == "Hello World"
+
+    # Try to undo the change
+    UndoManager.undo(undo_manager)
+
+    # Check if the text was affected
+    assert Text.to_string(text) == "Hello World" # We expect this to stay unchanged
   end
 end
