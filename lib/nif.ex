@@ -154,16 +154,8 @@ defmodule Yex.Nif do
 
   def awareness_remove_states(_awareness, _clients), do: :erlang.nif_error(:nif_not_loaded)
 
-  def undo_manager_new(_doc, _options), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_include_origin(_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_exclude_origin(_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_undo(_manager, _transaction \\ nil), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_redo(_manager, _transaction \\ nil), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_can_undo(_manager, _transaction \\ nil), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_can_redo(_manager, _transaction \\ nil), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_clear(_manager, _transaction \\ nil), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_add_tracked_origin(_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_remove_tracked_origin(_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_new(_doc), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_include_origin(_undo_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
 end
 
 defmodule Yex.Nif.Util do

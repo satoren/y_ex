@@ -28,4 +28,15 @@ rustler::atoms! {
   delete,
   retain,
   attributes,
+
+  // undo message types
+
+  // Observer events
+  undo_item_added,    // for observe_item_added
+  undo_item_updated,  // for observe_item_updated  
+  undo_item_popped,   // for observe_item_popped
+
+  // Event kinds
+  undo,              // EventKind::Undo
+  redo,              // EventKind::Redo
 }
