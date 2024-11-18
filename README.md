@@ -26,7 +26,7 @@ end
 ## Feature parity
 
 
-|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.18)               |                y_ex<br/>(0.6.4)               | 
+|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.18)               |                y_ex<br/>(0.6.5)               | 
 |-----------------------------------------|:-------------------------------------------------:|:------------------------------------------:|:------------------------------------------:|
 | YText: insert/delete                    |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | YText: formatting attributes and deltas |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
@@ -35,7 +35,7 @@ end
 | YMap: weak links                        | &#x2705; <br/> <small>(weak-links branch)</small> |                  &#x2705;                  |                  &#x274C;                  |
 | YArray: insert/delete                   |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | YArray & YText quotations               | &#x2705; <br/> <small>(weak links branch)</small> |                  &#x2705;                  |                  &#x2705;                  |
-| YArray: move                            |    &#x2705; <br/> <small>(move branch)</small>    |                  &#x2705;                  |                  &#x274C;(next release)                  |
+| YArray: move                            |    &#x2705; <br/> <small>(move branch)</small>    |                  &#x2705;                  |                  &#x2705;                  |
 | XML Element, Fragment and Text          |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Sub-documents                           |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
 | Shared collections: observers           |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
