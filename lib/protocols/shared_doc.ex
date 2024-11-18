@@ -33,7 +33,6 @@ defmodule Yex.Sync.SharedDoc do
   message mus be represented in the Yjs protocol default format.
   type supports sync and awareness.
   """
-  @deprecated "Use `process_message_v1/3` instead"
   def send_yjs_message(server, message) when is_binary(message) do
     process_message_v1(server, message, self())
     |> handle_process_message_result(server)
@@ -43,7 +42,6 @@ defmodule Yex.Sync.SharedDoc do
   Start the initial state exchange.
 
   """
-  @deprecated "Use `process_message_v1/3` instead"
   def start_sync(server, step1_message) do
     process_message_v1(server, step1_message, self())
     |> handle_process_message_result(server)
