@@ -1,6 +1,6 @@
 defmodule Yex.Sync.SharedDocTest do
   use ExUnit.Case
-  alias Yex.{Doc, Array, Sync}
+  alias Yex.{Doc, Array, Sync, Awareness}
   alias Yex.Sync.SharedDoc
 
   setup_all do
@@ -101,42 +101,121 @@ defmodule Yex.Sync.SharedDocTest do
     assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}
   end
 
-  test "observe/unobserve" do
-    {:ok, pid} = SharedDoc.start_link(doc_name: random_docname())
+  describe "observe/unobserve" do
+    test "observe" do
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname())
 
-    on_exit(fn ->
-      Process.exit(pid, :normal)
-    end)
+      on_exit(fn ->
+        Process.exit(pid, :normal)
+      end)
 
-    SharedDoc.observe(pid)
+      SharedDoc.observe(pid)
 
-    doc = Doc.new()
+      doc = Doc.new()
 
-    Doc.get_array(doc, "array")
-    |> Array.insert(0, "local")
+      Doc.get_array(doc, "array")
+      |> Array.insert(0, "local")
 
-    assert {:ok, update} = Yex.encode_state_as_update(doc)
+      assert {:ok, update} = Yex.encode_state_as_update(doc)
 
-    DocServerTestModule.process_message_v1(
-      pid,
-      Sync.message_encode!({:sync, {:sync_step2, update}})
-    )
+      DocServerTestModule.process_message_v1(
+        pid,
+        Sync.message_encode!({:sync, {:sync_step2, update}})
+      )
 
-    assert_receive {:yjs, _, pid}
+      assert_receive {:yjs, _, pid}
 
-    SharedDoc.unobserve(pid)
+      SharedDoc.unobserve(pid)
 
-    Doc.get_array(doc, "array2")
-    |> Array.insert(0, "1")
+      Doc.get_array(doc, "array2")
+      |> Array.insert(0, "1")
 
-    assert {:ok, update} = Yex.encode_state_as_update(doc)
+      assert {:ok, update} = Yex.encode_state_as_update(doc)
 
-    DocServerTestModule.process_message_v1(
-      pid,
-      Sync.message_encode!({:sync, {:sync_step2, update}})
-    )
+      DocServerTestModule.process_message_v1(
+        pid,
+        Sync.message_encode!({:sync, {:sync_step2, update}})
+      )
 
-    refute_receive {:yjs, _, _pid}
+      refute_receive {:yjs, _, _pid}
+    end
+
+    test "remove awareness when unobserve" do
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname())
+
+      SharedDoc.observe(pid)
+
+      Task.async(fn ->
+        {:ok, awareness} = Yex.Awareness.new(Doc.new())
+        Awareness.set_local_state(awareness, %{"key" => "value"})
+        SharedDoc.observe(pid)
+
+        {:ok, awareness_update} = Awareness.encode_update(awareness)
+
+        SharedDoc.process_message_v1(
+          pid,
+          Sync.message_encode!({:awareness, awareness_update}),
+          self()
+        )
+      end)
+      |> Task.await()
+
+      # added awareness
+      {:ok, check_awareness} = Yex.Awareness.new(Doc.new())
+      assert_receive {:yjs, message, _pid}
+      {:awareness, message} = Sync.message_decode!(message)
+      :ok = Awareness.apply_update(check_awareness, message)
+      assert Awareness.get_client_ids(check_awareness) |> Enum.count() == 1
+
+      # deleted awareness
+      assert_receive {:yjs, message, _pid}
+      {:awareness, message} = Sync.message_decode!(message)
+      :ok = Awareness.apply_update(check_awareness, message)
+      assert Awareness.get_client_ids(check_awareness) |> Enum.count() == 0
+    end
+
+    test "remove awareness" do
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname())
+      SharedDoc.observe(pid)
+
+      send_awareness = fn state ->
+        {:ok, awareness} = Yex.Awareness.new(Doc.new())
+        Awareness.set_local_state(awareness, state)
+        SharedDoc.observe(pid)
+
+        {:ok, awareness_update} = Awareness.encode_update(awareness)
+
+        SharedDoc.process_message_v1(
+          pid,
+          Sync.message_encode!({:awareness, awareness_update}),
+          self()
+        )
+      end
+
+      send_awareness.(%{"key2" => "value2"})
+
+      Task.async(fn ->
+        send_awareness.(%{"key" => "value"})
+        send_awareness.(%{"key" => "value"})
+        send_awareness.(%{"key" => "value"})
+      end)
+      |> Task.await()
+
+      {:ok, [message]} =
+        SharedDoc.process_message_v1(
+          pid,
+          Sync.message_encode!(:query_awareness),
+          self()
+        )
+
+      {:awareness, awareness_update} = Sync.message_decode!(message)
+
+      {:ok, check_awareness} = Yex.Awareness.new(Doc.new())
+
+      Awareness.apply_update(check_awareness, awareness_update)
+
+      assert Awareness.get_client_ids(check_awareness) |> Enum.count() == 1
+    end
   end
 
   describe "Persistence" do

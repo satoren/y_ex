@@ -109,7 +109,8 @@ defmodule Yex.Sync.SharedDoc do
          persistence: persistence,
          persistence_state: persistence_state,
          auto_exit: auto_exit,
-         observer_process: %{}
+         observer_process: %{},
+         origin_client_map: %{}
        }
      )}
   end
@@ -137,6 +138,13 @@ defmodule Yex.Sync.SharedDoc do
     end
 
     assign(state, :observer_process, observer_process)
+    |> remove_awareness_clients_by_origin(client)
+  end
+
+  defp remove_awareness_clients_by_origin(state, origin) do
+    Awareness.remove_states(state.awareness, Map.get(state.assigns.origin_client_map, origin, []))
+
+    assign(state, :origin_client_map, Map.delete(state.assigns.origin_client_map, origin))
   end
 
   @impl true
@@ -170,13 +178,40 @@ defmodule Yex.Sync.SharedDoc do
     with {:ok, update} <- Awareness.encode_update(awareness, changed_clients),
          {:ok, message} <- Sync.message_encode({:awareness, update}) do
       broadcast_to_users(message, origin, state)
+
+      {:noreply,
+       state
+       |> update_origin_client_map(origin, %{removed: removed, added: added, updated: updated})}
     else
       error ->
         Logger.warning(error)
-        error
+        {:noreply, state}
     end
+  end
 
-    {:noreply, state}
+  defp update_origin_client_map(
+         state,
+         nil,
+         _event
+       ) do
+    state
+  end
+
+  defp update_origin_client_map(
+         state,
+         origin,
+         %{removed: removed, added: added, updated: _updated}
+       ) do
+    # state.assigns.origin_client_map
+    origin_client_map =
+      Map.update(state.assigns.origin_client_map, origin, added, fn prev ->
+        (added ++ prev)
+        |> Enum.uniq()
+        |> Enum.reject(fn id -> Enum.member?(removed, id) end)
+        |> Enum.to_list()
+      end)
+
+    assign(state, :origin_client_map, origin_client_map)
   end
 
   @impl true

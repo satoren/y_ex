@@ -141,7 +141,8 @@ defmodule Yex.DocServer.Worker do
       end
     end)
 
-    {:noreply, state}
+    # Process update messages immediately
+    handle_update_v1_immediately(state)
   end
 
   @impl true
@@ -159,7 +160,9 @@ defmodule Yex.DocServer.Worker do
         %{awareness: awareness} = state
       ) do
     Awareness.apply_update(awareness, message, origin)
-    {:noreply, state}
+
+    # Process update messages immediately
+    handle_awareness_change_immediately(state)
   end
 
   @impl true
@@ -204,6 +207,38 @@ defmodule Yex.DocServer.Worker do
       {:error, reason} ->
         Logger.warning(inspect(reason))
         []
+    end
+  end
+
+  defp handle_update_v1_immediately(%{doc: doc, module: module} = state) do
+    receive do
+      {:update_v1, update, origin, __MODULE__} ->
+        case module.handle_update_v1(doc, update, origin, state) do
+          {:noreply, state} ->
+            handle_update_v1_immediately(state)
+
+          result ->
+            result
+        end
+    after
+      0 ->
+        {:noreply, state}
+    end
+  end
+
+  defp handle_awareness_change_immediately(%{awareness: awareness, module: module} = state) do
+    receive do
+      {:awareness_change, change, origin, __MODULE__} ->
+        case module.handle_awareness_change(awareness, change, origin, state) do
+          {:noreply, state} ->
+            handle_awareness_change_immediately(state)
+
+          result ->
+            result
+        end
+    after
+      0 ->
+        {:noreply, state}
     end
   end
 end
