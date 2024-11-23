@@ -49,6 +49,8 @@ defmodule Yex.Nif do
   def array_delete_range(_array, _cur_txn, _index, _length),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def array_move_to(_array, _cur_txn, _from, _to), do: :erlang.nif_error(:nif_not_loaded)
+
   def array_to_json(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def map_set(_map, _cur_txn, _key, _value), do: :erlang.nif_error(:nif_not_loaded)

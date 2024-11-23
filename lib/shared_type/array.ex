@@ -66,6 +66,22 @@ defmodule Yex.Array do
     Yex.Nif.array_delete_range(array, cur_txn(array), index, length)
   end
 
+  @doc """
+  Moves element found at `source` index into `target` index position. Both indexes refer to a current state of the document.
+  ## Examples pushes a string then fetches it back
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, Yex.ArrayPrelim.from([1, 2]))
+      iex> Yex.Array.push(array, Yex.ArrayPrelim.from([3, 4]))
+      iex> :ok = Yex.Array.move_to(array, 0, 2)
+      iex> Yex.Array.to_json(array)
+      [[3, 4], [1, 2]]
+  """
+  @spec move_to(t, integer(), integer()) :: :ok
+  def move_to(%__MODULE__{} = array, from, to) do
+    Yex.Nif.array_move_to(array, cur_txn(array), from, to)
+  end
+
   @deprecated "Rename to `fetch/2`"
   @spec get(t, integer()) :: {:ok, term()} | :error
   def get(array, index) do
