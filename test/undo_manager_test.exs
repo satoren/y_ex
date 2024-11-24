@@ -46,4 +46,33 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == ""
   end
 
+  test "undo only removes changes from tracked origin", %{doc: doc, text: text, undo_manager: undo_manager} do
+    # Set up our tracked origin
+    tracked_origin = "tracked-origin"
+    UndoManager.include_origin(undo_manager, tracked_origin)
+
+    # Make changes from an untracked origin
+    untracked_origin = "untracked-origin"
+    Doc.transaction(doc, untracked_origin, fn ->
+      Text.insert(text, 0, "Untracked ")
+    end)
+
+    # Make changes from our tracked origin
+    Doc.transaction(doc, tracked_origin, fn ->
+      Text.insert(text, 10, "changes ")
+    end)
+
+    # Make more untracked changes
+    Doc.transaction(doc, untracked_origin, fn ->
+      Text.insert(text, 18, "remain")
+    end)
+
+    # Initial state should have all changes
+    assert Text.to_string(text) == "Untracked changes remain"
+
+    # After undo, only tracked changes should be removed
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "Untracked remain"
+  end
+
 end
