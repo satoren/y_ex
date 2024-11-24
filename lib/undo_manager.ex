@@ -7,8 +7,11 @@ defmodule Yex.UndoManager do
   @doc """
   Creates a new UndoManager for the given document.
   """
-  def new(doc) do
-    Yex.Nif.undo_manager_new(doc)
+  def new(doc, scope) do
+    case Yex.Nif.undo_manager_new(doc, scope) do
+      {:ok, manager} -> manager
+      error -> error
+    end
   end
 
   @doc """

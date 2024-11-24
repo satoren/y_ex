@@ -1,8 +1,15 @@
-use crate::wrap::NifWrap;
-use crate::doc::NifDoc;
-use rustler::{NifStruct, ResourceArc, Binary};
-use yrs::{UndoManager, undo::Options, Origin};
+use rustler::{Env, ResourceArc, NifStruct};
 use std::sync::RwLock;
+use yrs::UndoManager;
+use crate::{
+    text::NifText,
+    shared_type::NifSharedType,
+    wrap::NifWrap,
+    NifDoc,
+    utils::term_to_origin_binary,
+    NifError,
+    ENV,
+};
 
 pub type UndoManagerResource = NifWrap<RwLock<UndoManager>>;
 
@@ -16,44 +23,45 @@ pub struct NifUndoManager {
 }
 
 #[rustler::nif]
-pub fn undo_manager_new(doc: NifDoc) -> NifUndoManager {
-    let undo_manager = UndoManager::with_options(&doc.reference.doc, Options::default());
-    
-    let resource = UndoManagerResource::from(RwLock::new(undo_manager));
-    let arc = ResourceArc::new(resource);
-    
-    let arc_clone = arc.clone();
-    let _ = doc.reference.doc.observe_update_v2(move |_txn, _e| {
-        if let Ok(_manager) = arc_clone.0.write() {
-            // The UndoManager will track changes automatically
-            // when they're made with the correct origin
-        }
-    });
-    
-    NifUndoManager {
-        reference: arc,
-    }
+pub fn undo_manager_new(env: Env<'_>, doc: NifDoc, scope: NifText) -> Result<NifUndoManager, NifError> {
+    ENV.set(&mut env.clone(), || {
+        let branch = scope.readonly(None, |txn| scope.get_ref(txn))?;
+        let undo_manager = UndoManager::new(&doc, &branch);
+        let resource = UndoManagerResource::from(RwLock::new(undo_manager));
+        
+        Ok(NifUndoManager {
+            reference: ResourceArc::new(resource),
+        })
+    })
 }
 
 #[rustler::nif]
-pub fn undo_manager_include_origin(undo_manager: NifUndoManager, origin: Binary) {
-    let origin = Origin::from(origin.as_slice());
-    undo_manager.reference.0.write().unwrap().include_origin(origin);
+pub fn undo_manager_include_origin(
+    env: Env<'_>, 
+    undo_manager: NifUndoManager, 
+    origin_term: rustler::Term
+) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || {
+        let mut manager = undo_manager.reference.write()
+            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
+        
+        if let Some(origin) = term_to_origin_binary(origin_term) {
+            manager.include_origin(origin.as_slice());
+        }
+        
+        Ok(())
+    })
 }
 
 #[rustler::nif]
-pub fn undo_manager_undo(undo_manager: NifUndoManager) -> bool {
-    let mut manager = undo_manager.reference.0.write().unwrap();
-    match manager.try_undo() {
-        Ok(did_undo) => {
-            println!("Undo result: {}", did_undo);
-            did_undo
-        },
-        Err(e) => {
-            println!("Undo error: {:?}", e);
-            false
-        }
-    }
+pub fn undo_manager_undo(env: Env<'_>, undo_manager: NifUndoManager) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || {
+        let mut manager = undo_manager.reference.write()
+            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
+        
+        let _ = manager.undo();
+        Ok(())
+    })
 }
 
 
