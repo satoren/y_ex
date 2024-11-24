@@ -284,4 +284,34 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == "Untracked tracked "
   end
 
+
+  test "works with all types", %{doc: doc, text: text, array: array, map: map} do
+    text_manager = UndoManager.new(doc, text)
+    array_manager = UndoManager.new(doc, array)
+    map_manager = UndoManager.new(doc, map)
+
+    # Test with text
+    Text.insert(text, 0, "Hello")
+    assert Text.to_string(text) == "Hello"
+    UndoManager.undo(text_manager)
+    assert Text.to_string(text) == ""
+    UndoManager.redo(text_manager)
+    assert Text.to_string(text) == "Hello"
+
+    # Test with array
+    Array.push(array, "item")
+    assert Array.to_list(array) == ["item"]
+    UndoManager.undo(array_manager)
+    assert Array.to_list(array) == []
+    UndoManager.redo(array_manager)
+    assert Array.to_list(array) == ["item"]
+
+    # Test with map
+    Yex.Map.set(map, "key", "value")
+    assert Yex.Map.to_map(map) == %{"key" => "value"}
+    UndoManager.undo(map_manager)
+    assert Yex.Map.to_map(map) == %{}
+    UndoManager.redo(map_manager)
+    assert Yex.Map.to_map(map) == %{"key" => "value"}
+  end
 end

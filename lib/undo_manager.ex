@@ -9,21 +9,21 @@ defmodule Yex.UndoManager do
   The scope can be a Text, Array, or Map type.
   """
   def new(doc, %Yex.Text{} = scope) do
-    case Yex.Nif.undo_manager_new_text(doc, scope) do
+    case Yex.Nif.undo_manager_new(doc, {:text, scope}) do
       {:ok, manager} -> manager
       error -> error
     end
   end
 
   def new(doc, %Yex.Array{} = scope) do
-    case Yex.Nif.undo_manager_new_array(doc, scope) do
+    case Yex.Nif.undo_manager_new(doc, {:array, scope}) do
       {:ok, manager} -> manager
       error -> error
     end
   end
 
   def new(doc, %Yex.Map{} = scope) do
-    case Yex.Nif.undo_manager_new_map(doc, scope) do
+    case Yex.Nif.undo_manager_new(doc, {:map, scope}) do
       {:ok, manager} -> manager
       error -> error
     end
@@ -49,4 +49,6 @@ defmodule Yex.UndoManager do
   def redo(undo_manager) do
     Yex.Nif.undo_manager_redo(undo_manager)
   end
+
+
 end
