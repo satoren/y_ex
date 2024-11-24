@@ -7,27 +7,32 @@ defmodule Yex.UndoManagerTest do
     doc = Doc.new()
     text = Doc.get_text(doc, "text")
     array = Doc.get_array(doc, "array")
-    undo_manager = UndoManager.new(doc, text)
+    map = Doc.get_map(doc, "map")
+
 
     # Return these as the test context
-    {:ok, doc: doc, text: text, array: array, undo_manager: undo_manager}
+    {:ok, doc: doc, text: text, array: array, map: map}
   end
 
-  test "can create an undo manager", %{undo_manager: undo_manager} do
+  test "can create an undo manager", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
     assert %UndoManager{} = undo_manager
     assert undo_manager.reference != nil
   end
 
-  test "can undo without failure when stack is empty", %{undo_manager: undo_manager} do
+  test "can undo without failure when stack is empty", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
     UndoManager.undo(undo_manager)
   end
 
-  test "can include an origin for tracking", %{undo_manager: undo_manager} do
+  test "can include an origin for tracking", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
     origin = "test-origin"
     UndoManager.include_origin(undo_manager, origin)
   end
 
-  test "can undo with no origin with text changes, text removed", %{text: text, undo_manager: undo_manager} do
+  test "can undo with no origin with text changes, text removed", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
     inserted_text = "Hello, world!"
     Text.insert(text, 0, inserted_text)
     assert Text.to_string(text) == inserted_text
@@ -35,7 +40,8 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == ""
   end
 
-  test "can undo with origin and transaction with text changes, text removed", %{doc: doc, text: text, undo_manager: undo_manager} do
+  test "can undo with origin and transaction with text changes, text removed", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
     origin = "test-origin"
     UndoManager.include_origin(undo_manager, origin)
     inserted_text = "Hello, world!"
@@ -47,7 +53,8 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == ""
   end
 
-  test "undo only removes changes from tracked origin for text", %{doc: doc, text: text, undo_manager: undo_manager} do
+  test "undo only removes changes from tracked origin for text", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
     # Set up our tracked origin
     tracked_origin = "tracked-origin"
     UndoManager.include_origin(undo_manager, tracked_origin)
@@ -94,9 +101,8 @@ defmodule Yex.UndoManagerTest do
 
   end
 
-  test "can undo map changes", %{doc: doc} do
+  test "can undo map changes", %{doc: doc, map: map} do
     # Create a map and its undo manager
-    map = Doc.get_map(doc, "map")
     undo_manager = UndoManager.new(doc, map)
 
     # Insert some values
@@ -144,8 +150,7 @@ defmodule Yex.UndoManagerTest do
     assert Array.to_list(array) == ["untracked1", "untracked2", "untracked3"]
   end
 
-  test "undo only removes changes from tracked origin for map", %{doc: doc} do
-    map = Doc.get_map(doc, "map")
+  test "undo only removes changes from tracked origin for map", %{doc: doc, map: map} do
     undo_manager = UndoManager.new(doc, map)
     tracked_origin = "tracked-origin"
     UndoManager.include_origin(undo_manager, tracked_origin)
