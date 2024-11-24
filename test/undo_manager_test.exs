@@ -314,4 +314,146 @@ defmodule Yex.UndoManagerTest do
     UndoManager.redo(map_manager)
     assert Yex.Map.to_map(map) == %{"key" => "value"}
   end
+
+  test "can expand scope to include additional text", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+    additional_text = Doc.get_text(doc, "additional_text")
+
+    # Add text to both shared types
+    Text.insert(text, 0, "Original")
+    Text.insert(additional_text, 0, "Additional")
+
+    # Initially, undo only affects original text
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+    assert Text.to_string(additional_text) == "Additional"
+
+    # Expand scope to include additional text
+    UndoManager.expand_scope(undo_manager, additional_text)
+
+    # New changes should affect both
+    Text.insert(text, 0, "New Original")
+    Text.insert(additional_text, 0, "New Additional")
+
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+    assert Text.to_string(additional_text) == "Additional"
+  end
+
+  test "can expand scope to include multiple types", %{doc: doc, text: text, array: array, map: map} do
+    undo_manager = UndoManager.new(doc, text)
+
+    # Expand scope to include array and map
+    UndoManager.expand_scope(undo_manager, array)
+    UndoManager.expand_scope(undo_manager, map)
+
+    # Make changes to all types
+    Text.insert(text, 0, "Text")
+    Array.push(array, "Array")
+    Yex.Map.set(map, "key", "Map")
+
+    # Verify initial state
+    assert Text.to_string(text) == "Text"
+    assert Array.to_list(array) == ["Array"]
+    assert Yex.Map.to_map(map) == %{"key" => "Map"}
+
+    # Undo should affect all types
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+    assert Array.to_list(array) == []
+    assert Yex.Map.to_map(map) == %{}
+  end
+
+  test "can exclude an origin from tracking", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+    origin = "test-origin"
+    UndoManager.exclude_origin(undo_manager, origin)
+  end
+
+  test "excluded origin changes are not tracked", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+    excluded_origin = "excluded-origin"
+    UndoManager.exclude_origin(undo_manager, excluded_origin)
+
+    # Make changes with excluded origin
+    Doc.transaction(doc, excluded_origin, fn ->
+      Text.insert(text, 0, "Excluded ")
+    end)
+
+    # Make changes with unspecified origin
+    Text.insert(text, 9, "tracked ")
+
+    # Make changes with excluded origin
+    Doc.transaction(doc, excluded_origin, fn ->
+      Text.insert(text, 17, "Also Excluded")
+    end)
+
+    # Initial state should have all changes
+    assert Text.to_string(text) == "Excluded tracked Also Excluded"
+
+    # After undo, only non-excluded changes should be removed
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "Excluded Also Excluded"
+  end
+
+  test "stop_capturing prevents merging of changes", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+
+    # prove changes are merging
+    Text.insert(text, 0, "a")
+    Text.insert(text, 1, "b")
+    assert Text.to_string(text) == "ab"
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+
+    # do it again with stop capture
+    Text.insert(text, 0, "a")
+    # Stop capturing to prevent merging
+    UndoManager.stop_capturing(undo_manager)
+
+    # Second change
+    Text.insert(text, 1, "b")
+
+    # Initial state should have both changes
+    assert Text.to_string(text) == "ab"
+
+    # Undo should only remove the second change
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "a"
+  end
+
+  test "changes merge without stop_capturing", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+
+    # Make two changes in quick succession
+    Text.insert(text, 0, "a")
+    Text.insert(text, 1, "b")
+
+    # Initial state should have both changes
+    assert Text.to_string(text) == "ab"
+
+    # Undo should remove both changes since they were merged
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+  end
+
+  test "stop_capturing works with different types", %{doc: doc, array: array} do
+    undo_manager = UndoManager.new(doc, array)
+
+    # First change
+    Array.push(array, "first")
+
+    # Stop capturing
+    UndoManager.stop_capturing(undo_manager)
+
+    # Second change
+    Array.push(array, "second")
+
+    # Initial state should have both items
+    assert Array.to_list(array) == ["first", "second"]
+
+    # Undo should only remove the second item
+    UndoManager.undo(undo_manager)
+    assert Array.to_list(array) == ["first"]
+  end
 end
