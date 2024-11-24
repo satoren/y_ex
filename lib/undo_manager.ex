@@ -37,6 +37,13 @@ defmodule Yex.UndoManager do
   end
 
   @doc """
+  Excludes an origin from being tracked by the UndoManager.
+  """
+  def exclude_origin(undo_manager, origin) do
+    Yex.Nif.undo_manager_exclude_origin(undo_manager, origin)
+  end
+
+  @doc """
   Undoes the last tracked change.
   """
   def undo(undo_manager) do
@@ -50,5 +57,39 @@ defmodule Yex.UndoManager do
     Yex.Nif.undo_manager_redo(undo_manager)
   end
 
+  @doc """
+  Expands the scope of the UndoManager to include additional shared types.
+  The scope can be a Text, Array, or Map type.
+  """
+  def expand_scope(undo_manager, %Yex.Text{} = scope) do
+    Yex.Nif.undo_manager_expand_scope(undo_manager, {:text, scope})
+  end
+
+  def expand_scope(undo_manager, %Yex.Array{} = scope) do
+    Yex.Nif.undo_manager_expand_scope(undo_manager, {:array, scope})
+  end
+
+  def expand_scope(undo_manager, %Yex.Map{} = scope) do
+    Yex.Nif.undo_manager_expand_scope(undo_manager, {:map, scope})
+  end
+
+  @doc """
+  Stops capturing changes for the current stack item.
+  This ensures that the next change will create a new stack item instead of
+  being merged with the previous one, even if it occurs within the normal timeout window.
+
+  ## Example:
+      text = Doc.get_text(doc, "text")
+      undo_manager = UndoManager.new(doc, text)
+
+      Text.insert(text, 0, "a")
+      UndoManager.stop_capturing(undo_manager)
+      Text.insert(text, 1, "b")
+      UndoManager.undo(undo_manager)
+      # Text.to_string(text) will be "a" (only "b" was removed)
+  """
+  def stop_capturing(undo_manager) do
+    Yex.Nif.undo_manager_stop_capturing(undo_manager)
+  end
 
 end
