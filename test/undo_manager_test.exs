@@ -1,6 +1,6 @@
 defmodule Yex.UndoManagerTest do
   use ExUnit.Case
-  alias Yex.{Doc, UndoManager}
+  alias Yex.{Doc, Text, UndoManager}
   doctest Yex.UndoManager
 
   setup do
@@ -21,17 +21,29 @@ defmodule Yex.UndoManagerTest do
     UndoManager.undo(undo_manager)
   end
 
-  # test "can include an origin for tracking", %{undo_manager: undo_manager} do
-  #   origin = "test-origin"
-  #   UndoManager.include_origin(undo_manager, origin)
-  # end
+  test "can include an origin for tracking", %{undo_manager: undo_manager} do
+    origin = "test-origin"
+    UndoManager.include_origin(undo_manager, origin)
+  end
 
-  # test "can undo text changes from tracked origin", %{doc: doc, text: text, undo_manager: undo_manager} do
-  #   origin = "test-origin"
-  #   ...
-  # end
+  test "can undo with no origin with text changes, text removed", %{text: text, undo_manager: undo_manager} do
+    inserted_text = "Hello, world!"
+    Text.insert(text, 0, inserted_text)
+    assert Text.to_string(text) == inserted_text
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+  end
 
-  # test "attempts to undo direct changes without transaction", %{text: text, undo_manager: undo_manager} do
-  #   ...
-  # end
+  test "can undo with origin and transaction with text changes, text removed", %{doc: doc, text: text, undo_manager: undo_manager} do
+    origin = "test-origin"
+    UndoManager.include_origin(undo_manager, origin)
+    inserted_text = "Hello, world!"
+    Doc.transaction(doc, origin, fn ->
+      Text.insert(text, 0, inserted_text)
+    end)
+    assert Text.to_string(text) == inserted_text
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+  end
+
 end
