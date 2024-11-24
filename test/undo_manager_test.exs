@@ -102,7 +102,6 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can undo map changes", %{doc: doc, map: map} do
-    # Create a map and its undo manager
     undo_manager = UndoManager.new(doc, map)
 
     # Insert some values
