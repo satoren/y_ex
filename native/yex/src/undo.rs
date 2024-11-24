@@ -27,7 +27,10 @@ pub struct NifUndoManager {
 #[rustler::nif]
 pub fn undo_manager_new_text(env: Env<'_>, doc: NifDoc, scope: NifText) -> Result<NifUndoManager, NifError> {
     ENV.set(&mut env.clone(), || {
-        let branch = scope.readonly(None, |txn| scope.get_ref(txn))?;
+        let branch = scope.readonly(None, |txn| {
+            scope.get_ref(txn)
+        })?;
+        
         let undo_manager = UndoManager::new(&doc, &branch);
         let resource = ResourceArc::new(UndoManagerResource::from(RwLock::new(undo_manager)));
         
@@ -40,7 +43,10 @@ pub fn undo_manager_new_text(env: Env<'_>, doc: NifDoc, scope: NifText) -> Resul
 #[rustler::nif]
 pub fn undo_manager_new_array(env: Env<'_>, doc: NifDoc, scope: NifArray) -> Result<NifUndoManager, NifError> {
     ENV.set(&mut env.clone(), || {
-        let branch = scope.readonly(None, |txn| scope.get_ref(txn))?;
+        let branch = scope.readonly(None, |txn| {
+            scope.get_ref(txn)
+        })?;
+        
         let undo_manager = UndoManager::new(&doc, &branch);
         let resource = ResourceArc::new(UndoManagerResource::from(RwLock::new(undo_manager)));
         
@@ -53,7 +59,10 @@ pub fn undo_manager_new_array(env: Env<'_>, doc: NifDoc, scope: NifArray) -> Res
 #[rustler::nif]
 pub fn undo_manager_new_map(env: Env<'_>, doc: NifDoc, scope: NifMap) -> Result<NifUndoManager, NifError> {
     ENV.set(&mut env.clone(), || {
-        let branch = scope.readonly(None, |txn| scope.get_ref(txn))?;
+        let branch = scope.readonly(None, |txn| {
+            scope.get_ref(txn)
+        })?;
+        
         let undo_manager = UndoManager::new(&doc, &branch);
         let resource = ResourceArc::new(UndoManagerResource::from(RwLock::new(undo_manager)));
         
