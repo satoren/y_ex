@@ -84,14 +84,24 @@ pub fn undo_manager_include_origin(
 #[rustler::nif]
 pub fn undo_manager_undo(env: Env<'_>, undo_manager: NifUndoManager) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        let mut manager = undo_manager.reference.write()
+        // First check if we can undo without holding the write lock
+        {
+            let read_manager = undo_manager.reference.read()
+                .map_err(|_| NifError::Message("Failed to acquire read lock".to_string()))?;
+            
+            if !read_manager.can_undo() {
+                return Ok(());
+            }
+        } // read lock is dropped here
+
+        // Now acquire write lock for the actual undo operation
+        let mut write_manager = undo_manager.reference.write()
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
         
-        if !manager.can_undo() {
-            return Ok(());
+        // Double check can_undo since state might have changed
+        if write_manager.can_undo() {
+            write_manager.undo_blocking();
         }
-        
-        manager.undo_blocking();
         
         Ok(())
     })
@@ -100,14 +110,24 @@ pub fn undo_manager_undo(env: Env<'_>, undo_manager: NifUndoManager) -> Result<(
 #[rustler::nif]
 pub fn undo_manager_redo(env: Env<'_>, undo_manager: NifUndoManager) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        let mut manager = undo_manager.reference.write()
+        // First check if we can redo without holding the write lock
+        {
+            let read_manager = undo_manager.reference.read()
+                .map_err(|_| NifError::Message("Failed to acquire read lock".to_string()))?;
+            
+            if !read_manager.can_redo() {
+                return Ok(());
+            }
+        } // read lock is dropped here
+
+        // Now acquire write lock for the actual redo operation
+        let mut write_manager = undo_manager.reference.write()
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
         
-        if !manager.can_redo() {
-            return Ok(());
+        // Double check can_redo since state might have changed
+        if write_manager.can_redo() {
+            write_manager.redo_blocking();
         }
-        
-        manager.redo_blocking();
         
         Ok(())
     })
