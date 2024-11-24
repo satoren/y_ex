@@ -1,15 +1,16 @@
 defmodule Yex.UndoManagerTest do
   use ExUnit.Case
-  alias Yex.{Doc, Text, UndoManager}
+  alias Yex.{Doc, Text, Array, UndoManager}
   doctest Yex.UndoManager
 
   setup do
     doc = Doc.new()
     text = Doc.get_text(doc, "text")
+    array = Doc.get_array(doc, "array")
     undo_manager = UndoManager.new(doc, text)
 
     # Return these as the test context
-    {:ok, doc: doc, text: text, undo_manager: undo_manager}
+    {:ok, doc: doc, text: text, array: array, undo_manager: undo_manager}
   end
 
   test "can create an undo manager", %{undo_manager: undo_manager} do
@@ -73,6 +74,42 @@ defmodule Yex.UndoManagerTest do
     # After undo, only tracked changes should be removed
     UndoManager.undo(undo_manager)
     assert Text.to_string(text) == "Untracked remain"
+  end
+
+  test "can undo array changes", %{doc: doc, array: array} do
+    # Create a new undo manager specifically for the array
+    undo_manager = UndoManager.new(doc, array)
+
+    # Insert some values
+    Array.push(array, "first")
+    Array.push(array, "second")
+    Array.push(array, "third")
+
+    # Verify initial state
+    assert Array.to_list(array) == ["first", "second", "third"]
+
+    # Undo the last insertion
+    UndoManager.undo(undo_manager)
+    assert Array.to_list(array) == []
+
+  end
+
+  test "can undo map changes", %{doc: doc} do
+    # Create a map and its undo manager
+    map = Doc.get_map(doc, "map")
+    undo_manager = UndoManager.new(doc, map)
+
+    # Insert some values
+    Yex.Map.set(map, "key1", "value1")
+    Yex.Map.set(map, "key2", "value2")
+    Yex.Map.set(map, "key3", "value3")
+
+    # Verify initial state
+    assert Yex.Map.to_map(map) == %{"key1" => "value1", "key2" => "value2", "key3" => "value3"}
+
+    # Undo all changes
+    UndoManager.undo(undo_manager)
+    assert Yex.Map.to_map(map) == %{}
   end
 
 end
