@@ -199,4 +199,89 @@ defmodule Yex.UndoManagerTest do
     assert Yex.Map.to_map(map) == expected_after_undo
   end
 
+  test "can redo without failure when stack is empty", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+    UndoManager.redo(undo_manager)
+  end
+
+  test "can redo text changes after undo", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+    inserted_text = "Hello, world!"
+    Text.insert(text, 0, inserted_text)
+
+    # Verify initial state and undo
+    assert Text.to_string(text) == inserted_text
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+
+    # Verify redo restores the change
+    UndoManager.redo(undo_manager)
+    assert Text.to_string(text) == inserted_text
+  end
+
+  test "can redo array changes after undo", %{doc: doc, array: array} do
+    undo_manager = UndoManager.new(doc, array)
+
+    # Make some changes
+    Array.push(array, "first")
+    Array.push(array, "second")
+
+    # Verify initial state
+    assert Array.to_list(array) == ["first", "second"]
+
+    # Undo and verify
+    UndoManager.undo(undo_manager)
+    assert Array.to_list(array) == []
+
+    # Redo and verify restoration
+    UndoManager.redo(undo_manager)
+    assert Array.to_list(array) == ["first", "second"]
+  end
+
+  test "can redo map changes after undo", %{doc: doc, map: map} do
+    undo_manager = UndoManager.new(doc, map)
+
+    # Make some changes
+    Yex.Map.set(map, "key1", "value1")
+    Yex.Map.set(map, "key2", "value2")
+
+    # Verify initial state
+    assert Yex.Map.to_map(map) == %{"key1" => "value1", "key2" => "value2"}
+
+    # Undo and verify
+    UndoManager.undo(undo_manager)
+    assert Yex.Map.to_map(map) == %{}
+
+    # Redo and verify restoration
+    UndoManager.redo(undo_manager)
+    assert Yex.Map.to_map(map) == %{"key1" => "value1", "key2" => "value2"}
+  end
+
+  test "redo only affects tracked origin changes", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+    tracked_origin = "tracked-origin"
+    UndoManager.include_origin(undo_manager, tracked_origin)
+
+    # Make untracked changes
+    Doc.transaction(doc, "untracked-origin", fn ->
+      Text.insert(text, 0, "Untracked ")
+    end)
+
+    # Make tracked changes
+    Doc.transaction(doc, tracked_origin, fn ->
+      Text.insert(text, 10, "tracked ")
+    end)
+
+    # Initial state
+    assert Text.to_string(text) == "Untracked tracked "
+
+    # Undo tracked changes
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "Untracked "
+
+    # Redo tracked changes
+    UndoManager.redo(undo_manager)
+    assert Text.to_string(text) == "Untracked tracked "
+  end
+
 end
