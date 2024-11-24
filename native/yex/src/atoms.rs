@@ -39,4 +39,12 @@ rustler::atoms! {
   // Event kinds
   undo,              // EventKind::Undo
   redo,              // EventKind::Redo
+
+  // Type identifiers for branches
+  text,
+  map,
+  array,
+  xml_element,
+  xml_fragment,
+  xml_text,
 }
