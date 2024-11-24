@@ -64,21 +64,6 @@ fn create_undo_manager<T: NifSharedType>(
     }
 }
 
-// #[rustler::nif]
-// pub fn undo_manager_new_text(env: Env<'_>, doc: NifDoc, scope: NifText) -> NifUndoManager {
-//     create_undo_manager(env, doc, scope)
-// }
-
-// #[rustler::nif]
-// pub fn undo_manager_new_array(env: Env<'_>, doc: NifDoc, scope: NifArray) -> NifUndoManager {
-//     create_undo_manager(env, doc, scope)
-// }
-
-// #[rustler::nif]
-// pub fn undo_manager_new_map(env: Env<'_>, doc: NifDoc, scope: NifMap) -> NifUndoManager {
-//     create_undo_manager(env, doc, scope)
-// }
-
 fn with_write_lock_if<F>(
     undo_manager: &NifUndoManager,
     can_proceed: impl Fn(&UndoManager) -> bool,
