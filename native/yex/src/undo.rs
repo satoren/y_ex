@@ -1,17 +1,40 @@
 use yrs::UndoManager;
-use rustler::{Env, ResourceArc, NifStruct, Term};
+use rustler::{Env, NifTaggedEnum, ResourceArc, NifStruct, Term};
 use std::sync::RwLock;
 use crate::{
     text::NifText,
     array::NifArray,
     map::NifMap,
-    shared_type::NifSharedType,
+    shared_type::NifSharedType,  
     wrap::NifWrap,
     NifDoc,
     utils::term_to_origin_binary,
     NifError,
     ENV,
 };
+
+#[derive(NifTaggedEnum)]
+pub enum SharedTypeInput {
+    Text(NifText),
+    Array(NifArray),
+    Map(NifMap),
+}
+
+#[rustler::nif]
+pub fn undo_manager_new(
+    env: Env<'_>,
+    doc: NifDoc,
+    scope: SharedTypeInput,
+) -> NifUndoManager {
+    ENV.set(&mut env.clone(), || {
+        match scope {
+            SharedTypeInput::Text(text) => create_undo_manager(env, doc, text),
+            SharedTypeInput::Array(array) => create_undo_manager(env, doc, array),
+            SharedTypeInput::Map(map) => create_undo_manager(env, doc, map),
+        }
+    })
+}
+
 
 pub type UndoManagerResource = NifWrap<RwLock<UndoManager>>;
 
@@ -24,42 +47,38 @@ pub struct NifUndoManager {
     reference: ResourceArc<UndoManagerResource>,
 }
 
-// Generic function to create new undo manager
 fn create_undo_manager<T: NifSharedType>(
-    env: Env<'_>,
+    _env: Env<'_>,
     doc: NifDoc,
     scope: T
-) -> Result<NifUndoManager, NifError> {
-    ENV.set(&mut env.clone(), || {
-        let branch = scope.readonly(None, |txn| {
-            scope.get_ref(txn)
-        })?;
-        
-        let undo_manager = UndoManager::new(&doc, &branch);
-        let resource = ResourceArc::new(UndoManagerResource::from(RwLock::new(undo_manager)));
-        
-        Ok(NifUndoManager {
-            reference: resource,
-        })
-    })
+) -> NifUndoManager {
+    let branch = scope.readonly(None, |txn| {
+        scope.get_ref(txn)
+    }).unwrap();
+    
+    let undo_manager = UndoManager::new(&doc, &branch);
+    let resource = ResourceArc::new(UndoManagerResource::from(RwLock::new(undo_manager)));
+    
+    NifUndoManager {
+        reference: resource,
+    }
 }
 
-#[rustler::nif]
-pub fn undo_manager_new_text(env: Env<'_>, doc: NifDoc, scope: NifText) -> Result<NifUndoManager, NifError> {
-    create_undo_manager(env, doc, scope)
-}
+// #[rustler::nif]
+// pub fn undo_manager_new_text(env: Env<'_>, doc: NifDoc, scope: NifText) -> NifUndoManager {
+//     create_undo_manager(env, doc, scope)
+// }
 
-#[rustler::nif]
-pub fn undo_manager_new_array(env: Env<'_>, doc: NifDoc, scope: NifArray) -> Result<NifUndoManager, NifError> {
-    create_undo_manager(env, doc, scope)
-}
+// #[rustler::nif]
+// pub fn undo_manager_new_array(env: Env<'_>, doc: NifDoc, scope: NifArray) -> NifUndoManager {
+//     create_undo_manager(env, doc, scope)
+// }
 
-#[rustler::nif]
-pub fn undo_manager_new_map(env: Env<'_>, doc: NifDoc, scope: NifMap) -> Result<NifUndoManager, NifError> {
-    create_undo_manager(env, doc, scope)
-}
+// #[rustler::nif]
+// pub fn undo_manager_new_map(env: Env<'_>, doc: NifDoc, scope: NifMap) -> NifUndoManager {
+//     create_undo_manager(env, doc, scope)
+// }
 
-// Helper function for operations that require checking before write lock
 fn with_write_lock_if<F>(
     undo_manager: &NifUndoManager,
     can_proceed: impl Fn(&UndoManager) -> bool,
@@ -68,7 +87,6 @@ fn with_write_lock_if<F>(
 where
     F: FnOnce(&mut UndoManager)
 {
-    // First check without holding write lock
     {
         let read_manager = undo_manager.reference.read()
             .map_err(|_| NifError::Message("Failed to acquire read lock".to_string()))?;
@@ -78,17 +96,16 @@ where
         }
     }
 
-    // Now acquire write lock for the actual operation
     let mut write_manager = undo_manager.reference.write()
         .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
     
-    // Double check since state might have changed
     if can_proceed(&write_manager) {
         operation(&mut write_manager);
     }
     
     Ok(())
 }
+
 
 #[rustler::nif]
 pub fn undo_manager_include_origin(
