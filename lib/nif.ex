@@ -167,6 +167,7 @@ defmodule Yex.Nif do
   def undo_manager_update_stack_item(_undo_manager, _stack_item), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_get_meta(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_set_meta(_undo_manager, _meta), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_clear(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
 
 end
 
