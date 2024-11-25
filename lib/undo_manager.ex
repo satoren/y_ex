@@ -4,6 +4,10 @@ defmodule Yex.UndoManager do
   """
   defstruct [:reference]
 
+  @type t :: %__MODULE__{
+    reference: reference()
+  }
+
   @doc """
   Creates a new UndoManager for the given document and scope.
   The scope can be a Text, Array, or Map type.
@@ -114,34 +118,7 @@ defmodule Yex.UndoManager do
       UndoManager.add_observer(undo_manager, MyObserver)
   """
   def add_observer(undo_manager, observer) when is_atom(observer) do
-    me = self()
-
-    spawn_link(fn ->
-      # Pass both the module and PID to the Rust side
-      Yex.Nif.undo_manager_add_observer(undo_manager, observer, me)
-
-      # Keep the process alive to receive messages
-      receive_loop(observer, undo_manager)
-    end)
-  end
-
-  # Add a private function to handle the receive loop
-  defp receive_loop(observer, undo_manager) do
-    receive do
-      {:undo_item_popped, _meta} ->
-        # Call the observer's callback
-        observer.handle_stack_item_popped()
-        # Continue receiving messages
-        receive_loop(observer, undo_manager)
-
-      {:stack_item_added, stack_item} ->
-        case observer.handle_stack_item_added(stack_item) do
-          {:ok, updated_item} ->
-            Yex.Nif.undo_manager_update_stack_item(undo_manager, updated_item)
-          :ignore ->
-            :ok
-        end
-        receive_loop(observer, undo_manager)
-    end
+    {:ok, pid} = Yex.UndoServer.start_link(undo_manager: undo_manager, module: observer)
+    pid
   end
 end

@@ -14,6 +14,12 @@ use crate::{
     ENV,
     atoms,
 };
+use std::cell::RefCell;
+use std::println;
+
+thread_local! {
+    static CURRENT_ENV: RefCell<Option<Env<'static>>> = RefCell::new(None);
+}
 
 #[derive(NifTaggedEnum)]
 pub enum SharedTypeInput {
@@ -34,13 +40,18 @@ pub struct NifUndoManager {
     reference: ResourceArc<UndoManagerResource>,
 }
 
-struct Observer {
-    pid: LocalPid,
-}
-
 pub struct UndoManagerWrapper {
     manager: UndoManager,
-    observers: Vec<Observer>,
+    observer_pid: Option<LocalPid>
+}
+
+impl UndoManagerWrapper {
+    pub fn new(manager: UndoManager) -> Self {
+        Self { 
+            manager,
+            observer_pid: None
+        }
+    }
 }
 
 pub type UndoManagerResource = NifWrap<RwLock<UndoManagerWrapper>>;
@@ -72,45 +83,120 @@ fn create_undo_manager<T: NifSharedType>(
         scope.get_ref(txn)
     }).unwrap();
     
-    let wrapper = UndoManagerWrapper {
-        manager: UndoManager::new(&doc, &branch),
-        observers: Vec::new(),
-    };
-    
-    let resource = ResourceArc::new(NifWrap(RwLock::new(wrapper)));
+    let undo_manager = UndoManager::new(&doc, &branch);
+    let wrapper = UndoManagerWrapper::new(undo_manager);
     
     NifUndoManager {
-        reference: resource,
+        reference: ResourceArc::new(NifWrap(RwLock::new(wrapper))),
     }
 }
 
+fn notify_observers(env: Env, wrapper: &UndoManagerWrapper, event: &str) -> Result<(), NifError> {
+    println!("notify_observers called with event: {}", event);
+    
+    if let Some(ref observer_pid) = wrapper.observer_pid {
+        println!("Observer PID found");
+        
+        let meta = HashMap::from([
+            ("test_value".to_string(), "added".encode(env))
+        ]);
+        println!("Created metadata");
+        
+        let stack_item = NifStackItem {
+            meta: meta.encode(env)
+        };
+        
+        let message = match event {
+            "added" => {
+                println!("Preparing 'added' message");
+                (atoms::stack_item_added(), stack_item.encode(env))
+            },
+            "popped" => {
+                println!("Preparing 'popped' message");
+                (atoms::stack_item_popped(), meta.encode(env))
+            },
+            _ => {
+                println!("Unknown event type: {}", event);
+                return Ok(())
+            }
+        };
+        
+        println!("Attempting to send message for event: {}", event);
+        if let Err(_) = env.send(observer_pid, message) {
+            println!("Failed to send message");
+            return Err(NifError::Message("Failed to send message".to_string()));
+        }
+        println!("Successfully sent message");
+    } else {
+        println!("No observer PID found");
+    }
+    Ok(())
+}
+
+#[rustler::nif]
+pub fn undo_manager_add_observer(
+    env: Env,
+    undo_manager: NifUndoManager,
+    _observer_module: Term,
+    observer_pid: LocalPid
+) -> Result<(), NifError> {
+    println!("Adding observer");
+    
+    let mut wrapper = undo_manager.reference.0.write()
+        .map_err(|_| {
+            println!("Failed to acquire write lock");
+            NifError::Message("Failed to acquire write lock".to_string())
+        })?;
+    
+    println!("Current observer status: {}", wrapper.observer_pid.is_some());
+    wrapper.observer_pid = Some(observer_pid);
+    println!("Updated observer status: {}", wrapper.observer_pid.is_some());
+    
+    notify_observers(env, &wrapper, "added")?;
+    
+    println!("Observer successfully added");
+    Ok(())
+}
+
 fn with_write_lock_if<F, G>(
+    env: Env,
     undo_manager: &NifUndoManager,
     predicate: F,
     action: G
 ) -> Result<(), NifError>
 where
     F: FnOnce(&UndoManager) -> bool,
-    G: FnOnce(&mut UndoManager),
+    G: FnOnce(&mut UndoManager) -> bool,
 {
-    let mut wrapper = undo_manager.reference.0.write()
-        .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
+    println!("Entering with_write_lock_if");
+    
+    let mut wrapper = match undo_manager.reference.0.write() {
+        Ok(w) => {
+            println!("Acquired write lock");
+            w
+        },
+        Err(_) => {
+            println!("Failed to acquire write lock");
+            return Err(NifError::Message("Failed to acquire write lock".to_string()));
+        }
+    };
     
     if predicate(&wrapper.manager) {
-        action(&mut wrapper.manager);
+        println!("Predicate check passed");
+        let result = action(&mut wrapper.manager);
+        println!("Action completed with result: {}", result);
         
-        // After the action, notify observers
-        for observer in wrapper.observers.iter() {
-            ENV.with(|env| {
-                let message = (atoms::undo_item_popped(), atoms::ok().encode(*env));
-                let _result = env.send(&observer.pid, message);
-            });
+        if result {
+            println!("Notifying observers of popped event");
+            notify_observers(env, &wrapper, "popped")?;
         }
+    } else {
+        println!("Predicate check failed");
     }
     
+    println!("Exiting with_write_lock_if");
     Ok(())
 }
-
 
 #[rustler::nif]
 pub fn undo_manager_include_origin(
@@ -149,30 +235,36 @@ pub fn undo_manager_exclude_origin(
 }
 
 #[rustler::nif]
-pub fn undo_manager_undo(env: Env<'_>, undo_manager: NifUndoManager) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || {
-        with_write_lock_if(
+pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> Result<(), NifError> {
+    CURRENT_ENV.with(|current_env| {
+        *current_env.borrow_mut() = Some(unsafe { std::mem::transmute(env) });
+        
+        let result = with_write_lock_if(
+            env,
             &undo_manager,
+            |manager| manager.can_undo(),
             |manager| {
-                let can_undo = manager.can_undo();
-                can_undo
-            },
-            |manager| { 
-                manager.undo_blocking(); 
+                manager.undo_blocking();
+                true
             }
-        )
+        );
+        
+        *current_env.borrow_mut() = None;
+        result
     })
 }
 
 #[rustler::nif]
-pub fn undo_manager_redo(env: Env<'_>, undo_manager: NifUndoManager) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || {
-        with_write_lock_if(
-            &undo_manager,
-            |manager| manager.can_redo(),
-            |manager| { manager.redo_blocking(); }
-        )
-    })
+pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> Result<(), NifError> {
+    with_write_lock_if(
+        env,
+        &undo_manager,
+        |manager| manager.can_redo(),
+        |manager| {
+            manager.redo_blocking();
+            true
+        }
+    )
 }
 
 #[rustler::nif]
@@ -214,24 +306,6 @@ pub fn undo_manager_stop_capturing(env: Env<'_>, undo_manager: NifUndoManager) -
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
         
         wrapper.manager.reset();
-        Ok(())
-    })
-}
-
-#[rustler::nif]
-pub fn undo_manager_add_observer(
-    env: Env<'_>,
-    undo_manager: NifUndoManager,
-    _observer_module: Term,
-    observer_pid: LocalPid
-) -> Result<(), NifError> {
-    ENV.set(&mut env.clone(), || {
-        let mut wrapper = undo_manager.reference.0.write()
-            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
-        
-        wrapper.observers.push(Observer {
-            pid: observer_pid.clone(),
-        });
         Ok(())
     })
 }
