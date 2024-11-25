@@ -536,30 +536,17 @@ defmodule Yex.UndoManagerTest do
 
 
   test "multiple observers can be added" do
-    # Add debug logging here
-    require Logger
-
-    Logger.debug("Starting multiple observers test")
-
     doc = Doc.new()
     text = Doc.get_text(doc, "text")
     undo_manager = UndoManager.new(doc, text)
 
-    Logger.debug("Created undo manager")
-
-    # Add observers
-    pid1 = UndoManager.add_observer(undo_manager, TestObserver)
-    pid2 = UndoManager.add_observer(undo_manager, TestObserver)
-
-    Logger.debug("Added observers with PIDs: #{inspect(pid1)}, #{inspect(pid2)}")
+    # Add observers - prefix with underscore since we don't use the return values
+    _pid1 = UndoManager.add_observer(undo_manager, TestObserver)
+    _pid2 = UndoManager.add_observer(undo_manager, TestObserver)
 
     Text.insert(text, 0, "hello")
     UndoManager.undo(undo_manager)
 
-    Logger.debug("Performed text operation and undo")
-
     assert_receive {:stack_item_popped, %{"test_value" => "added"}}
-
-    Logger.debug("Test completed")
   end
 end
