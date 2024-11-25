@@ -1,6 +1,7 @@
 use yrs::UndoManager;
-use rustler::{Env, NifTaggedEnum, ResourceArc, NifStruct, Term};
+use rustler::{Env, NifTaggedEnum, ResourceArc, NifStruct, Term, Encoder, LocalPid};
 use std::sync::RwLock;
+use std::collections::HashMap;
 use crate::{
     text::NifText,
     array::NifArray,
@@ -11,6 +12,7 @@ use crate::{
     utils::term_to_origin_binary,
     NifError,
     ENV,
+    atoms,
 };
 
 #[derive(NifTaggedEnum)]
@@ -19,6 +21,32 @@ pub enum SharedTypeInput {
     Array(NifArray),
     Map(NifMap),
 }
+
+#[derive(NifStruct)]
+#[module = "Yex.UndoManager.StackItem"]
+pub struct NifStackItem<'a> {
+    pub meta: Term<'a>,
+}
+
+#[derive(NifStruct)]
+#[module = "Yex.UndoManager"]
+pub struct NifUndoManager {
+    reference: ResourceArc<UndoManagerResource>,
+}
+
+struct Observer {
+    pid: LocalPid,
+}
+
+pub struct UndoManagerWrapper {
+    manager: UndoManager,
+    observers: Vec<Observer>,
+}
+
+pub type UndoManagerResource = NifWrap<RwLock<UndoManagerWrapper>>;
+
+#[rustler::resource_impl]
+impl rustler::Resource for UndoManagerResource {}
 
 #[rustler::nif]
 pub fn undo_manager_new(
@@ -35,18 +63,6 @@ pub fn undo_manager_new(
     })
 }
 
-
-pub type UndoManagerResource = NifWrap<RwLock<UndoManager>>;
-
-#[rustler::resource_impl]
-impl rustler::Resource for UndoManagerResource {}
-
-#[derive(NifStruct)]
-#[module = "Yex.UndoManager"]
-pub struct NifUndoManager {
-    reference: ResourceArc<UndoManagerResource>,
-}
-
 fn create_undo_manager<T: NifSharedType>(
     _env: Env<'_>,
     doc: NifDoc,
@@ -56,36 +72,40 @@ fn create_undo_manager<T: NifSharedType>(
         scope.get_ref(txn)
     }).unwrap();
     
-    let undo_manager = UndoManager::new(&doc, &branch);
-    let resource = ResourceArc::new(UndoManagerResource::from(RwLock::new(undo_manager)));
+    let wrapper = UndoManagerWrapper {
+        manager: UndoManager::new(&doc, &branch),
+        observers: Vec::new(),
+    };
+    
+    let resource = ResourceArc::new(NifWrap(RwLock::new(wrapper)));
     
     NifUndoManager {
         reference: resource,
     }
 }
 
-fn with_write_lock_if<F>(
+fn with_write_lock_if<F, G>(
     undo_manager: &NifUndoManager,
-    can_proceed: impl Fn(&UndoManager) -> bool,
-    operation: F
+    predicate: F,
+    action: G
 ) -> Result<(), NifError>
 where
-    F: FnOnce(&mut UndoManager)
+    F: FnOnce(&UndoManager) -> bool,
+    G: FnOnce(&mut UndoManager),
 {
-    {
-        let read_manager = undo_manager.reference.read()
-            .map_err(|_| NifError::Message("Failed to acquire read lock".to_string()))?;
-        
-        if !can_proceed(&read_manager) {
-            return Ok(());
-        }
-    }
-
-    let mut write_manager = undo_manager.reference.write()
+    let mut wrapper = undo_manager.reference.0.write()
         .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
     
-    if can_proceed(&write_manager) {
-        operation(&mut write_manager);
+    if predicate(&wrapper.manager) {
+        action(&mut wrapper.manager);
+        
+        // After the action, notify observers
+        for observer in wrapper.observers.iter() {
+            ENV.with(|env| {
+                let message = (atoms::undo_item_popped(), atoms::ok().encode(*env));
+                let _result = env.send(&observer.pid, message);
+            });
+        }
     }
     
     Ok(())
@@ -99,11 +119,11 @@ pub fn undo_manager_include_origin(
     origin_term: Term
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        let mut manager = undo_manager.reference.write()
+        let mut wrapper = undo_manager.reference.0.write()
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
         
         if let Some(origin) = term_to_origin_binary(origin_term) {
-            manager.include_origin(origin.as_slice());
+            wrapper.manager.include_origin(origin.as_slice());
         }
         
         Ok(())
@@ -117,11 +137,11 @@ pub fn undo_manager_exclude_origin(
     origin_term: Term
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        let mut manager = undo_manager.reference.write()
+        let mut wrapper = undo_manager.reference.0.write()
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
         
         if let Some(origin) = term_to_origin_binary(origin_term) {
-            manager.exclude_origin(origin.as_slice());
+            wrapper.manager.exclude_origin(origin.as_slice());
         }
         
         Ok(())
@@ -133,8 +153,13 @@ pub fn undo_manager_undo(env: Env<'_>, undo_manager: NifUndoManager) -> Result<(
     ENV.set(&mut env.clone(), || {
         with_write_lock_if(
             &undo_manager,
-            |manager| manager.can_undo(),
-            |manager| { manager.undo_blocking(); }
+            |manager| {
+                let can_undo = manager.can_undo();
+                can_undo
+            },
+            |manager| { 
+                manager.undo_blocking(); 
+            }
         )
     })
 }
@@ -157,24 +182,24 @@ pub fn undo_manager_expand_scope(
     scope: SharedTypeInput,
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        let mut manager = undo_manager.reference.write()
+        let mut wrapper = undo_manager.reference.0.write()
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
         
         match scope {
             SharedTypeInput::Text(text) => {
                 let branch = text.readonly(None, |txn| text.get_ref(txn))
                     .map_err(|_| NifError::Message("Failed to get text branch reference".to_string()))?;
-                manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(&branch);
             },
             SharedTypeInput::Array(array) => {
                 let branch = array.readonly(None, |txn| array.get_ref(txn))
                     .map_err(|_| NifError::Message("Failed to get array branch reference".to_string()))?;
-                manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(&branch);
             },
             SharedTypeInput::Map(map) => {
                 let branch = map.readonly(None, |txn| map.get_ref(txn))
                     .map_err(|_| NifError::Message("Failed to get map branch reference".to_string()))?;
-                manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(&branch);
             },
         }
         
@@ -185,10 +210,85 @@ pub fn undo_manager_expand_scope(
 #[rustler::nif]
 pub fn undo_manager_stop_capturing(env: Env<'_>, undo_manager: NifUndoManager) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        let mut manager = undo_manager.reference.write()
+        let mut wrapper = undo_manager.reference.0.write()
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
         
-        manager.reset();
+        wrapper.manager.reset();
         Ok(())
     })
 }
+
+#[rustler::nif]
+pub fn undo_manager_add_observer(
+    env: Env<'_>,
+    undo_manager: NifUndoManager,
+    _observer_module: Term,
+    observer_pid: LocalPid
+) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || {
+        let mut wrapper = undo_manager.reference.0.write()
+            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
+        
+        wrapper.observers.push(Observer {
+            pid: observer_pid.clone(),
+        });
+        Ok(())
+    })
+}
+
+#[rustler::nif]
+pub fn undo_manager_update_stack_item<'a>(
+    env: Env<'a>,
+    undo_manager: NifUndoManager,
+    stack_item: NifStackItem<'a>
+) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || {
+        let manager = undo_manager.reference.0.write()
+            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
+        
+        if let Some(_current_item) = manager.manager.undo_stack().last() {
+            let _: HashMap<String, Term> = stack_item.meta.decode()?;
+            Ok(())
+        } else {
+            Err(NifError::Message("No current stack item available".to_string()))
+        }
+    })
+}
+
+#[rustler::nif]
+pub fn undo_manager_get_meta<'a>(
+    env: Env<'a>,
+    undo_manager: NifUndoManager
+) -> Result<Term<'a>, NifError> {
+    ENV.set(&mut env.clone(), || {
+        let manager = undo_manager.reference.0.write()
+            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
+        
+        if let Some(_current_item) = manager.manager.undo_stack().last() {
+            let meta: HashMap<String, Term> = HashMap::new();
+            Ok(meta.encode(env))
+        } else {
+            Err(NifError::Message("No current stack item available".to_string()))
+        }
+    })
+}
+
+#[rustler::nif]
+pub fn undo_manager_set_meta<'a>(
+    env: Env<'a>,
+    undo_manager: NifUndoManager,
+    meta: Term<'a>
+) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || {
+        let manager = undo_manager.reference.0.write()
+            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
+        
+        if let Some(_current_item) = manager.manager.undo_stack().last() {
+            let _: HashMap<String, Term> = meta.decode()?;
+            Ok(())
+        } else {
+            Err(NifError::Message("No current stack item available".to_string()))
+        }
+    })
+}
+
