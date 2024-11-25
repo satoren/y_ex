@@ -15,7 +15,6 @@ use crate::{
     atoms,
 };
 use std::cell::RefCell;
-use std::println;
 
 thread_local! {
     static CURRENT_ENV: RefCell<Option<Env<'static>>> = RefCell::new(None);
@@ -92,43 +91,24 @@ fn create_undo_manager<T: NifSharedType>(
 }
 
 fn notify_observers(env: Env, wrapper: &UndoManagerWrapper, event: &str) -> Result<(), NifError> {
-    println!("notify_observers called with event: {}", event);
-    
     if let Some(ref observer_pid) = wrapper.observer_pid {
-        println!("Observer PID found");
-        
         let meta = HashMap::from([
             ("test_value".to_string(), "added".encode(env))
         ]);
-        println!("Created metadata");
         
         let stack_item = NifStackItem {
             meta: meta.encode(env)
         };
         
         let message = match event {
-            "added" => {
-                println!("Preparing 'added' message");
-                (atoms::stack_item_added(), stack_item.encode(env))
-            },
-            "popped" => {
-                println!("Preparing 'popped' message");
-                (atoms::stack_item_popped(), meta.encode(env))
-            },
-            _ => {
-                println!("Unknown event type: {}", event);
-                return Ok(())
-            }
+            "added" => (atoms::stack_item_added(), stack_item.encode(env)),
+            "popped" => (atoms::stack_item_popped(), meta.encode(env)),
+            _ => return Ok(())
         };
         
-        println!("Attempting to send message for event: {}", event);
         if let Err(_) = env.send(observer_pid, message) {
-            println!("Failed to send message");
             return Err(NifError::Message("Failed to send message".to_string()));
         }
-        println!("Successfully sent message");
-    } else {
-        println!("No observer PID found");
     }
     Ok(())
 }
@@ -140,21 +120,12 @@ pub fn undo_manager_add_observer(
     _observer_module: Term,
     observer_pid: LocalPid
 ) -> Result<(), NifError> {
-    println!("Adding observer");
-    
     let mut wrapper = undo_manager.reference.0.write()
-        .map_err(|_| {
-            println!("Failed to acquire write lock");
-            NifError::Message("Failed to acquire write lock".to_string())
-        })?;
+        .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
     
-    println!("Current observer status: {}", wrapper.observer_pid.is_some());
     wrapper.observer_pid = Some(observer_pid);
-    println!("Updated observer status: {}", wrapper.observer_pid.is_some());
-    
     notify_observers(env, &wrapper, "added")?;
     
-    println!("Observer successfully added");
     Ok(())
 }
 
@@ -168,33 +139,17 @@ where
     F: FnOnce(&UndoManager) -> bool,
     G: FnOnce(&mut UndoManager) -> bool,
 {
-    println!("Entering with_write_lock_if");
-    
-    let mut wrapper = match undo_manager.reference.0.write() {
-        Ok(w) => {
-            println!("Acquired write lock");
-            w
-        },
-        Err(_) => {
-            println!("Failed to acquire write lock");
-            return Err(NifError::Message("Failed to acquire write lock".to_string()));
-        }
-    };
+    let mut wrapper = undo_manager.reference.0.write()
+        .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
     
     if predicate(&wrapper.manager) {
-        println!("Predicate check passed");
         let result = action(&mut wrapper.manager);
-        println!("Action completed with result: {}", result);
         
         if result {
-            println!("Notifying observers of popped event");
             notify_observers(env, &wrapper, "popped")?;
         }
-    } else {
-        println!("Predicate check failed");
     }
     
-    println!("Exiting with_write_lock_if");
     Ok(())
 }
 
