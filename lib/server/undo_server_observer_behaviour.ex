@@ -1,4 +1,4 @@
-defmodule Yex.UndoManager.Observer do
+defmodule Yex.UndoServer.ObserverBehavior do
   @moduledoc """
   Behaviour for implementing UndoManager observers that can track and modify
   stack items during undo/redo operations.
