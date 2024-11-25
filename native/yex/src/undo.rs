@@ -1,4 +1,4 @@
-use yrs::UndoManager;
+use yrs::{UndoManager, undo::Options as UndoOptions};
 use rustler::{Env, NifTaggedEnum, ResourceArc, NifStruct, Term, Encoder, LocalPid};
 use std::sync::RwLock;
 use std::collections::HashMap;
@@ -58,6 +58,12 @@ pub type UndoManagerResource = NifWrap<RwLock<UndoManagerWrapper>>;
 #[rustler::resource_impl]
 impl rustler::Resource for UndoManagerResource {}
 
+#[derive(NifStruct)]
+#[module = "Yex.UndoManager.Options"]
+pub struct NifUndoOptions {
+    pub capture_timeout: u64,
+}
+
 #[rustler::nif]
 pub fn undo_manager_new(
     env: Env<'_>,
@@ -74,20 +80,55 @@ pub fn undo_manager_new(
 }
 
 fn create_undo_manager<T: NifSharedType>(
-    _env: Env<'_>,
+    env: Env<'_>,
     doc: NifDoc,
     scope: T
+) -> NifUndoManager {
+    create_undo_manager_with_options(
+        env,
+        doc,
+        scope,
+        NifUndoOptions { capture_timeout: 500 }
+    )
+}
+
+fn create_undo_manager_with_options<T: NifSharedType>(
+    _env: Env<'_>,
+    doc: NifDoc,
+    scope: T,
+    options: NifUndoOptions,
 ) -> NifUndoManager {
     let branch = scope.readonly(None, |txn| {
         scope.get_ref(txn)
     }).unwrap();
     
-    let undo_manager = UndoManager::new(&doc, &branch);
+    let undo_options = UndoOptions {
+        capture_timeout_millis: options.capture_timeout,
+        ..Default::default()
+    };
+    
+    let undo_manager = UndoManager::with_scope_and_options(&doc, &branch, undo_options);
     let wrapper = UndoManagerWrapper::new(undo_manager);
     
     NifUndoManager {
         reference: ResourceArc::new(NifWrap(RwLock::new(wrapper))),
     }
+}
+
+#[rustler::nif]
+pub fn undo_manager_new_with_options(
+    env: Env<'_>,
+    doc: NifDoc,
+    scope: SharedTypeInput,
+    options: NifUndoOptions,
+) -> NifUndoManager {
+    ENV.set(&mut env.clone(), || {
+        match scope {
+            SharedTypeInput::Text(text) => create_undo_manager_with_options(env, doc, text, options),
+            SharedTypeInput::Array(array) => create_undo_manager_with_options(env, doc, array, options),
+            SharedTypeInput::Map(map) => create_undo_manager_with_options(env, doc, map, options),
+        }
+    })
 }
 
 fn notify_observers(env: Env, wrapper: &UndoManagerWrapper, event: &str) -> Result<(), NifError> {
