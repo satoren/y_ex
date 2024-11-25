@@ -1,4 +1,19 @@
+defmodule Yex.UndoManager.Options do
+  @moduledoc """
+  Options for creating an UndoManager.
+
+  * `:capture_timeout` - Time in milliseconds to wait before creating a new capture group
+  """
+  defstruct capture_timeout: 500  # Default from Yrs
+
+  @type t :: %__MODULE__{
+    capture_timeout: non_neg_integer()
+  }
+end
+
 defmodule Yex.UndoManager do
+  alias Yex.UndoManager.Options
+
   @moduledoc """
   Represents a Y.UndoManager instance.
   """
@@ -9,25 +24,44 @@ defmodule Yex.UndoManager do
   }
 
   @doc """
-  Creates a new UndoManager for the given document and scope.
+  Creates a new UndoManager for the given document and scope with default options.
   The scope can be a Text, Array, or Map type.
   """
   def new(doc, %Yex.Text{} = scope) do
-    case Yex.Nif.undo_manager_new(doc, {:text, scope}) do
-      {:ok, manager} -> manager
-      error -> error
-    end
+    new_with_options(doc, scope, %Options{})
   end
 
   def new(doc, %Yex.Array{} = scope) do
-    case Yex.Nif.undo_manager_new(doc, {:array, scope}) do
+    new_with_options(doc, scope, %Options{})
+  end
+
+  def new(doc, %Yex.Map{} = scope) do
+    new_with_options(doc, scope, %Options{})
+  end
+
+  @doc """
+  Creates a new UndoManager with the given options.
+
+  ## Options
+
+  See `Yex.UndoManager.Options` for available options.
+  """
+  def new_with_options(doc, %Yex.Text{} = scope, %Options{} = options) do
+    case Yex.Nif.undo_manager_new_with_options(doc, {:text, scope}, options) do
       {:ok, manager} -> manager
       error -> error
     end
   end
 
-  def new(doc, %Yex.Map{} = scope) do
-    case Yex.Nif.undo_manager_new(doc, {:map, scope}) do
+  def new_with_options(doc, %Yex.Array{} = scope, %Options{} = options) do
+    case Yex.Nif.undo_manager_new_with_options(doc, {:array, scope}, options) do
+      {:ok, manager} -> manager
+      error -> error
+    end
+  end
+
+  def new_with_options(doc, %Yex.Map{} = scope, %Options{} = options) do
+    case Yex.Nif.undo_manager_new_with_options(doc, {:map, scope}, options) do
       {:ok, manager} -> manager
       error -> error
     end
