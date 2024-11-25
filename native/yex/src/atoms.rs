@@ -47,4 +47,5 @@ rustler::atoms! {
   xml_element,
   xml_fragment,
   xml_text,
+  popped,
 }

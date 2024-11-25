@@ -92,4 +92,56 @@ defmodule Yex.UndoManager do
     Yex.Nif.undo_manager_stop_capturing(undo_manager)
   end
 
+  @doc """
+  Adds an observer to the UndoManager that will receive callbacks when
+  stack items are added or popped.
+
+  ## Example:
+      defmodule MyObserver do
+        @behaviour Yex.UndoManager.Observer
+
+        def handle_stack_item_added(stack_item) do
+          {:ok, Map.put(stack_item.meta, :cursor_position, get_cursor_position())}
+        end
+
+        def handle_stack_item_popped(stack_item) do
+          restore_cursor_position(stack_item.meta.cursor_position)
+          :ok
+        end
+      end
+
+      undo_manager = UndoManager.new(doc, text)
+      UndoManager.add_observer(undo_manager, MyObserver)
+  """
+  def add_observer(undo_manager, observer) when is_atom(observer) do
+    me = self()
+
+    spawn_link(fn ->
+      # Pass both the module and PID to the Rust side
+      Yex.Nif.undo_manager_add_observer(undo_manager, observer, me)
+
+      # Keep the process alive to receive messages
+      receive_loop(observer, undo_manager)
+    end)
+  end
+
+  # Add a private function to handle the receive loop
+  defp receive_loop(observer, undo_manager) do
+    receive do
+      {:undo_item_popped, _meta} ->
+        # Call the observer's callback
+        observer.handle_stack_item_popped()
+        # Continue receiving messages
+        receive_loop(observer, undo_manager)
+
+      {:stack_item_added, stack_item} ->
+        case observer.handle_stack_item_added(stack_item) do
+          {:ok, updated_item} ->
+            Yex.Nif.undo_manager_update_stack_item(undo_manager, updated_item)
+          :ignore ->
+            :ok
+        end
+        receive_loop(observer, undo_manager)
+    end
+  end
 end

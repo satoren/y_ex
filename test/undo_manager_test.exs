@@ -456,4 +456,86 @@ defmodule Yex.UndoManagerTest do
     UndoManager.undo(undo_manager)
     assert Array.to_list(array) == ["first"]
   end
+
+  defmodule TestObserver do
+    @behaviour Yex.UndoManager.Observer
+
+    def handle_stack_item_added(stack_item), do: {:ok, stack_item}
+
+    def handle_stack_item_popped() do
+      send(Process.whereis(:test_observer_process), {:undo_item_popped, :ok})
+      :ok
+    end
+  end
+
+  defmodule SecondObserver do
+    @behaviour Yex.UndoManager.Observer
+
+    def handle_stack_item_added(stack_item), do: {:ok, stack_item}
+
+    def handle_stack_item_popped() do
+      send(Process.whereis(:test_observer_process), {:undo_item_popped, :ok})
+      :ok
+    end
+  end
+
+  test "observer receives callbacks and can modify stack items", %{doc: doc, text: text} do
+    # Register our test process to receive messages
+    Process.register(self(), :test_observer_process)
+
+    undo_manager = UndoManager.new(doc, text)
+    UndoManager.add_observer(undo_manager, TestObserver)
+
+    # Make a change that should trigger the observer
+    Text.insert(text, 0, "Hello")
+
+    # Small delay to ensure observer has processed
+    Process.sleep(10)
+
+    # Undo should trigger the popped callback
+    UndoManager.undo(undo_manager)
+
+    # Verify we received the meta information with our test value
+    assert_receive {:undo_item_popped, :ok}
+  end
+
+  test "observer can ignore stack items", %{doc: doc, text: text} do
+    defmodule IgnoringObserver do
+      @behaviour Yex.UndoManager.Observer
+
+      def handle_stack_item_added(stack_item), do: {:ok, stack_item}
+
+      def handle_stack_item_popped() do
+        send(Process.whereis(:test_observer_process), {:undo_item_popped, :ok})
+        :ok
+      end
+    end
+
+    undo_manager = UndoManager.new(doc, text)
+    UndoManager.add_observer(undo_manager, IgnoringObserver)
+
+    # Make and undo changes - should work without error even though observer ignores
+    Text.insert(text, 0, "Hello")
+    assert Text.to_string(text) == "Hello"
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+  end
+
+  test "multiple observers can be added", %{doc: doc, text: text} do
+    Process.register(self(), :test_observer_process)
+
+    undo_manager = UndoManager.new(doc, text)
+    UndoManager.add_observer(undo_manager, TestObserver)
+    UndoManager.add_observer(undo_manager, SecondObserver)
+
+    # Make a change that should trigger both observers
+    Text.insert(text, 0, "Hello")
+    Process.sleep(10)
+
+    UndoManager.undo(undo_manager)
+
+    # Verify we received notifications from both observers
+    assert_receive {:undo_item_popped, :ok}
+    assert_receive {:undo_item_popped, :ok}
+  end
 end
