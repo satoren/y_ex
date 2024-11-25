@@ -569,4 +569,57 @@ defmodule Yex.UndoManagerTest do
     UndoManager.redo(undo_manager)
     assert Text.to_string(text) == "Hello World"
   end
+
+  test "can create an undo manager with options", %{doc: doc, text: text} do
+    options = %UndoManager.Options{capture_timeout: 1000}
+    undo_manager = UndoManager.new_with_options(doc, text, options)
+    assert %UndoManager{} = undo_manager
+    assert undo_manager.reference != nil
+  end
+
+  test "capture timeout works as expected", %{doc: doc, text: text} do
+    options = %UndoManager.Options{capture_timeout: 100}
+    undo_manager = UndoManager.new_with_options(doc, text, options)
+
+    Text.insert(text, 0, "a")
+    Process.sleep(150) # Wait longer than capture_timeout
+    Text.insert(text, 1, "b")
+
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "a" # Only 'b' was undone
+  end
+
+  test "demonstrate constructor with options", %{doc: doc, text: text} do
+
+    options = %UndoManager.Options{capture_timeout: 100}
+    undo_manager = UndoManager.new_with_options(doc, text, options)
+    # prove tests are batched
+    Text.insert(text, 0, "a")
+    Text.insert(text, 1, "b")
+    assert Text.to_string(text) == "ab"
+
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+
+
+    # Prove options are respected
+    Text.insert(text, 0, "c")
+    Process.sleep(150)
+    Text.insert(text, 1, "d")
+    assert Text.to_string(text) == "cd"
+
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "c" # Only 'd' was undone due to timeout
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "" # get back to empty
+
+    # Prove option means insufficient timeout will still batch
+    Text.insert(text, 0, "e")
+    Process.sleep(50)
+    Text.insert(text, 1, "f")
+    assert Text.to_string(text) == "ef"
+
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "" # Only 'b' was undone due to timeout
+  end
 end
