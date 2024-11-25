@@ -321,3 +321,16 @@ pub fn undo_manager_set_meta<'a>(
     })
 }
 
+#[rustler::nif]
+pub fn undo_manager_clear(env: Env, undo_manager: NifUndoManager) -> Result<(), NifError> {
+    ENV.set(&mut env.clone(), || {
+        let mut wrapper = undo_manager.reference.0.write()
+            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
+        
+        wrapper.manager.clear();
+        notify_observers(env, &wrapper, "popped")?;
+        
+        Ok(())
+    })
+}
+

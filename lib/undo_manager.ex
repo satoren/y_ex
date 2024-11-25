@@ -121,4 +121,20 @@ defmodule Yex.UndoManager do
     {:ok, pid} = Yex.UndoServer.start_link(undo_manager: undo_manager, module: observer)
     pid
   end
+
+  @doc """
+  Clears all StackItems stored within current UndoManager, effectively resetting its state.
+
+  ## Example:
+      text = Doc.get_text(doc, "text")
+      undo_manager = UndoManager.new(doc, text)
+
+      Text.insert(text, 0, "Hello")
+      Text.insert(text, 5, " World")
+      UndoManager.clear(undo_manager)
+      # All undo/redo history is now cleared
+  """
+  def clear(undo_manager) do
+    Yex.Nif.undo_manager_clear(undo_manager)
+  end
 end

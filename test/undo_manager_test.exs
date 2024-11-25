@@ -549,4 +549,24 @@ defmodule Yex.UndoManagerTest do
 
     assert_receive {:stack_item_popped, %{"test_value" => "added"}}
   end
+
+  test "clear removes all stack items", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+
+    # Make some changes that will create undo stack items
+    Text.insert(text, 0, "Hello")
+    Text.insert(text, 5, " World")
+    assert Text.to_string(text) == "Hello World"
+
+    # Clear the undo manager
+    UndoManager.clear(undo_manager)
+
+    # Try to undo - should have no effect since stack was cleared
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "Hello World"
+
+    # Try to redo - should have no effect since stack was cleared
+    UndoManager.redo(undo_manager)
+    assert Text.to_string(text) == "Hello World"
+  end
 end
