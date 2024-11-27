@@ -166,10 +166,10 @@ defmodule Yex.XmlElementPrelim do
           children: [Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()]
         }
 
-  def new(tag, children) do
+  def new(tag, children, attributes \\ %{}) do
     %__MODULE__{
       tag: tag,
-      attributes: %{},
+      attributes: attributes,
       children: Enum.to_list(children)
     }
   end
