@@ -186,24 +186,9 @@ impl Prelim for NifYInput {
                 let text = TextRef::from(inner_ref);
                 text.apply_delta(txn, v.delta.0);
             }
-            NifYInput::XmlTextPrelim(v) => {
-                let text = XmlTextRef::from(inner_ref);
-                text.apply_delta(txn, v.delta.0);
-            }
-            NifYInput::XmlElementPrelim(v) => {
-                let element = XmlElementRef::from(inner_ref);
-
-                for value in v.children {
-                    element.push_back(txn, value);
-                }
-            }
-            NifYInput::XmlFragmentPrelim(v) => {
-                let element = XmlFragmentRef::from(inner_ref);
-
-                for value in v.children {
-                    element.push_back(txn, value);
-                }
-            }
+            NifYInput::XmlTextPrelim(v) => v.integrate(txn, inner_ref),
+            NifYInput::XmlElementPrelim(v) => v.integrate(txn, inner_ref),
+            NifYInput::XmlFragmentPrelim(v) => v.integrate(txn, inner_ref),
         }
     }
 }
@@ -239,24 +224,9 @@ impl Prelim for NifXmlIn {
 
     fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
         match self {
-            NifXmlIn::Text(v) => {
-                let text = XmlTextRef::from(inner_ref);
-                text.apply_delta(txn, v.delta.0);
-            }
-            NifXmlIn::Element(v) => {
-                let element = XmlElementRef::from(inner_ref);
-
-                for value in v.children {
-                    element.push_back(txn, value);
-                }
-            }
-            NifXmlIn::Fragment(v) => {
-                let element = XmlFragmentRef::from(inner_ref);
-
-                for value in v.children {
-                    element.push_back(txn, value);
-                }
-            }
+            NifXmlIn::Text(v) => v.integrate(txn, inner_ref),
+            NifXmlIn::Element(v) => v.integrate(txn, inner_ref),
+            NifXmlIn::Fragment(v) => v.integrate(txn, inner_ref),
         }
     }
 }

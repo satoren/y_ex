@@ -167,5 +167,21 @@ defmodule YexXmlElementTest do
       assert "<div><div></div><div></div><span>text</span><div></div>textdiv</div>" ==
                XmlFragment.to_string(xml_fragment)
     end
+
+    test "XmlElementPrelim.new with attribute", %{xml_fragment: xml_fragment} do
+      XmlFragment.push(
+        xml_fragment,
+        XmlElementPrelim.new(
+          "div",
+          [
+            XmlTextPrelim.from("text")
+          ],
+          %{"href" => "http://example.com"}
+        )
+      )
+
+      assert "<div href=\"http://example.com\">text</div>" ==
+               XmlFragment.to_string(xml_fragment)
+    end
   end
 end
