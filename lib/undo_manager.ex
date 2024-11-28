@@ -152,7 +152,7 @@ defmodule Yex.UndoManager do
       UndoManager.add_observer(undo_manager, MyObserver)
   """
   def add_observer(undo_manager, observer) when is_atom(observer) do
-    {:ok, pid} = Yex.UndoServer.start_link(undo_manager: undo_manager, module: observer)
+    {:ok, pid} = Yex.ObserverServer.start_link(undo_manager: undo_manager, module: observer)
     pid
   end
 

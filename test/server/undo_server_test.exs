@@ -1,4 +1,4 @@
-defmodule Yex.UndoServerTest do
+defmodule Yex.ObserverServerTest do
   use ExUnit.Case
   alias Yex.{Doc, Text, UndoManager}
   doctest Yex.UndoManager
@@ -24,7 +24,7 @@ defmodule Yex.UndoServerTest do
   end
 
   defmodule TestObserver do
-    use Yex.UndoServer
+    use Yex.ObserverServer
 
     def handle_stack_item_added(stack_item, state) do
       {:ok, Map.put(stack_item, "test_value", "added"), state}
@@ -37,7 +37,7 @@ defmodule Yex.UndoServerTest do
   end
 
   defmodule SecondObserver do
-    use Yex.UndoServer
+    use Yex.ObserverServer
 
     def handle_stack_item_added(stack_item, state) do
       {:ok, Map.put(stack_item, "test_value", "added"), state}
@@ -50,7 +50,7 @@ defmodule Yex.UndoServerTest do
   end
 
   defmodule IgnoringObserver do
-    use Yex.UndoServer
+    use Yex.ObserverServer
 
     def handle_stack_item_added(_stack_item, state) do
       {:ignore, state}
