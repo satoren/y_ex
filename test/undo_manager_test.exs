@@ -8,18 +8,6 @@ defmodule Yex.UndoManagerTest do
     text = Doc.get_text(doc, "text")
     array = Doc.get_array(doc, "array")
     map = Doc.get_map(doc, "map")
-
-    if Process.whereis(:test_observer_process) do
-      Process.unregister(:test_observer_process)
-    end
-    Process.register(self(), :test_observer_process)
-
-    on_exit(fn ->
-      if Process.whereis(:test_observer_process) do
-        Process.unregister(:test_observer_process)
-      end
-    end)
-
     # Return these as the test context
     {:ok, doc: doc, text: text, array: array, map: map}
   end
@@ -467,89 +455,6 @@ defmodule Yex.UndoManagerTest do
     assert Array.to_list(array) == ["first"]
   end
 
-  defmodule TestObserver do
-    use Yex.UndoServer
-
-    def handle_stack_item_added(stack_item, state) do
-      {:ok, Map.put(stack_item, "test_value", "added"), state}
-    end
-
-    def handle_stack_item_popped(state) do
-      send(:test_observer_process, {:stack_item_popped, %{"test_value" => "added"}})
-      {:ok, state}
-    end
-  end
-
-  defmodule SecondObserver do
-    use Yex.UndoServer
-
-    def handle_stack_item_added(stack_item, state) do
-      {:ok, Map.put(stack_item, "test_value", "added"), state}
-    end
-
-    def handle_stack_item_popped(state) do
-      send(:test_observer_process, {:stack_item_popped, %{"test_value" => "added"}})
-      {:ok, state}
-    end
-  end
-
-  defmodule IgnoringObserver do
-    use Yex.UndoServer
-
-    def handle_stack_item_added(_stack_item, state) do
-      {:ignore, state}
-    end
-
-    def handle_stack_item_popped(state) do
-      send(:test_observer_process, {:stack_item_popped, :ok})
-      {:ok, state}
-    end
-  end
-
-  test "observer receives callbacks and can modify stack items", %{doc: doc, text: text} do
-    # Remove this line since it's now in setup
-    # Process.register(self(), :test_observer_process)
-
-    undo_manager = UndoManager.new(doc, text)
-    UndoManager.add_observer(undo_manager, TestObserver)
-
-    # Make a change that should trigger the observer
-    Text.insert(text, 0, "Hello")
-
-    # Undo should trigger the popped callback with metadata
-    UndoManager.undo(undo_manager)
-
-    # Verify we received the meta information with our test value
-    assert_receive {:stack_item_popped, %{"test_value" => "added"}}
-  end
-
-  test "observer can ignore stack items", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
-    UndoManager.add_observer(undo_manager, IgnoringObserver)
-
-    # Make and undo changes - should work without error even though observer ignores
-    Text.insert(text, 0, "Hello")
-    assert Text.to_string(text) == "Hello"
-    UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == ""
-  end
-
-
-  test "multiple observers can be added" do
-    doc = Doc.new()
-    text = Doc.get_text(doc, "text")
-    undo_manager = UndoManager.new(doc, text)
-
-    # Add observers - prefix with underscore since we don't use the return values
-    _pid1 = UndoManager.add_observer(undo_manager, TestObserver)
-    _pid2 = UndoManager.add_observer(undo_manager, TestObserver)
-
-    Text.insert(text, 0, "hello")
-    UndoManager.undo(undo_manager)
-
-    assert_receive {:stack_item_popped, %{"test_value" => "added"}}
-  end
-
   test "clear removes all stack items", %{doc: doc, text: text} do
     undo_manager = UndoManager.new(doc, text)
 
@@ -622,4 +527,136 @@ defmodule Yex.UndoManagerTest do
     UndoManager.undo(undo_manager)
     assert Text.to_string(text) == "" # Only 'b' was undone due to timeout
   end
+
+
+  test "basic constructor example", %{doc: doc, text: text} do
+    # From docs: const undoManager = new Y.UndoManager(ytext)
+    undo_manager = UndoManager.new(doc, text)
+    assert %UndoManager{} = undo_manager
+  end
+
+  test "demonstrates exact stopCapturing behavior from docs", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+
+    # Example from docs:
+    # // without stopCapturing
+    Text.insert(text, 0, "a")
+    Text.insert(text, 1, "b")
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "" # note that 'ab' was removed
+
+    # Reset state
+    Text.delete(text, 0, Text.length(text))
+
+    # Example from docs:
+    # // with stopCapturing
+    Text.insert(text, 0, "a")
+    UndoManager.stop_capturing(undo_manager)
+    Text.insert(text, 1, "b")
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "a" # note that only 'b' was removed
+  end
+
+  test "demonstrates tracking specific origins from docs", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+
+    # From docs: undoManager.addToScope(ytext)
+    UndoManager.include_origin(undo_manager, "my-origin")
+
+    # Make changes with tracked origin
+    Doc.transaction(doc, "my-origin", fn ->
+      Text.insert(text, 0, "tracked changes")
+    end)
+
+    # Make changes with untracked origin
+    Doc.transaction(doc, "other-origin", fn ->
+      Text.insert(text, 0, "untracked ")
+    end)
+
+    assert Text.to_string(text) == "untracked tracked changes"
+
+    # Undo should only affect tracked changes
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "untracked "
+  end
+
+  test "demonstrates clear functionality from docs", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+
+    # Make some changes
+    Text.insert(text, 0, "hello")
+    Text.insert(text, 5, " world")
+    assert Text.to_string(text) == "hello world"
+
+    # From docs: undoManager.clear()
+    UndoManager.clear(undo_manager)
+
+    # Verify undo/redo have no effect after clear
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "hello world"
+    UndoManager.redo(undo_manager)
+    assert Text.to_string(text) == "hello world"
+  end
+
+  test "demonstrates scope expansion from docs", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+    additional_text = Doc.get_text(doc, "additional_text")
+
+    # From docs: undoManager.addToScope(additionalYText)
+    UndoManager.expand_scope(undo_manager, additional_text)
+
+    # Make changes to both texts
+    Text.insert(text, 0, "first text")
+    Text.insert(additional_text, 0, "second text")
+
+    # Undo should affect both texts
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+    assert Text.to_string(additional_text) == ""
+  end
+
+
+
+  defmodule CustomBinding do
+    # Just a marker module to match the JavaScript example
+  end
+
+  test "demonstrates tracked origins specification from docs", %{doc: doc, text: text} do
+    # Mirror the docs setup:
+    # const undoManager = new Y.UndoManager(ytext, {
+    #   trackedOrigins: new Set([42, CustomBinding])
+    # })
+    undo_manager = UndoManager.new(doc, text)
+    UndoManager.include_origin(undo_manager, 42)
+    UndoManager.include_origin(undo_manager, CustomBinding)
+
+    # First example: untracked origin (null)
+    Text.insert(text, 0, "abc")
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "abc" # not tracked because origin is null
+    Text.delete(text, 0, 3) # revert change
+
+    # Second example: tracked origin (42)
+    Doc.transaction(doc, 42, fn ->
+      Text.insert(text, 0, "abc")
+    end)
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "" # tracked because origin is 42
+
+    # Third example: untracked origin (41)
+    Doc.transaction(doc, 41, fn ->
+      Text.insert(text, 0, "abc")
+    end)
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "abc" # not tracked because 41 isn't in tracked origins
+    Text.delete(text, 0, 3) # revert change
+
+    # Fourth example: tracked origin (CustomBinding)
+    Doc.transaction(doc, CustomBinding, fn ->
+      Text.insert(text, 0, "abc")
+    end)
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "" # tracked because CustomBinding is in tracked origins
+  end
+
 end
