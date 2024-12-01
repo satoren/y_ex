@@ -29,17 +29,6 @@ rustler::atoms! {
   retain,
   attributes,
 
-  // undo message types
-
-  // Observer events
-  stack_item_added,    // for observe_item_added
-  stack_item_updated,  // for observe_item_updated  
-  stack_item_popped,   // for observe_item_popped
-
-  // Event kinds
-  undo,              // EventKind::Undo
-  redo,              // EventKind::Redo
-
   // Type identifiers for branches
   text,
   map,
