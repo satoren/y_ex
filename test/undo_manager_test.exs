@@ -762,7 +762,12 @@ defmodule Yex.UndoManagerTest do
     assert Array.to_list(array) == ["World"]
   end
 
-  test "new_with_options unwraps successful results", %{doc: doc, text: text, array: array, map: map} do
+  test "new_with_options unwraps successful results", %{
+    doc: doc,
+    text: text,
+    array: array,
+    map: map
+  } do
     options = %UndoManager.Options{capture_timeout: 1000}
 
     # Test Text type
