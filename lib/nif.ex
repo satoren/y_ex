@@ -163,13 +163,19 @@ defmodule Yex.Nif do
   def undo_manager_expand_scope(_undo_manager, _scope), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_exclude_origin(_undo_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_stop_capturing(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_add_observer(_undo_manager, _observer_module, _observer_pid), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_update_stack_item(_undo_manager, _stack_item), do: :erlang.nif_error(:nif_not_loaded)
+
+  def undo_manager_add_observer(_undo_manager, _observer_module, _observer_pid),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def undo_manager_update_stack_item(_undo_manager, _stack_item),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def undo_manager_get_meta(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_set_meta(_undo_manager, _meta), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_clear(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_new_with_options(_doc, _scope, _options), do: :erlang.nif_error(:nif_not_loaded)
 
+  def undo_manager_new_with_options(_doc, _scope, _options),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
 
 defmodule Yex.Nif.Util do
