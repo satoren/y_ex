@@ -38,14 +38,19 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == ""
   end
 
-  test "can undo with origin and transaction with text changes, text removed", %{doc: doc, text: text} do
+  test "can undo with origin and transaction with text changes, text removed", %{
+    doc: doc,
+    text: text
+  } do
     undo_manager = UndoManager.new(doc, text)
     origin = "test-origin"
     UndoManager.include_origin(undo_manager, origin)
     inserted_text = "Hello, world!"
+
     Doc.transaction(doc, origin, fn ->
       Text.insert(text, 0, inserted_text)
     end)
+
     assert Text.to_string(text) == inserted_text
     UndoManager.undo(undo_manager)
     assert Text.to_string(text) == ""
@@ -59,6 +64,7 @@ defmodule Yex.UndoManagerTest do
 
     # Make changes from an untracked origin
     untracked_origin = "untracked-origin"
+
     Doc.transaction(doc, untracked_origin, fn ->
       Text.insert(text, 0, "Untracked ")
     end)
@@ -96,7 +102,6 @@ defmodule Yex.UndoManagerTest do
     # Undo the last insertion
     UndoManager.undo(undo_manager)
     assert Array.to_list(array) == []
-
   end
 
   test "can undo map changes", %{doc: doc, map: map} do
@@ -123,6 +128,7 @@ defmodule Yex.UndoManagerTest do
 
     # Make changes from an untracked origin
     untracked_origin = "untracked-origin"
+
     Doc.transaction(doc, untracked_origin, fn ->
       Array.push(array, "untracked1")
       Array.push(array, "untracked2")
@@ -140,7 +146,13 @@ defmodule Yex.UndoManagerTest do
     end)
 
     # Verify initial state
-    assert Array.to_list(array) == ["untracked1", "untracked2", "tracked1", "tracked2", "untracked3"]
+    assert Array.to_list(array) == [
+             "untracked1",
+             "untracked2",
+             "tracked1",
+             "tracked2",
+             "untracked3"
+           ]
 
     # After undo, only tracked changes should be removed
     UndoManager.undo(undo_manager)
@@ -154,6 +166,7 @@ defmodule Yex.UndoManagerTest do
 
     # Make changes from an untracked origin
     untracked_origin = "untracked-origin"
+
     Doc.transaction(doc, untracked_origin, fn ->
       Yex.Map.set(map, "untracked1", "value1")
       Yex.Map.set(map, "untracked2", "value2")
@@ -181,6 +194,7 @@ defmodule Yex.UndoManagerTest do
       "tracked2" => "value4",
       "untracked3" => "value5"
     }
+
     assert Yex.Map.to_map(map) == expected_initial
 
     # After undo, only tracked changes should be removed
@@ -194,6 +208,7 @@ defmodule Yex.UndoManagerTest do
       "untracked2" => "value2",
       "untracked3" => "value5"
     }
+
     assert Yex.Map.to_map(map) == expected_after_undo
   end
 
@@ -282,7 +297,6 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == "Untracked tracked "
   end
 
-
   test "works with all types", %{doc: doc, text: text, array: array, map: map} do
     text_manager = UndoManager.new(doc, text)
     array_manager = UndoManager.new(doc, array)
@@ -338,7 +352,12 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(additional_text) == "Additional"
   end
 
-  test "can expand scope to include multiple types", %{doc: doc, text: text, array: array, map: map} do
+  test "can expand scope to include multiple types", %{
+    doc: doc,
+    text: text,
+    array: array,
+    map: map
+  } do
     undo_manager = UndoManager.new(doc, text)
 
     # Expand scope to include array and map
@@ -487,15 +506,16 @@ defmodule Yex.UndoManagerTest do
     undo_manager = UndoManager.new_with_options(doc, text, options)
 
     Text.insert(text, 0, "a")
-    Process.sleep(150) # Wait longer than capture_timeout
+    # Wait longer than capture_timeout
+    Process.sleep(150)
     Text.insert(text, 1, "b")
 
     UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "a" # Only 'b' was undone
+    # Only 'b' was undone
+    assert Text.to_string(text) == "a"
   end
 
   test "demonstrate constructor with options", %{doc: doc, text: text} do
-
     options = %UndoManager.Options{capture_timeout: 100}
     undo_manager = UndoManager.new_with_options(doc, text, options)
     # prove tests are batched
@@ -506,7 +526,6 @@ defmodule Yex.UndoManagerTest do
     UndoManager.undo(undo_manager)
     assert Text.to_string(text) == ""
 
-
     # Prove options are respected
     Text.insert(text, 0, "c")
     Process.sleep(150)
@@ -514,9 +533,11 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == "cd"
 
     UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "c" # Only 'd' was undone due to timeout
+    # Only 'd' was undone due to timeout
+    assert Text.to_string(text) == "c"
     UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "" # get back to empty
+    # get back to empty
+    assert Text.to_string(text) == ""
 
     # Prove option means insufficient timeout will still batch
     Text.insert(text, 0, "e")
@@ -525,9 +546,9 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == "ef"
 
     UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "" # Only 'b' was undone due to timeout
+    # Only 'b' was undone due to timeout
+    assert Text.to_string(text) == ""
   end
-
 
   test "basic constructor example", %{doc: doc, text: text} do
     # From docs: const undoManager = new Y.UndoManager(ytext)
@@ -543,7 +564,8 @@ defmodule Yex.UndoManagerTest do
     Text.insert(text, 0, "a")
     Text.insert(text, 1, "b")
     UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "" # note that 'ab' was removed
+    # note that 'ab' was removed
+    assert Text.to_string(text) == ""
 
     # Reset state
     Text.delete(text, 0, Text.length(text))
@@ -554,7 +576,8 @@ defmodule Yex.UndoManagerTest do
     UndoManager.stop_capturing(undo_manager)
     Text.insert(text, 1, "b")
     UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "a" # note that only 'b' was removed
+    # note that only 'b' was removed
+    assert Text.to_string(text) == "a"
   end
 
   test "demonstrates tracking specific origins from docs", %{doc: doc, text: text} do
@@ -615,8 +638,6 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(additional_text) == ""
   end
 
-
-
   defmodule CustomBinding do
     # Just a marker module to match the JavaScript example
   end
@@ -633,30 +654,38 @@ defmodule Yex.UndoManagerTest do
     # First example: untracked origin (null)
     Text.insert(text, 0, "abc")
     UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "abc" # not tracked because origin is null
-    Text.delete(text, 0, 3) # revert change
+    # not tracked because origin is null
+    assert Text.to_string(text) == "abc"
+    # revert change
+    Text.delete(text, 0, 3)
 
     # Second example: tracked origin (42)
     Doc.transaction(doc, 42, fn ->
       Text.insert(text, 0, "abc")
     end)
+
     UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "" # tracked because origin is 42
+    # tracked because origin is 42
+    assert Text.to_string(text) == ""
 
     # Third example: untracked origin (41)
     Doc.transaction(doc, 41, fn ->
       Text.insert(text, 0, "abc")
     end)
+
     UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "abc" # not tracked because 41 isn't in tracked origins
-    Text.delete(text, 0, 3) # revert change
+    # not tracked because 41 isn't in tracked origins
+    assert Text.to_string(text) == "abc"
+    # revert change
+    Text.delete(text, 0, 3)
 
     # Fourth example: tracked origin (CustomBinding)
     Doc.transaction(doc, CustomBinding, fn ->
       Text.insert(text, 0, "abc")
     end)
-    UndoManager.undo(undo_manager)
-    assert Text.to_string(text) == "" # tracked because CustomBinding is in tracked origins
-  end
 
+    UndoManager.undo(undo_manager)
+    # tracked because CustomBinding is in tracked origins
+    assert Text.to_string(text) == ""
+  end
 end

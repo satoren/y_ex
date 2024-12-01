@@ -4,11 +4,12 @@ defmodule Yex.UndoManager.Options do
 
   * `:capture_timeout` - Time in milliseconds to wait before creating a new capture group
   """
-  defstruct capture_timeout: 500  # Default from Yrs
+  # Default from Yrs
+  defstruct capture_timeout: 500
 
   @type t :: %__MODULE__{
-    capture_timeout: non_neg_integer()
-  }
+          capture_timeout: non_neg_integer()
+        }
 end
 
 defmodule Yex.UndoManager do
@@ -20,8 +21,8 @@ defmodule Yex.UndoManager do
   defstruct [:reference]
 
   @type t :: %__MODULE__{
-    reference: reference()
-  }
+          reference: reference()
+        }
 
   @doc """
   Creates a new UndoManager for the given document and scope with default options.
@@ -129,7 +130,6 @@ defmodule Yex.UndoManager do
   def stop_capturing(undo_manager) do
     Yex.Nif.undo_manager_stop_capturing(undo_manager)
   end
-
 
   @doc """
   Clears all StackItems stored within current UndoManager, effectively resetting its state.
