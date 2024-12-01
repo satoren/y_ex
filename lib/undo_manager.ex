@@ -24,6 +24,10 @@ defmodule Yex.UndoManager do
           reference: reference()
         }
 
+  @doc false
+  def unwrap_manager_result({:ok, manager}), do: manager
+  def unwrap_manager_result(error), do: error
+
   @doc """
   Creates a new UndoManager for the given document and scope with default options.
   The scope can be a Text, Array, or Map type.
@@ -64,10 +68,6 @@ defmodule Yex.UndoManager do
     |> Yex.Nif.undo_manager_new_with_options({:map, scope}, options)
     |> unwrap_manager_result()
   end
-
-  # Add this private function to handle the unwrapping
-  defp unwrap_manager_result({:ok, manager}), do: manager
-  defp unwrap_manager_result(error), do: error
 
   @doc """
   Includes an origin to be tracked by the UndoManager.

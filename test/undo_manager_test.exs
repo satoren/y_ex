@@ -785,4 +785,13 @@ defmodule Yex.UndoManagerTest do
     assert match?(%UndoManager{}, map_manager)
     assert map_manager.reference != nil
   end
+
+  test "unwrap_manager_result handles both success and error cases directly" do
+    # Test successful case
+    assert UndoManager.unwrap_manager_result({:ok, :manager}) == :manager
+
+    # Test error case
+    error = {:error, "some error"}
+    assert UndoManager.unwrap_manager_result(error) == error
+  end
 end
