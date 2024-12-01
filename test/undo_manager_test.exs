@@ -688,4 +688,96 @@ defmodule Yex.UndoManagerTest do
     # tracked because CustomBinding is in tracked origins
     assert Text.to_string(text) == ""
   end
+
+  test "multiple undo/redo sequences work correctly", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+
+    # First change
+    Text.insert(text, 0, "Hello")
+
+    # stop tracking to ensure changes are not batched
+    UndoManager.stop_capturing(undo_manager)
+
+    # Second change
+    Text.insert(text, 5, " World")
+    assert Text.to_string(text) == "Hello World"
+
+    # First undo
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "Hello"
+
+    # First redo
+    UndoManager.redo(undo_manager)
+    assert Text.to_string(text) == "Hello World"
+
+    # Undo both changes
+    UndoManager.undo(undo_manager)
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+
+    # Redo both changes
+    UndoManager.redo(undo_manager)
+    UndoManager.redo(undo_manager)
+    assert Text.to_string(text) == "Hello World"
+  end
+
+  test "redo stack is cleared when new changes are made", %{doc: doc, text: text} do
+    undo_manager = UndoManager.new(doc, text)
+
+    # Initial change
+    Text.insert(text, 0, "Hello")
+
+    # Undo the change
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+
+    # Make a new change instead of redo
+    Text.insert(text, 0, "Different")
+
+    # Try to redo - should have no effect since we made a new change
+    UndoManager.redo(undo_manager)
+    assert Text.to_string(text) == "Different"
+  end
+
+  test "redo with multiple types in scope", %{doc: doc, text: text, array: array} do
+    undo_manager = UndoManager.new(doc, text)
+    UndoManager.expand_scope(undo_manager, array)
+
+    # Make changes to both types
+    Text.insert(text, 0, "Hello")
+    Array.push(array, "World")
+
+    # Verify initial state
+    assert Text.to_string(text) == "Hello"
+    assert Array.to_list(array) == ["World"]
+
+    # Undo changes to both types
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+    assert Array.to_list(array) == []
+
+    # Redo should restore both changes
+    UndoManager.redo(undo_manager)
+    assert Text.to_string(text) == "Hello"
+    assert Array.to_list(array) == ["World"]
+  end
+
+  test "new_with_options unwraps successful results", %{doc: doc, text: text, array: array, map: map} do
+    options = %UndoManager.Options{capture_timeout: 1000}
+
+    # Test Text type
+    text_manager = UndoManager.new_with_options(doc, text, options)
+    assert match?(%UndoManager{}, text_manager)
+    assert text_manager.reference != nil
+
+    # Test Array type
+    array_manager = UndoManager.new_with_options(doc, array, options)
+    assert match?(%UndoManager{}, array_manager)
+    assert array_manager.reference != nil
+
+    # Test Map type
+    map_manager = UndoManager.new_with_options(doc, map, options)
+    assert match?(%UndoManager{}, map_manager)
+    assert map_manager.reference != nil
+  end
 end

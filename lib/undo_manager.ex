@@ -48,25 +48,26 @@ defmodule Yex.UndoManager do
   See `Yex.UndoManager.Options` for available options.
   """
   def new_with_options(doc, %Yex.Text{} = scope, %Options{} = options) do
-    case Yex.Nif.undo_manager_new_with_options(doc, {:text, scope}, options) do
-      {:ok, manager} -> manager
-      error -> error
-    end
+    doc
+    |> Yex.Nif.undo_manager_new_with_options({:text, scope}, options)
+    |> unwrap_manager_result()
   end
 
   def new_with_options(doc, %Yex.Array{} = scope, %Options{} = options) do
-    case Yex.Nif.undo_manager_new_with_options(doc, {:array, scope}, options) do
-      {:ok, manager} -> manager
-      error -> error
-    end
+    doc
+    |> Yex.Nif.undo_manager_new_with_options({:array, scope}, options)
+    |> unwrap_manager_result()
   end
 
   def new_with_options(doc, %Yex.Map{} = scope, %Options{} = options) do
-    case Yex.Nif.undo_manager_new_with_options(doc, {:map, scope}, options) do
-      {:ok, manager} -> manager
-      error -> error
-    end
+    doc
+    |> Yex.Nif.undo_manager_new_with_options({:map, scope}, options)
+    |> unwrap_manager_result()
   end
+
+  # Add this private function to handle the unwrapping
+  defp unwrap_manager_result({:ok, manager}), do: manager
+  defp unwrap_manager_result(error), do: error
 
   @doc """
   Includes an origin to be tracked by the UndoManager.
