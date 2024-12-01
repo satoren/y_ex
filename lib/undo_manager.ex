@@ -130,31 +130,6 @@ defmodule Yex.UndoManager do
     Yex.Nif.undo_manager_stop_capturing(undo_manager)
   end
 
-  @doc """
-  Adds an observer to the UndoManager that will receive callbacks when
-  stack items are added or popped.
-
-  ## Example:
-      defmodule MyObserver do
-        @behaviour Yex.UndoManager.Observer
-
-        def handle_stack_item_added(stack_item) do
-          {:ok, Map.put(stack_item.meta, :cursor_position, get_cursor_position())}
-        end
-
-        def handle_stack_item_popped(stack_item) do
-          restore_cursor_position(stack_item.meta.cursor_position)
-          :ok
-        end
-      end
-
-      undo_manager = UndoManager.new(doc, text)
-      UndoManager.add_observer(undo_manager, MyObserver)
-  """
-  def add_observer(undo_manager, observer) when is_atom(observer) do
-    {:ok, pid} = Yex.ObserverServer.start_link(undo_manager: undo_manager, module: observer)
-    pid
-  end
 
   @doc """
   Clears all StackItems stored within current UndoManager, effectively resetting its state.
