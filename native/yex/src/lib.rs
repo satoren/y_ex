@@ -10,12 +10,12 @@ mod subscription;
 mod sync;
 mod term_box;
 mod text;
+mod undo;
 mod utils;
 mod wrap;
 mod xml;
 mod yinput;
 mod youtput;
-mod undo;
 
 use any::NifAny;
 use array::NifArray;
