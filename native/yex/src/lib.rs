@@ -4,6 +4,7 @@ mod atoms;
 mod awareness;
 mod doc;
 mod error;
+mod event;
 mod map;
 mod shared_type;
 mod subscription;

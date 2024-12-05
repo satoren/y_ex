@@ -1,6 +1,6 @@
 defmodule YexXmlTextTest do
   use ExUnit.Case
-  alias Yex.{Doc, XmlFragment, XmlText, XmlTextPrelim}
+  alias Yex.{Doc, XmlFragment, XmlText, XmlTextPrelim, SharedType}
   doctest XmlText
   doctest XmlTextPrelim
 
@@ -147,6 +147,66 @@ defmodule YexXmlTextTest do
       parent = Yex.Xml.parent(text)
 
       assert parent == xml_fragment
+    end
+
+    test "observe", %{doc: doc, xml_text: text} do
+      ref = SharedType.observe(text)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          XmlText.insert(text, 0, "123456")
+          XmlText.format(text, 1, 3, %{"bold" => true})
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.XmlTextEvent{
+                        target: ^text,
+                        delta: [
+                          %{insert: "1"},
+                          %{attributes: %{"bold" => true}, insert: "234"},
+                          %{insert: "56"}
+                        ]
+                      }, "origin_value", nil}
+    end
+
+    test "observe delete ", %{doc: doc, xml_text: text} do
+      XmlText.insert(text, 0, "123456")
+      ref = SharedType.observe(text)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          XmlText.delete(text, 0, 1)
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.XmlTextEvent{
+                        target: ^text,
+                        delta: [%{delete: 1}],
+                        path: []
+                      }, "origin_value", nil}
+    end
+
+    test "observe_deep", %{doc: doc, xml_text: text} do
+      ref = SharedType.observe_deep(text)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          XmlText.insert(text, 0, "123456")
+          XmlText.format(text, 1, 3, %{"bold" => true})
+        end)
+
+      assert_receive {:observe_deep_event, ^ref,
+                      [
+                        %Yex.XmlTextEvent{
+                          path: [],
+                          target: ^text,
+                          delta: [
+                            %{insert: "1"},
+                            %{attributes: %{"bold" => true}, insert: "234"},
+                            %{insert: "56"}
+                          ]
+                        }
+                      ], "origin_value", _metadata}
     end
   end
 end

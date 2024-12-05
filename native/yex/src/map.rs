@@ -1,6 +1,8 @@
 use crate::atoms;
 use crate::doc::TransactionResource;
-use crate::shared_type::{NifSharedType, SharedTypeId};
+use crate::event::{NifMapEvent, NifSharedTypeDeepObservable, NifSharedTypeObservable};
+use crate::shared_type::NifSharedType;
+use crate::shared_type::SharedTypeId;
 use crate::{doc::DocResource, yinput::NifYInput, youtput::NifYOut, NifAny};
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
 use std::collections::HashMap;
@@ -33,6 +35,10 @@ impl NifSharedType for NifMap {
         &self.reference
     }
     const DELETED_ERROR: &'static str = "Map has been deleted";
+}
+impl NifSharedTypeDeepObservable for NifMap {}
+impl NifSharedTypeObservable for NifMap {
+    type Event = NifMapEvent;
 }
 
 #[rustler::nif]
