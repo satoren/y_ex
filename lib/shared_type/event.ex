@@ -61,7 +61,7 @@ defmodule Yex.TextEvent do
 
   @type t :: %__MODULE__{
           path: list(number() | String.t()),
-          target: Yex.Map.t(),
+          target: Yex.Text.t(),
           delta: Yex.Text.delta()
         }
 end
@@ -105,7 +105,7 @@ defmodule Yex.XmlTextEvent do
 
   @type t :: %__MODULE__{
           path: list(number() | String.t()),
-          target: Yex.Map.t(),
+          target: Yex.XmlText.t(),
           delta: Yex.Text.delta()
         }
 end

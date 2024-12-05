@@ -115,11 +115,6 @@ defmodule Yex.Map do
     Yex.Nif.map_to_json(map, cur_txn(map))
   end
 
-  defdelegate observe(t), to: Yex.SharedType
-  defdelegate observe(t, option), to: Yex.SharedType
-  defdelegate observe_deep(t), to: Yex.SharedType
-  defdelegate observe_deep(t, option), to: Yex.SharedType
-
   defp cur_txn(%__MODULE__{doc: doc_ref}) do
     Process.get(doc_ref, nil)
   end

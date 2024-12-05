@@ -82,11 +82,6 @@ defmodule Yex.XmlText do
     Yex.Nif.xml_text_parent(xml_text, cur_txn(xml_text))
   end
 
-  defdelegate observe(t), to: Yex.SharedType
-  defdelegate observe(t, option), to: Yex.SharedType
-  defdelegate observe_deep(t), to: Yex.SharedType
-  defdelegate observe_deep(t, option), to: Yex.SharedType
-
   defp cur_txn(%__MODULE__{doc: doc_ref}) do
     Process.get(doc_ref, nil)
   end

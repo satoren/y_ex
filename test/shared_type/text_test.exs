@@ -242,7 +242,7 @@ defmodule Yex.TextTest do
 
     Text.insert(text, 0, "Hello World")
 
-    ref = Text.observe_deep(text)
+    ref = SharedType.observe_deep(text)
 
     :ok =
       Doc.transaction(doc, "origin_value", fn ->
