@@ -1,6 +1,6 @@
 defmodule Yex.ArrayTest do
   use ExUnit.Case
-  alias Yex.{Doc, Array, ArrayPrelim}
+  alias Yex.{Doc, Array, ArrayPrelim, SharedType}
   doctest Array
   doctest ArrayPrelim
 
@@ -206,5 +206,147 @@ defmodule Yex.ArrayTest do
     Yex.Array.push(array, Enum.to_list(201..300))
     :error = Yex.Array.move_to(array, 0, 5)
     :error = Yex.Array.move_to(array, 3, 0)
+  end
+
+  describe "observe" do
+    test "insert " do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "text")
+
+      ref = SharedType.observe(array)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Array.insert(array, 0, "Hello")
+          Array.insert(array, 1, " World")
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.ArrayEvent{
+                        change: [%{insert: ["Hello", " World"]}]
+                      }, "origin_value", nil}
+    end
+
+    test "delete " do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "text")
+      Array.insert(array, 0, "Hello")
+      Array.insert(array, 1, " World")
+
+      ref = SharedType.observe(array)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Array.delete(array, 0)
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.ArrayEvent{
+                        change: [%{delete: 1}]
+                      }, "origin_value", nil}
+    end
+
+    test "retain and insert" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "text")
+      Array.insert(array, 0, "Hello")
+
+      ref = SharedType.observe(array)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Array.insert(array, 1, " World")
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.ArrayEvent{
+                        change: [%{retain: 1}, %{insert: [" World"]}]
+                      }, "origin_value", nil}
+    end
+
+    test "unobserve" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "text")
+
+      ref = SharedType.observe(array)
+      assert :ok = SharedType.unobserve(ref)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          Array.insert(array, 0, "Hello")
+        end)
+
+      refute_receive {:observe_event, _, %Yex.ArrayEvent{}, _}
+
+      # noop but return ok
+      assert :ok = SharedType.unobserve(make_ref())
+    end
+  end
+
+  test "observe_deep" do
+    doc = Doc.new()
+    array = Doc.get_array(doc, "data")
+
+    Array.insert(
+      array,
+      0,
+      Yex.MapPrelim.from(%{
+        "key" => Yex.MapPrelim.from(%{"key" => ArrayPrelim.from([1, 2, 3, 4])})
+      })
+    )
+
+    ref = SharedType.observe_deep(array)
+
+    map = Yex.Array.fetch!(array, 0)
+    child_map = Yex.Map.fetch!(map, "key")
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Yex.Array.push(array, "array_value")
+        Yex.Map.set(child_map, "key2", "value")
+        Yex.Map.set(map, "key2", "value")
+      end)
+
+    assert_receive {:observe_deep_event, ^ref,
+                    [
+                      %Yex.ArrayEvent{
+                        path: [],
+                        target: ^array,
+                        change: [%{retain: 1}, %{insert: ["array_value"]}]
+                      },
+                      %Yex.MapEvent{
+                        path: [0],
+                        target: ^map,
+                        keys: %{"key2" => %{action: :add, new_value: "value"}}
+                      },
+                      %Yex.MapEvent{
+                        path: [0, "key"],
+                        target: ^child_map,
+                        keys: %{"key2" => %{action: :add, new_value: "value"}}
+                      }
+                    ], "origin_value", nil}
+  end
+
+  test "unobserve_deep" do
+    doc = Doc.new()
+
+    array = Doc.get_array(doc, "text")
+
+    ref = SharedType.observe_deep(array)
+    assert :ok = SharedType.unobserve_deep(ref)
+
+    :ok =
+      Doc.transaction(doc, "origin_value", fn ->
+        Array.insert(array, 0, "Hello")
+      end)
+
+    refute_receive {:observe_deep_event, _, %Yex.ArrayEvent{}, _, _}
+
+    # noop but return ok
+    assert :ok = SharedType.unobserve_deep(make_ref())
   end
 end

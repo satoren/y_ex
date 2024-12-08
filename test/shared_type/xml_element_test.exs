@@ -1,6 +1,17 @@
 defmodule YexXmlElementTest do
   use ExUnit.Case
-  alias Yex.{Doc, XmlFragment, XmlElement, XmlElementPrelim, XmlText, XmlTextPrelim, Xml}
+
+  alias Yex.{
+    Doc,
+    XmlFragment,
+    XmlElement,
+    XmlElementPrelim,
+    XmlText,
+    XmlTextPrelim,
+    Xml,
+    SharedType
+  }
+
   doctest XmlElement
   doctest XmlElementPrelim
 
@@ -139,6 +150,94 @@ defmodule YexXmlElementTest do
       XmlElement.push(e, XmlElementPrelim.empty("div"))
 
       assert 6 === XmlElement.children(e) |> Enum.count()
+    end
+
+    test "observe", %{doc: doc, xml_element: xml_element} do
+      ref = SharedType.observe(xml_element)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          XmlElement.insert_attribute(xml_element, "Hello", "World")
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.XmlEvent{
+                        target: ^xml_element,
+                        keys: %{"Hello" => %{action: :add, new_value: "World"}},
+                        delta: []
+                      }, "origin_value", nil}
+    end
+
+    test "observe delete ", %{doc: doc, xml_element: xml_element} do
+      XmlElement.push(xml_element, XmlTextPrelim.from("Hello"))
+      XmlElement.push(xml_element, XmlTextPrelim.from("World"))
+
+      ref = SharedType.observe(xml_element)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          XmlElement.delete(xml_element, 0, 1)
+        end)
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.XmlEvent{
+                        target: ^xml_element,
+                        keys: %{},
+                        delta: [%{delete: 1}],
+                        path: []
+                      }, "origin_value", nil}
+    end
+
+    test "observe_deep", %{doc: doc, xml_element: xml_element} do
+      XmlElement.push(
+        xml_element,
+        XmlElementPrelim.new("span", [
+          XmlElementPrelim.new("span", [
+            XmlTextPrelim.from("text")
+          ])
+        ])
+      )
+
+      el2 = XmlElement.first_child(xml_element)
+      el3 = XmlElement.first_child(el2)
+      text = XmlElement.first_child(el3)
+
+      ref = SharedType.observe_deep(xml_element)
+
+      :ok =
+        Doc.transaction(doc, "origin_value", fn ->
+          XmlElement.push(xml_element, XmlTextPrelim.from("1"))
+          XmlElement.insert_attribute(el2, "attr", "value")
+          XmlElement.push(el3, XmlElementPrelim.empty("div"))
+          XmlText.insert(text, 0, "text")
+        end)
+
+      assert_receive {:observe_deep_event, ^ref,
+                      [
+                        %Yex.XmlEvent{
+                          path: [],
+                          target: ^xml_element,
+                          keys: %{},
+                          delta: [%{retain: 1}, %{insert: [%Yex.XmlText{}]}]
+                        },
+                        %Yex.XmlEvent{
+                          path: [0],
+                          target: ^el2,
+                          keys: %{"attr" => %{action: :add, new_value: "value"}},
+                          delta: []
+                        },
+                        %Yex.XmlEvent{
+                          keys: %{},
+                          path: [0, 0],
+                          target: ^el3,
+                          delta: [%{retain: 1}, %{insert: [%Yex.XmlElement{}]}]
+                        },
+                        %Yex.XmlTextEvent{
+                          path: [0, 0, 0],
+                          target: ^text,
+                          delta: [%{insert: "text"}]
+                        }
+                      ], "origin_value", _metadata}
     end
   end
 

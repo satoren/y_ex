@@ -8,6 +8,7 @@ use crate::{
     any::NifAttr,
     atoms,
     doc::{DocResource, TransactionResource},
+    event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifXmlEvent, NifXmlTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
     text::encode_diffs,
     yinput::{NifXmlIn, NifYInputDelta},
@@ -47,6 +48,10 @@ impl NifSharedType for NifXmlFragment {
 
     const DELETED_ERROR: &'static str = "XmlFragment has been deleted";
 }
+impl NifSharedTypeDeepObservable for NifXmlFragment {}
+impl NifSharedTypeObservable for NifXmlFragment {
+    type Event = NifXmlEvent;
+}
 
 #[derive(NifStruct)]
 #[module = "Yex.XmlElement"]
@@ -62,6 +67,10 @@ impl NifXmlElement {
             reference: XmlElementId::new(xml.hook()),
         }
     }
+}
+impl NifSharedTypeDeepObservable for NifXmlElement {}
+impl NifSharedTypeObservable for NifXmlElement {
+    type Event = NifXmlEvent;
 }
 
 impl NifSharedType for NifXmlElement {
@@ -92,6 +101,7 @@ impl NifXmlText {
         }
     }
 }
+
 impl NifSharedType for NifXmlText {
     type RefType = XmlTextRef;
 
@@ -103,6 +113,11 @@ impl NifSharedType for NifXmlText {
     }
 
     const DELETED_ERROR: &'static str = "XmlText has been deleted";
+}
+
+impl NifSharedTypeDeepObservable for NifXmlText {}
+impl NifSharedTypeObservable for NifXmlText {
+    type Event = NifXmlTextEvent;
 }
 
 #[rustler::nif]
@@ -500,7 +515,6 @@ fn xml_text_parent(
     let doc = xml.doc();
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-
         Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
     })
 }

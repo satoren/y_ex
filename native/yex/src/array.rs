@@ -5,6 +5,7 @@ use yrs::*;
 use crate::{
     atoms,
     doc::{DocResource, TransactionResource},
+    event::{NifArrayEvent, NifSharedTypeDeepObservable, NifSharedTypeObservable},
     shared_type::{NifSharedType, SharedTypeId},
     yinput::NifYInput,
     youtput::NifYOut,
@@ -38,6 +39,10 @@ impl NifSharedType for NifArray {
         &self.reference
     }
     const DELETED_ERROR: &'static str = "Array has been deleted";
+}
+impl NifSharedTypeDeepObservable for NifArray {}
+impl NifSharedTypeObservable for NifArray {
+    type Event = NifArrayEvent;
 }
 
 #[rustler::nif]

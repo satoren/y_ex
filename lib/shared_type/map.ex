@@ -41,7 +41,7 @@ defmodule Yex.Map do
 
   @doc """
   get a key from the map.
-  ## Examples
+    ## Examples
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "plane", ["Hello", "World"])
