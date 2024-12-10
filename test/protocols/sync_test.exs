@@ -105,6 +105,122 @@ defmodule Yex.SyncTest do
     end
   end
 
+  describe "sync protocol operations" do
+    setup do
+      doc = Doc.new()
+      {:ok, doc: doc}
+    end
+
+    test "get_update with binary input" do
+      assert {:ok, {:sync_update, <<1, 2, 3>>}} = Sync.get_update(<<1, 2, 3>>)
+    end
+
+    test "get_update with invalid input" do
+      assert_raise FunctionClauseError, fn ->
+        Sync.get_update(123)
+      end
+    end
+
+    test "read_sync_message with unknown message type", %{doc: doc} do
+      assert {:error, :unknown_message} = Sync.read_sync_message({:unknown_type, <<>>}, doc, nil)
+    end
+
+    test "read_sync_message with sync_step1", %{doc: doc} do
+      assert {:ok, {:sync_step2, _}} = Sync.read_sync_message({:sync_step1, <<0>>}, doc, nil)
+    end
+
+    test "read_sync_message with sync_step2", %{doc: doc} do
+      assert :ok = Sync.read_sync_message({:sync_step2, <<0>>}, doc, nil)
+    end
+
+    test "read_sync_message with sync_update", %{doc: doc} do
+      assert :ok = Sync.read_sync_message({:sync_update, <<0>>}, doc, nil)
+    end
+  end
+
+  describe "sync protocol message encoding" do
+    test "message_encode! with valid sync_step1" do
+      encoded = Sync.message_encode!({:sync, {:sync_step1, <<0>>}})
+      assert is_binary(encoded)
+      assert byte_size(encoded) > 0
+    end
+
+    test "message_encode! with valid sync_step2" do
+      encoded = Sync.message_encode!({:sync, {:sync_step2, <<0>>}})
+      assert is_binary(encoded)
+      assert byte_size(encoded) > 0
+    end
+
+    test "message_encode! with valid sync_update" do
+      encoded = Sync.message_encode!({:sync, {:sync_update, <<0>>}})
+      assert is_binary(encoded)
+      assert byte_size(encoded) > 0
+    end
+
+    test "message_encode! with query_awareness" do
+      encoded = Sync.message_encode!(:query_awareness)
+      assert is_binary(encoded)
+      assert byte_size(encoded) > 0
+    end
+
+    test "message_encode! with invalid message" do
+      assert_raise RuntimeError, fn ->
+        Sync.message_encode!({:invalid_type, :message})
+      end
+    end
+  end
+
+  describe "sync protocol message decoding" do
+    test "message_decode! with valid sync_step1" do
+      result = Sync.message_decode!(<<0, 0, 1, 0>>)
+      assert {:sync, {:sync_step1, <<0>>}} = result
+    end
+
+    test "message_decode! with valid sync_step2" do
+      result = Sync.message_decode!(<<0, 1, 1, 0>>)
+      assert {:sync, {:sync_step2, <<0>>}} = result
+    end
+
+    test "message_decode! with valid sync_update" do
+      result = Sync.message_decode!(<<0, 2, 1, 0>>)
+      assert {:sync, {:sync_update, <<0>>}} = result
+    end
+
+    test "message_decode! with query_awareness" do
+      result = Sync.message_decode!(<<3>>)
+      assert :query_awareness = result
+    end
+
+    test "message_decode! with invalid message" do
+      assert_raise RuntimeError, fn ->
+        Sync.message_decode!(<<255, 255>>)
+      end
+    end
+
+    test "message_decode handles various valid messages" do
+      valid_messages = [
+        {<<0, 0, 1, 0>>, {:sync, {:sync_step1, <<0>>}}},
+        {<<0, 1, 1, 0>>, {:sync, {:sync_step2, <<0>>}}},
+        {<<0, 2, 1, 0>>, {:sync, {:sync_update, <<0>>}}},
+        {<<3>>, :query_awareness}
+      ]
+
+      Enum.each(valid_messages, fn {input, expected} ->
+        assert {:ok, ^expected} = Sync.message_decode(input)
+      end)
+    end
+  end
+
+  describe "sync protocol v2 operations" do
+    test "message_decode_v2 with valid message" do
+      assert {:error, _} = Sync.message_decode_v2(<<0, 0, 1, 0>>)
+    end
+
+    test "message_encode_v2 with valid message" do
+      assert {:ok, _} = Sync.message_encode_v2({:sync, {:sync_step1, <<0>>}})
+    end
+  end
+
   test "get_sync_step1" do
     doc = Doc.new()
 
