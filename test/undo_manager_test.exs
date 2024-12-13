@@ -1,6 +1,6 @@
 defmodule Yex.UndoManagerTest do
   use ExUnit.Case
-  alias Yex.{Doc, Text, TextPrelim,Array, UndoManager}
+  alias Yex.{Doc, Text, TextPrelim, Array, UndoManager}
   doctest Yex.UndoManager
 
   setup do
@@ -816,7 +816,6 @@ defmodule Yex.UndoManagerTest do
     # Insert additional text
     Text.insert(embedded_text, 7, " Content")
     assert Text.to_string(embedded_text) == "Initial Content"
-
 
     # Undo should revert the inserted text but keep the preliminary text
     UndoManager.undo(undo_manager)
