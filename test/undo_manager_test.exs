@@ -1,6 +1,6 @@
 defmodule Yex.UndoManagerTest do
   use ExUnit.Case
-  alias Yex.{Doc, Text, Array, UndoManager}
+  alias Yex.{Doc, Text, TextPrelim,Array, UndoManager}
   doctest Yex.UndoManager
 
   setup do
@@ -793,5 +793,33 @@ defmodule Yex.UndoManagerTest do
     # Test error case
     error = {:error, "some error"}
     assert UndoManager.unwrap_manager_result(error) == error
+  end
+
+  test "undo works with embedded Yex objects", %{doc: doc} do
+    # Create an array to hold our embedded text
+    array = Doc.get_array(doc, "array")
+    undo_manager = UndoManager.new(doc, array)
+
+    # Create a text object with initial content
+    text_prelim = TextPrelim.from("Initial")
+
+    # Push the text into the array
+    Array.push(array, text_prelim)
+
+    # Fetch the text from the array and verify initial content
+    {:ok, embedded_text} = Array.fetch(array, 0)
+    assert Text.to_string(embedded_text) == "Initial"
+
+    # Stop capturing to prevent merging the push and insert operations
+    UndoManager.stop_capturing(undo_manager)
+
+    # Insert additional text
+    Text.insert(embedded_text, 7, " Content")
+    assert Text.to_string(embedded_text) == "Initial Content"
+
+
+    # Undo should revert the inserted text but keep the preliminary text
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(embedded_text) == "Initial"
   end
 end
