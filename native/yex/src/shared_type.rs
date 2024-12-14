@@ -28,9 +28,7 @@ impl<'de, 'a: 'de, T> Encoder for SharedTypeId<T> {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
         let mut s = flexbuffers::FlexbufferSerializer::new();
 
-        if let Err(err) = self.hook.serialize(&mut s) {
-            return (atoms::error(), err.to_string()).encode(env);
-        }
+        self.hook.serialize(&mut s).expect("encode failed");
         SliceIntoBinary::new(s.view()).encode(env)
     }
 }

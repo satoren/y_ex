@@ -21,9 +21,7 @@ impl<'de, 'a: 'de> Encoder for StickyIndexRef {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
         let mut s = flexbuffers::FlexbufferSerializer::new();
 
-        if let Err(err) = self.0.serialize(&mut s) {
-            return (atoms::error(), err.to_string()).encode(env);
-        }
+        self.0.serialize(&mut s).expect("encode failed");
         SliceIntoBinary::new(s.view()).encode(env)
     }
 }
