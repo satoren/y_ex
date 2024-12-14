@@ -23,7 +23,8 @@ defmodule Yex.StickyIndex do
     Yex.Nif.sticky_index_new(shared_type, cur_txn(shared_type), index, assoc)
   end
 
-  @spec get_offset(t) :: {:ok, integer()} | :error
+
+  @spec get_offset(t) :: {:ok, %{index: integer(), assoc: :before | :after}} | :error
   def get_offset(%__MODULE__{} = sticky_index) do
     Yex.Nif.sticky_index_get_offset(sticky_index, cur_txn(sticky_index))
   end

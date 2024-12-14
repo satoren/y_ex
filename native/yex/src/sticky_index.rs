@@ -1,6 +1,6 @@
 use rustler::{Atom, Decoder, Encoder, Env, NifResult, NifStruct, NifUnitEnum, ResourceArc, Term};
 use serde::{Deserialize as _, Serialize as _};
-use yrs::{Assoc, IndexedSequence as _, StickyIndex};
+use yrs::{Assoc, IndexedSequence, StickyIndex};
 
 use crate::{
     atoms,
@@ -68,6 +68,31 @@ impl From<&NifAssoc> for Assoc {
     }
 }
 
+fn create_sticky_index<T>(
+    shared_type: &T,
+    env: Env<'_>,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: u32,
+    assoc: NifAssoc,
+) -> NifResult<NifStickyIndex>
+where
+    T: NifSharedType,
+    T::RefType: IndexedSequence,
+{
+    shared_type.mutably(env, current_transaction, |txn| {
+        let doc = shared_type.doc().clone();
+        let shared_ref = shared_type.get_ref(txn)?;
+        let sticky_index = shared_ref
+            .sticky_index(txn, index, (&assoc).into())
+            .ok_or(rustler::Error::BadArg)?;
+        Ok(NifStickyIndex {
+            doc,
+            reference: StickyIndexRef::new(sticky_index),
+            assoc,
+        })
+    })
+}
+
 #[rustler::nif]
 fn sticky_index_new(
     env: Env<'_>,
@@ -77,76 +102,20 @@ fn sticky_index_new(
     assoc: NifAssoc,
 ) -> NifResult<NifStickyIndex> {
     match shared_type {
-        NifSharedTypeInput::Array(array) => array.mutably(env, current_transaction, |txn| {
-            let doc = array.doc().clone();
-            let array = array.get_ref(txn)?;
-            let sticky_index = array
-                .sticky_index(txn, index, (&assoc).into())
-                .ok_or(rustler::Error::BadArg)?;
-            let sticky_index = NifStickyIndex {
-                doc: doc,
-                reference: StickyIndexRef::new(sticky_index),
-                assoc,
-            };
-            Ok(sticky_index)
-        }),
-        NifSharedTypeInput::Text(text) => text.mutably(env, current_transaction, |txn| {
-            let doc = text.doc().clone();
-            let text = text.get_ref(txn)?;
-            let sticky_index = text
-                .sticky_index(txn, index, (&assoc).into())
-                .ok_or(rustler::Error::BadArg)?;
-            let sticky_index = NifStickyIndex {
-                doc: doc,
-                reference: StickyIndexRef::new(sticky_index),
-                assoc,
-            };
-            Ok(sticky_index)
-        }),
+        NifSharedTypeInput::Array(array) => {
+            create_sticky_index(&array, env, current_transaction, index, assoc)
+        }
+        NifSharedTypeInput::Text(text) => {
+            create_sticky_index(&text, env, current_transaction, index, assoc)
+        }
         NifSharedTypeInput::XmlText(xml_text) => {
-            xml_text.mutably(env, current_transaction, |txn| {
-                let doc = xml_text.doc().clone();
-                let xml_text = xml_text.get_ref(txn)?;
-                let sticky_index = xml_text
-                    .sticky_index(txn, index, (&assoc).into())
-                    .ok_or(rustler::Error::BadArg)?;
-                let sticky_index = NifStickyIndex {
-                    doc: doc,
-                    reference: StickyIndexRef::new(sticky_index),
-                    assoc: assoc,
-                };
-                Ok(sticky_index)
-            })
+            create_sticky_index(&xml_text, env, current_transaction, index, assoc)
         }
         NifSharedTypeInput::XmlFragment(xml_fragment) => {
-            xml_fragment.mutably(env, current_transaction, |txn| {
-                let doc = xml_fragment.doc().clone();
-                let xml_fragment = xml_fragment.get_ref(txn)?;
-                let sticky_index = xml_fragment
-                    .sticky_index(txn, index, (&assoc).into())
-                    .ok_or(rustler::Error::BadArg)?;
-                let sticky_index = NifStickyIndex {
-                    doc: doc,
-                    reference: StickyIndexRef::new(sticky_index),
-                    assoc,
-                };
-                Ok(sticky_index)
-            })
+            create_sticky_index(&xml_fragment, env, current_transaction, index, assoc)
         }
         NifSharedTypeInput::XmlElement(xml_element) => {
-            xml_element.mutably(env, current_transaction, |txn| {
-                let doc = xml_element.doc().clone();
-                let xml_element = xml_element.get_ref(txn)?;
-                let sticky_index = xml_element
-                    .sticky_index(txn, index, (&assoc).into())
-                    .ok_or(rustler::Error::BadArg)?;
-                let sticky_index = NifStickyIndex {
-                    doc: doc,
-                    reference: StickyIndexRef::new(sticky_index),
-                    assoc,
-                };
-                Ok(sticky_index)
-            })
+            create_sticky_index(&xml_element, env, current_transaction, index, assoc)
         }
         _ => Err(rustler::Error::BadArg),
     }
