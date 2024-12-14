@@ -1,6 +1,7 @@
 defmodule Yex.StickyIndexTest do
   use ExUnit.Case
   alias Yex.{StickyIndex, Doc, Text}
+  doctest StickyIndex
 
   test "new" do
     doc = Doc.new()
