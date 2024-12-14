@@ -29,11 +29,13 @@ defmodule Yex.StickyIndex do
     ...> end)
   """
   defstruct [
+    :doc,
     :reference,
     :assoc
   ]
 
   @type t :: %__MODULE__{
+          doc: reference(),
           reference: reference(),
           assoc: :before | :after
         }
