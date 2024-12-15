@@ -32,15 +32,7 @@ defmodule Yex.UndoManager do
   Creates a new UndoManager for the given document and scope with default options.
   The scope can be a Text, Array, or Map type.
   """
-  def new(doc, %Yex.Text{} = scope) do
-    new_with_options(doc, scope, %Options{})
-  end
-
-  def new(doc, %Yex.Array{} = scope) do
-    new_with_options(doc, scope, %Options{})
-  end
-
-  def new(doc, %Yex.Map{} = scope) do
+  def new(doc, scope) when is_struct(scope) do
     new_with_options(doc, scope, %Options{})
   end
 
