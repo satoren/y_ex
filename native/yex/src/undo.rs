@@ -1,21 +1,20 @@
 use crate::{
-    array::NifArray, map::NifMap, shared_type::NifSharedType, text::NifText,
-    utils::term_to_origin_binary, wrap::NifWrap, NifDoc, NifError, ENV,
+    shared_type::NifSharedType,
+    utils::term_to_origin_binary,
+    wrap::NifWrap,
+    NifDoc,
+    NifError,
+    ENV,
+    yinput::NifSharedTypeInput,
 };
-use rustler::{Env, NifStruct, NifTaggedEnum, ResourceArc, Term};
+
+use rustler::{Env, NifStruct, ResourceArc, Term};
 use std::cell::RefCell;
 use std::sync::RwLock;
 use yrs::{undo::Options as UndoOptions, UndoManager};
 
 thread_local! {
     static CURRENT_ENV: RefCell<Option<Env<'static>>> = RefCell::new(None);
-}
-
-#[derive(NifTaggedEnum)]
-pub enum SharedTypeInput {
-    Text(NifText),
-    Array(NifArray),
-    Map(NifMap),
 }
 
 #[derive(NifStruct)]
@@ -46,11 +45,14 @@ pub struct NifUndoOptions {
 }
 
 #[rustler::nif]
-pub fn undo_manager_new(env: Env<'_>, doc: NifDoc, scope: SharedTypeInput) -> NifUndoManager {
+pub fn undo_manager_new(env: Env<'_>, doc: NifDoc, scope: NifSharedTypeInput) -> NifUndoManager {
     ENV.set(&mut env.clone(), || match scope {
-        SharedTypeInput::Text(text) => create_undo_manager(env, doc, text),
-        SharedTypeInput::Array(array) => create_undo_manager(env, doc, array),
-        SharedTypeInput::Map(map) => create_undo_manager(env, doc, map),
+        NifSharedTypeInput::Text(text) => create_undo_manager(env, doc, text),
+        NifSharedTypeInput::Array(array) => create_undo_manager(env, doc, array),
+        NifSharedTypeInput::Map(map) => create_undo_manager(env, doc, map),
+        NifSharedTypeInput::XmlText(text) => create_undo_manager(env, doc, text),
+        NifSharedTypeInput::XmlElement(element) => create_undo_manager(env, doc, element),
+        NifSharedTypeInput::XmlFragment(fragment) => create_undo_manager(env, doc, fragment),
     })
 }
 
@@ -90,13 +92,16 @@ fn create_undo_manager_with_options<T: NifSharedType>(
 pub fn undo_manager_new_with_options(
     env: Env<'_>,
     doc: NifDoc,
-    scope: SharedTypeInput,
+    scope: NifSharedTypeInput,
     options: NifUndoOptions,
 ) -> NifUndoManager {
     ENV.set(&mut env.clone(), || match scope {
-        SharedTypeInput::Text(text) => create_undo_manager_with_options(env, doc, text, options),
-        SharedTypeInput::Array(array) => create_undo_manager_with_options(env, doc, array, options),
-        SharedTypeInput::Map(map) => create_undo_manager_with_options(env, doc, map, options),
+        NifSharedTypeInput::Text(text) => create_undo_manager_with_options(env, doc, text, options),
+        NifSharedTypeInput::Array(array) => create_undo_manager_with_options(env, doc, array, options),
+        NifSharedTypeInput::Map(map) => create_undo_manager_with_options(env, doc, map, options),
+        NifSharedTypeInput::XmlText(text) => create_undo_manager_with_options(env, doc, text, options),
+        NifSharedTypeInput::XmlElement(element) => create_undo_manager_with_options(env, doc, element, options),
+        NifSharedTypeInput::XmlFragment(fragment) => create_undo_manager_with_options(env, doc, fragment, options),
     })
 }
 
@@ -187,7 +192,7 @@ pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> Result<(), N
 pub fn undo_manager_expand_scope(
     env: Env<'_>,
     undo_manager: NifUndoManager,
-    scope: SharedTypeInput,
+    scope: NifSharedTypeInput,
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = undo_manager
@@ -197,24 +202,34 @@ pub fn undo_manager_expand_scope(
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
 
         match scope {
-            SharedTypeInput::Text(text) => {
-                let branch = text.readonly(None, |txn| text.get_ref(txn)).map_err(|_| {
-                    NifError::Message("Failed to get text branch reference".to_string())
-                })?;
+            NifSharedTypeInput::Text(text) => {
+                let branch = text.readonly(None, |txn| text.get_ref(txn))
+                    .map_err(|_| NifError::Message("Failed to get text branch reference".to_string()))?;
                 wrapper.manager.expand_scope(&branch);
             }
-            SharedTypeInput::Array(array) => {
-                let branch = array
-                    .readonly(None, |txn| array.get_ref(txn))
-                    .map_err(|_| {
-                        NifError::Message("Failed to get array branch reference".to_string())
-                    })?;
+            NifSharedTypeInput::Array(array) => {
+                let branch = array.readonly(None, |txn| array.get_ref(txn))
+                    .map_err(|_| NifError::Message("Failed to get array branch reference".to_string()))?;
                 wrapper.manager.expand_scope(&branch);
             }
-            SharedTypeInput::Map(map) => {
-                let branch = map.readonly(None, |txn| map.get_ref(txn)).map_err(|_| {
-                    NifError::Message("Failed to get map branch reference".to_string())
-                })?;
+            NifSharedTypeInput::Map(map) => {
+                let branch = map.readonly(None, |txn| map.get_ref(txn))
+                    .map_err(|_| NifError::Message("Failed to get map branch reference".to_string()))?;
+                wrapper.manager.expand_scope(&branch);
+            }
+            NifSharedTypeInput::XmlText(text) => {
+                let branch = text.readonly(None, |txn| text.get_ref(txn))
+                    .map_err(|_| NifError::Message("Failed to get xml text branch reference".to_string()))?;
+                wrapper.manager.expand_scope(&branch);
+            }
+            NifSharedTypeInput::XmlElement(element) => {
+                let branch = element.readonly(None, |txn| element.get_ref(txn))
+                    .map_err(|_| NifError::Message("Failed to get xml element branch reference".to_string()))?;
+                wrapper.manager.expand_scope(&branch);
+            }
+            NifSharedTypeInput::XmlFragment(fragment) => {
+                let branch = fragment.readonly(None, |txn| fragment.get_ref(txn))
+                    .map_err(|_| NifError::Message("Failed to get xml fragment branch reference".to_string()))?;
                 wrapper.manager.expand_scope(&branch);
             }
         }

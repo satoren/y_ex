@@ -43,21 +43,9 @@ defmodule Yex.UndoManager do
 
   See `Yex.UndoManager.Options` for available options.
   """
-  def new_with_options(doc, %Yex.Text{} = scope, %Options{} = options) do
+  def new_with_options(doc, scope, %Options{} = options) do
     doc
-    |> Yex.Nif.undo_manager_new_with_options({:text, scope}, options)
-    |> unwrap_manager_result()
-  end
-
-  def new_with_options(doc, %Yex.Array{} = scope, %Options{} = options) do
-    doc
-    |> Yex.Nif.undo_manager_new_with_options({:array, scope}, options)
-    |> unwrap_manager_result()
-  end
-
-  def new_with_options(doc, %Yex.Map{} = scope, %Options{} = options) do
-    doc
-    |> Yex.Nif.undo_manager_new_with_options({:map, scope}, options)
+    |> Yex.Nif.undo_manager_new_with_options(scope, options)
     |> unwrap_manager_result()
   end
 
@@ -93,16 +81,8 @@ defmodule Yex.UndoManager do
   Expands the scope of the UndoManager to include additional shared types.
   The scope can be a Text, Array, or Map type.
   """
-  def expand_scope(undo_manager, %Yex.Text{} = scope) do
-    Yex.Nif.undo_manager_expand_scope(undo_manager, {:text, scope})
-  end
-
-  def expand_scope(undo_manager, %Yex.Array{} = scope) do
-    Yex.Nif.undo_manager_expand_scope(undo_manager, {:array, scope})
-  end
-
-  def expand_scope(undo_manager, %Yex.Map{} = scope) do
-    Yex.Nif.undo_manager_expand_scope(undo_manager, {:map, scope})
+  def expand_scope(undo_manager, scope) do
+    Yex.Nif.undo_manager_expand_scope(undo_manager, scope)
   end
 
   @doc """
