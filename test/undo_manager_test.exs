@@ -1,6 +1,19 @@
 defmodule Yex.UndoManagerTest do
   use ExUnit.Case
-  alias Yex.{Doc, Text, TextPrelim, Array, UndoManager}
+
+  alias Yex.{
+    Doc,
+    Text,
+    TextPrelim,
+    Array,
+    UndoManager,
+    XmlFragment,
+    XmlElement,
+    XmlElementPrelim,
+    XmlText,
+    XmlTextPrelim
+  }
+
   doctest Yex.UndoManager
 
   setup do
@@ -8,8 +21,9 @@ defmodule Yex.UndoManagerTest do
     text = Doc.get_text(doc, "text")
     array = Doc.get_array(doc, "array")
     map = Doc.get_map(doc, "map")
+    xml_fragment = Doc.get_xml_fragment(doc, "xml")
     # Return these as the test context
-    {:ok, doc: doc, text: text, array: array, map: map}
+    {:ok, doc: doc, text: text, array: array, map: map, xml_fragment: xml_fragment}
   end
 
   test "can create an undo manager", %{doc: doc, text: text} do
@@ -820,5 +834,133 @@ defmodule Yex.UndoManagerTest do
     # Undo should revert the inserted text but keep the preliminary text
     UndoManager.undo(undo_manager)
     assert Text.to_string(embedded_text) == "Initial"
+  end
+
+  test "can undo xml fragment changes", %{doc: doc, xml_fragment: xml_fragment} do
+    undo_manager = UndoManager.new(doc, xml_fragment)
+
+    # Add some XML content
+    XmlFragment.push(xml_fragment, XmlTextPrelim.from("Hello"))
+    XmlFragment.push(xml_fragment, XmlElementPrelim.empty("div"))
+
+    # Verify initial state
+    assert XmlFragment.to_string(xml_fragment) == "Hello<div></div>"
+
+    # Undo changes
+    UndoManager.undo(undo_manager)
+    assert XmlFragment.to_string(xml_fragment) == ""
+  end
+
+  test "can undo xml element changes", %{doc: doc, xml_fragment: xml_fragment} do
+    # First create an element in the fragment
+    XmlFragment.push(xml_fragment, XmlElementPrelim.empty("div"))
+    {:ok, element} = XmlFragment.fetch(xml_fragment, 0)
+
+    undo_manager = UndoManager.new(doc, element)
+
+    # Add attributes and content
+    XmlElement.insert_attribute(element, "class", "test")
+    XmlElement.push(element, XmlTextPrelim.from("content"))
+
+    # Verify initial state
+    assert XmlElement.to_string(element) == "<div class=\"test\">content</div>"
+
+    # Undo changes
+    UndoManager.undo(undo_manager)
+    assert XmlElement.to_string(element) == "<div></div>"
+  end
+
+  test "can undo xml text changes", %{doc: doc, xml_fragment: xml_fragment} do
+    # First create a text node in the fragment
+    XmlFragment.push(xml_fragment, XmlTextPrelim.from(""))
+    {:ok, text_node} = XmlFragment.fetch(xml_fragment, 0)
+
+    undo_manager = UndoManager.new(doc, text_node)
+
+    # Add content and formatting
+    XmlText.insert(text_node, 0, "Hello World")
+    XmlText.format(text_node, 0, 5, %{"bold" => true})
+
+    # Verify initial state
+    assert XmlText.to_string(text_node) == "<bold>Hello</bold> World"
+
+    # Undo changes
+    UndoManager.undo(undo_manager)
+    assert XmlText.to_string(text_node) == ""
+  end
+
+  test "undo only removes changes from tracked origin for xml", %{
+    doc: doc,
+    xml_fragment: xml_fragment
+  } do
+    undo_manager = UndoManager.new(doc, xml_fragment)
+    tracked_origin = "tracked-origin"
+    UndoManager.include_origin(undo_manager, tracked_origin)
+
+    # Make untracked changes
+    Doc.transaction(doc, "untracked-origin", fn ->
+      XmlFragment.push(xml_fragment, XmlTextPrelim.from("untracked"))
+    end)
+
+    # Make tracked changes
+    Doc.transaction(doc, tracked_origin, fn ->
+      XmlFragment.push(xml_fragment, XmlElementPrelim.empty("div"))
+    end)
+
+    # Make more untracked changes
+    Doc.transaction(doc, "untracked-origin", fn ->
+      XmlFragment.push(xml_fragment, XmlTextPrelim.from("more-untracked"))
+    end)
+
+    # Verify initial state
+    assert XmlFragment.to_string(xml_fragment) == "untracked<div></div>more-untracked"
+
+    # Undo should only remove tracked changes
+    UndoManager.undo(undo_manager)
+    assert XmlFragment.to_string(xml_fragment) == "untrackedmore-untracked"
+  end
+
+  test "can redo xml changes", %{doc: doc, xml_fragment: xml_fragment} do
+    undo_manager = UndoManager.new(doc, xml_fragment)
+
+    # Make some changes
+    XmlFragment.push(xml_fragment, XmlTextPrelim.from("Hello"))
+    XmlFragment.push(xml_fragment, XmlElementPrelim.empty("div"))
+
+    # Verify initial state
+    assert XmlFragment.to_string(xml_fragment) == "Hello<div></div>"
+
+    # Undo changes
+    UndoManager.undo(undo_manager)
+    assert XmlFragment.to_string(xml_fragment) == ""
+
+    # Redo changes
+    UndoManager.redo(undo_manager)
+    assert XmlFragment.to_string(xml_fragment) == "Hello<div></div>"
+  end
+
+  test "works with nested xml structure", %{doc: doc, xml_fragment: xml_fragment} do
+    undo_manager = UndoManager.new(doc, xml_fragment)
+
+    # Create a nested structure
+    XmlFragment.push(
+      xml_fragment,
+      XmlElementPrelim.new("div", [
+        XmlElementPrelim.new("span", [
+          XmlTextPrelim.from("nested content")
+        ])
+      ])
+    )
+
+    # Verify initial state
+    assert XmlFragment.to_string(xml_fragment) == "<div><span>nested content</span></div>"
+
+    # Undo should remove entire structure
+    UndoManager.undo(undo_manager)
+    assert XmlFragment.to_string(xml_fragment) == ""
+
+    # Redo should restore entire structure
+    UndoManager.redo(undo_manager)
+    assert XmlFragment.to_string(xml_fragment) == "<div><span>nested content</span></div>"
   end
 end
