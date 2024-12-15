@@ -163,6 +163,10 @@ defmodule Yex.Nif do
   def awareness_remove_states(_awareness, _clients), do: :erlang.nif_error(:nif_not_loaded)
 
   def undo_manager_new(_doc, _scope), do: :erlang.nif_error(:nif_not_loaded)
+
+  def undo_manager_new_with_options(_doc, _scope, _options),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def undo_manager_include_origin(_undo_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_undo(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_redo(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
@@ -179,9 +183,6 @@ defmodule Yex.Nif do
   def undo_manager_get_meta(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_set_meta(_undo_manager, _meta), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_clear(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
-
-  def undo_manager_new_with_options(_doc, _scope, _options),
-    do: :erlang.nif_error(:nif_not_loaded)
 end
 
 defmodule Yex.Nif.Util do
