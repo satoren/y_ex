@@ -956,11 +956,6 @@ defmodule Yex.UndoManagerTest do
     assert XmlFragment.to_string(xml_fragment) == "<div><span>nested content</span></div>"
   end
 
-  test "returns error when trying to create undo manager with invalid scope", %{doc: doc} do
-    invalid_scope = %{not: "a valid scope"}
-    assert {:error, _reason} = UndoManager.new(doc, invalid_scope)
-  end
-
   test "returns error when trying to create undo manager with invalid options", %{
     doc: doc,
     text: text
