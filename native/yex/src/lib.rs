@@ -7,6 +7,7 @@ mod error;
 mod event;
 mod map;
 mod shared_type;
+mod sticky_index;
 mod subscription;
 mod sync;
 mod term_box;

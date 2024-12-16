@@ -127,6 +127,12 @@ defmodule Yex.Nif do
   def shared_type_observe_deep(_map, _cur_txn, _pid, _ref, _metadata),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def sticky_index_new(_shared_type, _cur_txn, _index, _assoc),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def sticky_index_get_offset(_sticky_index, _cur_txn),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def encode_state_vector_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def encode_state_as_update_v1(_doc, _cur_txn, _diff), do: :erlang.nif_error(:nif_not_loaded)
   def apply_update_v1(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
