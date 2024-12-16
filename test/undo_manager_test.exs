@@ -587,6 +587,7 @@ defmodule Yex.UndoManagerTest do
     # Example from docs:
     # // with stopCapturing
     Text.insert(text, 0, "a")
+    # Ensure subsequent changes are captured separately
     UndoManager.stop_capturing(undo_manager)
     Text.insert(text, 1, "b")
     UndoManager.undo(undo_manager)
