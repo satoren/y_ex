@@ -27,6 +27,10 @@ defmodule Yex.UndoManager do
   @doc """
   Creates a new UndoManager for the given document and scope with default options.
   The scope can be a Text, Array, or Map type.
+
+  ## Errors
+  - Returns `{:error, "Invalid scope: expected a struct"}` if scope is not a struct
+  - Returns `{:error, "Failed to get branch reference"}` if there's an error accessing the scope
   """
   @spec new(Yex.Doc.t(), struct()) ::
           {:ok, Yex.UndoManager.t()} | {:error, term()}
@@ -44,6 +48,12 @@ defmodule Yex.UndoManager do
   ## Options
 
   See `Yex.UndoManager.Options` for available options.
+
+  ## Errors
+  - Returns `{:error, "Invalid document: expected a Yex.Doc struct"}` if doc is not a Yex.Doc
+  - Returns `{:error, "Invalid scope: expected a struct"}` if scope is not a struct
+  - Returns `{:error, "Invalid options: expected a Yex.UndoManager.Options struct"}` if options is invalid
+  - Returns `{:error, "Failed to get branch reference"}` if there's an error accessing the scope
   """
   @spec new_with_options(Yex.Doc.t(), struct(), Options.t()) ::
           {:ok, Yex.UndoManager.t()} | {:error, term()}
@@ -60,10 +70,7 @@ defmodule Yex.UndoManager do
 
       true ->
         try do
-          case Yex.Nif.undo_manager_new_with_options(doc, scope, options) do
-            %Yex.UndoManager{} = manager -> {:ok, manager}
-            error -> {:error, error}
-          end
+          Yex.Nif.undo_manager_new_with_options(doc, scope, options)
         rescue
           e in ArgumentError -> {:error, "NIF error: #{Exception.message(e)}"}
         end

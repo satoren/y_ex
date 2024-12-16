@@ -40,7 +40,7 @@ pub struct NifUndoOptions {
 }
 
 #[rustler::nif]
-pub fn undo_manager_new(env: Env<'_>, doc: NifDoc, scope: NifSharedTypeInput) -> NifUndoManager {
+pub fn undo_manager_new(env: Env<'_>, doc: NifDoc, scope: NifSharedTypeInput) -> Result<NifUndoManager, NifError> {
     ENV.set(&mut env.clone(), || match scope {
         NifSharedTypeInput::Text(text) => create_undo_manager(env, doc, text),
         NifSharedTypeInput::Array(array) => create_undo_manager(env, doc, array),
@@ -51,7 +51,11 @@ pub fn undo_manager_new(env: Env<'_>, doc: NifDoc, scope: NifSharedTypeInput) ->
     })
 }
 
-fn create_undo_manager<T: NifSharedType>(env: Env<'_>, doc: NifDoc, scope: T) -> NifUndoManager {
+fn create_undo_manager<T: NifSharedType>(
+    env: Env<'_>, 
+    doc: NifDoc, 
+    scope: T
+) -> Result<NifUndoManager, NifError> {
     create_undo_manager_with_options(
         env,
         doc,
@@ -67,8 +71,9 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     doc: NifDoc,
     scope: T,
     options: NifUndoOptions,
-) -> NifUndoManager {
-    let branch = scope.readonly(None, |txn| scope.get_ref(txn)).unwrap();
+) -> Result<NifUndoManager, NifError> {
+    let branch = scope.readonly(None, |txn| scope.get_ref(txn))
+        .map_err(|_| NifError::Message("Failed to get branch reference".to_string()))?;
 
     let undo_options = UndoOptions {
         capture_timeout_millis: options.capture_timeout,
@@ -78,9 +83,9 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     let undo_manager = UndoManager::with_scope_and_options(&doc, &branch, undo_options);
     let wrapper = UndoManagerWrapper::new(undo_manager);
 
-    NifUndoManager {
+    Ok(NifUndoManager {
         reference: ResourceArc::new(NifWrap(RwLock::new(wrapper))),
-    }
+    })
 }
 
 #[rustler::nif]
@@ -89,22 +94,14 @@ pub fn undo_manager_new_with_options(
     doc: NifDoc,
     scope: NifSharedTypeInput,
     options: NifUndoOptions,
-) -> NifUndoManager {
+) -> Result<NifUndoManager, NifError> {
     ENV.set(&mut env.clone(), || match scope {
         NifSharedTypeInput::Text(text) => create_undo_manager_with_options(env, doc, text, options),
-        NifSharedTypeInput::Array(array) => {
-            create_undo_manager_with_options(env, doc, array, options)
-        }
+        NifSharedTypeInput::Array(array) => create_undo_manager_with_options(env, doc, array, options),
         NifSharedTypeInput::Map(map) => create_undo_manager_with_options(env, doc, map, options),
-        NifSharedTypeInput::XmlText(text) => {
-            create_undo_manager_with_options(env, doc, text, options)
-        }
-        NifSharedTypeInput::XmlElement(element) => {
-            create_undo_manager_with_options(env, doc, element, options)
-        }
-        NifSharedTypeInput::XmlFragment(fragment) => {
-            create_undo_manager_with_options(env, doc, fragment, options)
-        }
+        NifSharedTypeInput::XmlText(text) => create_undo_manager_with_options(env, doc, text, options),
+        NifSharedTypeInput::XmlElement(element) => create_undo_manager_with_options(env, doc, element, options),
+        NifSharedTypeInput::XmlFragment(fragment) => create_undo_manager_with_options(env, doc, fragment, options),
     })
 }
 
