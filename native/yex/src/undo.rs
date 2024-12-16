@@ -4,7 +4,6 @@ use crate::{
 };
 
 use rustler::{Env, NifStruct, ResourceArc, Term};
-use std::cell::RefCell;
 use std::sync::RwLock;
 use yrs::{undo::Options as UndoOptions, UndoManager};
 

@@ -34,7 +34,13 @@ defmodule Yex.UndoManager do
   """
   @spec new(Yex.Doc.t(), struct()) ::
           {:ok, Yex.UndoManager.t()} | {:error, term()}
-  def new(doc, scope) do
+  def new(doc, scope)
+      when is_struct(scope, Yex.Text) or
+             is_struct(scope, Yex.Array) or
+             is_struct(scope, Yex.Map) or
+             is_struct(scope, Yex.XmlText) or
+             is_struct(scope, Yex.XmlElement) or
+             is_struct(scope, Yex.XmlFragment) do
     if is_struct(scope) do
       new_with_options(doc, scope, %Options{})
     else
@@ -57,7 +63,13 @@ defmodule Yex.UndoManager do
   """
   @spec new_with_options(Yex.Doc.t(), struct(), Options.t()) ::
           {:ok, Yex.UndoManager.t()} | {:error, term()}
-  def new_with_options(doc, scope, options) do
+  def new_with_options(doc, scope, options)
+      when is_struct(scope, Yex.Text) or
+             is_struct(scope, Yex.Array) or
+             is_struct(scope, Yex.Map) or
+             is_struct(scope, Yex.XmlText) or
+             is_struct(scope, Yex.XmlElement) or
+             is_struct(scope, Yex.XmlFragment) do
     cond do
       not is_struct(doc, Yex.Doc) ->
         {:error, "Invalid document: expected a Yex.Doc struct"}
