@@ -474,7 +474,7 @@ defmodule Yex.UndoManagerTest do
     # First change
     Array.push(array, "first")
 
-    # Stop capturing
+    # Stop capturing to prevent merging
     UndoManager.stop_capturing(undo_manager)
 
     # Second change
