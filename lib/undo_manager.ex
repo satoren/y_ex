@@ -24,16 +24,18 @@ defmodule Yex.UndoManager do
           reference: reference()
         }
 
-  @doc false
-  def unwrap_manager_result({:ok, manager}), do: manager
-  def unwrap_manager_result(error), do: error
-
   @doc """
   Creates a new UndoManager for the given document and scope with default options.
   The scope can be a Text, Array, or Map type.
   """
-  def new(doc, scope) when is_struct(scope) do
-    new_with_options(doc, scope, %Options{})
+  @spec new(Yex.Doc.t(), struct()) ::
+          {:ok, Yex.UndoManager.t()} | {:error, term()}
+  def new(doc, scope) do
+    if is_struct(scope) do
+      new_with_options(doc, scope, %Options{})
+    else
+      {:error, "Invalid scope: expected a struct"}
+    end
   end
 
   @doc """
@@ -43,10 +45,29 @@ defmodule Yex.UndoManager do
 
   See `Yex.UndoManager.Options` for available options.
   """
-  def new_with_options(doc, scope, %Options{} = options) do
-    doc
-    |> Yex.Nif.undo_manager_new_with_options(scope, options)
-    |> unwrap_manager_result()
+  @spec new_with_options(Yex.Doc.t(), struct(), Options.t()) ::
+          {:ok, Yex.UndoManager.t()} | {:error, term()}
+  def new_with_options(doc, scope, options) do
+    cond do
+      not is_struct(doc, Yex.Doc) ->
+        {:error, "Invalid document: expected a Yex.Doc struct"}
+
+      not is_struct(scope) ->
+        {:error, "Invalid scope: expected a struct"}
+
+      not is_struct(options, Options) ->
+        {:error, "Invalid options: expected a Yex.UndoManager.Options struct"}
+
+      true ->
+        try do
+          case Yex.Nif.undo_manager_new_with_options(doc, scope, options) do
+            %Yex.UndoManager{} = manager -> {:ok, manager}
+            error -> {:error, error}
+          end
+        rescue
+          e in ArgumentError -> {:error, "NIF error: #{Exception.message(e)}"}
+        end
+    end
   end
 
   @doc """

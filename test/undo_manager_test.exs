@@ -27,24 +27,24 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can create an undo manager", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     assert %UndoManager{} = undo_manager
     assert undo_manager.reference != nil
   end
 
   test "can undo without failure when stack is empty", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     UndoManager.undo(undo_manager)
   end
 
   test "can include an origin for tracking", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     origin = "test-origin"
     UndoManager.include_origin(undo_manager, origin)
   end
 
   test "can undo with no origin with text changes, text removed", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     inserted_text = "Hello, world!"
     Text.insert(text, 0, inserted_text)
     assert Text.to_string(text) == inserted_text
@@ -56,7 +56,7 @@ defmodule Yex.UndoManagerTest do
     doc: doc,
     text: text
   } do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     origin = "test-origin"
     UndoManager.include_origin(undo_manager, origin)
     inserted_text = "Hello, world!"
@@ -71,7 +71,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "undo only removes changes from tracked origin for text", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     # Set up our tracked origin
     tracked_origin = "tracked-origin"
     UndoManager.include_origin(undo_manager, tracked_origin)
@@ -103,7 +103,7 @@ defmodule Yex.UndoManagerTest do
 
   test "can undo array changes", %{doc: doc, array: array} do
     # Create a new undo manager specifically for the array
-    undo_manager = UndoManager.new(doc, array)
+    {:ok, undo_manager} = UndoManager.new(doc, array)
 
     # Insert some values
     Array.push(array, "first")
@@ -119,7 +119,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can undo map changes", %{doc: doc, map: map} do
-    undo_manager = UndoManager.new(doc, map)
+    {:ok, undo_manager} = UndoManager.new(doc, map)
 
     # Insert some values
     Yex.Map.set(map, "key1", "value1")
@@ -136,7 +136,7 @@ defmodule Yex.UndoManagerTest do
 
   test "undo only removes changes from tracked origin for array", %{doc: doc, array: array} do
     # Create a new undo manager specifically for the array
-    undo_manager = UndoManager.new(doc, array)
+    {:ok, undo_manager} = UndoManager.new(doc, array)
     tracked_origin = "tracked-origin"
     UndoManager.include_origin(undo_manager, tracked_origin)
 
@@ -174,7 +174,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "undo only removes changes from tracked origin for map", %{doc: doc, map: map} do
-    undo_manager = UndoManager.new(doc, map)
+    {:ok, undo_manager} = UndoManager.new(doc, map)
     tracked_origin = "tracked-origin"
     UndoManager.include_origin(undo_manager, tracked_origin)
 
@@ -227,12 +227,12 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can redo without failure when stack is empty", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     UndoManager.redo(undo_manager)
   end
 
   test "can redo text changes after undo", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     inserted_text = "Hello, world!"
     Text.insert(text, 0, inserted_text)
 
@@ -247,7 +247,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can redo array changes after undo", %{doc: doc, array: array} do
-    undo_manager = UndoManager.new(doc, array)
+    {:ok, undo_manager} = UndoManager.new(doc, array)
 
     # Make some changes
     Array.push(array, "first")
@@ -266,7 +266,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can redo map changes after undo", %{doc: doc, map: map} do
-    undo_manager = UndoManager.new(doc, map)
+    {:ok, undo_manager} = UndoManager.new(doc, map)
 
     # Make some changes
     Yex.Map.set(map, "key1", "value1")
@@ -285,7 +285,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "redo only affects tracked origin changes", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     tracked_origin = "tracked-origin"
     UndoManager.include_origin(undo_manager, tracked_origin)
 
@@ -312,9 +312,9 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "works with all types", %{doc: doc, text: text, array: array, map: map} do
-    text_manager = UndoManager.new(doc, text)
-    array_manager = UndoManager.new(doc, array)
-    map_manager = UndoManager.new(doc, map)
+    {:ok, text_manager} = UndoManager.new(doc, text)
+    {:ok, array_manager} = UndoManager.new(doc, array)
+    {:ok, map_manager} = UndoManager.new(doc, map)
 
     # Test with text
     Text.insert(text, 0, "Hello")
@@ -342,7 +342,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can expand scope to include additional text", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     additional_text = Doc.get_text(doc, "additional_text")
 
     # Add text to both shared types
@@ -372,7 +372,7 @@ defmodule Yex.UndoManagerTest do
     array: array,
     map: map
   } do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
 
     # Expand scope to include array and map
     UndoManager.expand_scope(undo_manager, array)
@@ -396,13 +396,13 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can exclude an origin from tracking", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     origin = "test-origin"
     UndoManager.exclude_origin(undo_manager, origin)
   end
 
   test "excluded origin changes are not tracked", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     excluded_origin = "excluded-origin"
     UndoManager.exclude_origin(undo_manager, excluded_origin)
 
@@ -428,7 +428,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "stop_capturing prevents merging of changes", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
 
     # prove changes are merging
     Text.insert(text, 0, "a")
@@ -454,7 +454,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "changes merge without stop_capturing", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
 
     # Make two changes in quick succession
     Text.insert(text, 0, "a")
@@ -469,7 +469,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "stop_capturing works with different types", %{doc: doc, array: array} do
-    undo_manager = UndoManager.new(doc, array)
+    {:ok, undo_manager} = UndoManager.new(doc, array)
 
     # First change
     Array.push(array, "first")
@@ -489,7 +489,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "clear removes all stack items", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
 
     # Make some changes that will create undo stack items
     Text.insert(text, 0, "Hello")
@@ -510,14 +510,14 @@ defmodule Yex.UndoManagerTest do
 
   test "can create an undo manager with options", %{doc: doc, text: text} do
     options = %UndoManager.Options{capture_timeout: 1000}
-    undo_manager = UndoManager.new_with_options(doc, text, options)
+    {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
     assert %UndoManager{} = undo_manager
     assert undo_manager.reference != nil
   end
 
   test "capture timeout works as expected", %{doc: doc, text: text} do
     options = %UndoManager.Options{capture_timeout: 100}
-    undo_manager = UndoManager.new_with_options(doc, text, options)
+    {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
 
     Text.insert(text, 0, "a")
     # Wait longer than capture_timeout
@@ -531,7 +531,7 @@ defmodule Yex.UndoManagerTest do
 
   test "demonstrate constructor with options", %{doc: doc, text: text} do
     options = %UndoManager.Options{capture_timeout: 100}
-    undo_manager = UndoManager.new_with_options(doc, text, options)
+    {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
     # prove tests are batched
     Text.insert(text, 0, "a")
     Text.insert(text, 1, "b")
@@ -566,12 +566,12 @@ defmodule Yex.UndoManagerTest do
 
   test "basic constructor example", %{doc: doc, text: text} do
     # From docs: const undoManager = new Y.UndoManager(ytext)
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     assert %UndoManager{} = undo_manager
   end
 
   test "demonstrates exact stopCapturing behavior from docs", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
 
     # Example from docs:
     # // without stopCapturing
@@ -595,7 +595,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "demonstrates tracking specific origins from docs", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
 
     # From docs: undoManager.addToScope(ytext)
     UndoManager.include_origin(undo_manager, "my-origin")
@@ -618,7 +618,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "demonstrates clear functionality from docs", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
 
     # Make some changes
     Text.insert(text, 0, "hello")
@@ -636,7 +636,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "demonstrates scope expansion from docs", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     additional_text = Doc.get_text(doc, "additional_text")
 
     # From docs: undoManager.addToScope(additionalYText)
@@ -661,7 +661,7 @@ defmodule Yex.UndoManagerTest do
     # const undoManager = new Y.UndoManager(ytext, {
     #   trackedOrigins: new Set([42, CustomBinding])
     # })
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     UndoManager.include_origin(undo_manager, 42)
     UndoManager.include_origin(undo_manager, CustomBinding)
 
@@ -704,7 +704,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "multiple undo/redo sequences work correctly", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
 
     # First change
     Text.insert(text, 0, "Hello")
@@ -736,7 +736,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "redo stack is cleared when new changes are made", %{doc: doc, text: text} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
 
     # Initial change
     Text.insert(text, 0, "Hello")
@@ -754,7 +754,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "redo with multiple types in scope", %{doc: doc, text: text, array: array} do
-    undo_manager = UndoManager.new(doc, text)
+    {:ok, undo_manager} = UndoManager.new(doc, text)
     UndoManager.expand_scope(undo_manager, array)
 
     # Make changes to both types
@@ -785,34 +785,25 @@ defmodule Yex.UndoManagerTest do
     options = %UndoManager.Options{capture_timeout: 1000}
 
     # Test Text type
-    text_manager = UndoManager.new_with_options(doc, text, options)
+    {:ok, text_manager} = UndoManager.new_with_options(doc, text, options)
     assert match?(%UndoManager{}, text_manager)
     assert text_manager.reference != nil
 
     # Test Array type
-    array_manager = UndoManager.new_with_options(doc, array, options)
+    {:ok, array_manager} = UndoManager.new_with_options(doc, array, options)
     assert match?(%UndoManager{}, array_manager)
     assert array_manager.reference != nil
 
     # Test Map type
-    map_manager = UndoManager.new_with_options(doc, map, options)
+    {:ok, map_manager} = UndoManager.new_with_options(doc, map, options)
     assert match?(%UndoManager{}, map_manager)
     assert map_manager.reference != nil
-  end
-
-  test "unwrap_manager_result handles both success and error cases directly" do
-    # Test successful case
-    assert UndoManager.unwrap_manager_result({:ok, :manager}) == :manager
-
-    # Test error case
-    error = {:error, "some error"}
-    assert UndoManager.unwrap_manager_result(error) == error
   end
 
   test "undo works with embedded Yex objects", %{doc: doc} do
     # Create an array to hold our embedded text
     array = Doc.get_array(doc, "array")
-    undo_manager = UndoManager.new(doc, array)
+    {:ok, undo_manager} = UndoManager.new(doc, array)
 
     # Create a text object with initial content
     text_prelim = TextPrelim.from("Initial")
@@ -837,7 +828,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can undo xml fragment changes", %{doc: doc, xml_fragment: xml_fragment} do
-    undo_manager = UndoManager.new(doc, xml_fragment)
+    {:ok, undo_manager} = UndoManager.new(doc, xml_fragment)
 
     # Add some XML content
     XmlFragment.push(xml_fragment, XmlTextPrelim.from("Hello"))
@@ -856,7 +847,7 @@ defmodule Yex.UndoManagerTest do
     XmlFragment.push(xml_fragment, XmlElementPrelim.empty("div"))
     {:ok, element} = XmlFragment.fetch(xml_fragment, 0)
 
-    undo_manager = UndoManager.new(doc, element)
+    {:ok, undo_manager} = UndoManager.new(doc, element)
 
     # Add attributes and content
     XmlElement.insert_attribute(element, "class", "test")
@@ -875,7 +866,7 @@ defmodule Yex.UndoManagerTest do
     XmlFragment.push(xml_fragment, XmlTextPrelim.from(""))
     {:ok, text_node} = XmlFragment.fetch(xml_fragment, 0)
 
-    undo_manager = UndoManager.new(doc, text_node)
+    {:ok, undo_manager} = UndoManager.new(doc, text_node)
 
     # Add content and formatting
     XmlText.insert(text_node, 0, "Hello World")
@@ -893,7 +884,7 @@ defmodule Yex.UndoManagerTest do
     doc: doc,
     xml_fragment: xml_fragment
   } do
-    undo_manager = UndoManager.new(doc, xml_fragment)
+    {:ok, undo_manager} = UndoManager.new(doc, xml_fragment)
     tracked_origin = "tracked-origin"
     UndoManager.include_origin(undo_manager, tracked_origin)
 
@@ -921,7 +912,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "can redo xml changes", %{doc: doc, xml_fragment: xml_fragment} do
-    undo_manager = UndoManager.new(doc, xml_fragment)
+    {:ok, undo_manager} = UndoManager.new(doc, xml_fragment)
 
     # Make some changes
     XmlFragment.push(xml_fragment, XmlTextPrelim.from("Hello"))
@@ -940,7 +931,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "works with nested xml structure", %{doc: doc, xml_fragment: xml_fragment} do
-    undo_manager = UndoManager.new(doc, xml_fragment)
+    {:ok, undo_manager} = UndoManager.new(doc, xml_fragment)
 
     # Create a nested structure
     XmlFragment.push(
@@ -962,5 +953,23 @@ defmodule Yex.UndoManagerTest do
     # Redo should restore entire structure
     UndoManager.redo(undo_manager)
     assert XmlFragment.to_string(xml_fragment) == "<div><span>nested content</span></div>"
+  end
+
+  test "returns error when trying to create undo manager with invalid scope", %{doc: doc} do
+    invalid_scope = %{not: "a valid scope"}
+    assert {:error, _reason} = UndoManager.new(doc, invalid_scope)
+  end
+
+  test "returns error when trying to create undo manager with invalid options", %{
+    doc: doc,
+    text: text
+  } do
+    invalid_options = %{not: "valid options"}
+    assert {:error, _reason} = UndoManager.new_with_options(doc, text, invalid_options)
+  end
+
+  test "returns error when trying to create undo manager with invalid document", %{text: text} do
+    invalid_doc = %{not: "a valid doc"}
+    assert {:error, _reason} = UndoManager.new(invalid_doc, text)
   end
 end
