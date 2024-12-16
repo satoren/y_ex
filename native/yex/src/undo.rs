@@ -8,10 +8,6 @@ use std::cell::RefCell;
 use std::sync::RwLock;
 use yrs::{undo::Options as UndoOptions, UndoManager};
 
-thread_local! {
-    static CURRENT_ENV: RefCell<Option<Env<'static>>> = RefCell::new(None);
-}
-
 #[derive(NifStruct)]
 #[module = "Yex.UndoManager"]
 pub struct NifUndoManager {
@@ -149,25 +145,18 @@ pub fn undo_manager_exclude_origin(
 
 #[rustler::nif]
 pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> Result<(), NifError> {
-    CURRENT_ENV.with(|current_env| {
-        *current_env.borrow_mut() = Some(unsafe { std::mem::transmute(env) });
+    ENV.set(&mut env.clone(), || {
+        let mut wrapper = undo_manager
+            .reference
+            .0
+            .write()
+            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
 
-        let result = ENV.set(&mut env.clone(), || {
-            let mut wrapper = undo_manager
-                .reference
-                .0
-                .write()
-                .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
+        if wrapper.manager.can_undo() {
+            wrapper.manager.undo_blocking();
+        }
 
-            if wrapper.manager.can_undo() {
-                wrapper.manager.undo_blocking();
-            }
-
-            Ok(())
-        });
-
-        *current_env.borrow_mut() = None;
-        result
+        Ok(())
     })
 }
 
