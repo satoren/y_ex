@@ -89,7 +89,7 @@ defmodule Yex.UndoManagerTest do
 
   test "undo only removes changes from tracked origin for text", %{doc: doc, text: text} do
     {:ok, undo_manager} = UndoManager.new(doc, text)
-    # Set up our tracked origin
+    # Set up our tracked origin so that undo manager is only tracking changes from this origin
     tracked_origin = "tracked-origin"
     UndoManager.include_origin(undo_manager, tracked_origin)
 
