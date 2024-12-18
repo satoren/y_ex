@@ -956,16 +956,90 @@ defmodule Yex.UndoManagerTest do
     assert XmlFragment.to_string(xml_fragment) == "<div><span>nested content</span></div>"
   end
 
-  test "returns error when trying to create undo manager with invalid options", %{
-    doc: doc,
-    text: text
-  } do
-    invalid_options = %{not: "valid options"}
-    assert {:error, _reason} = UndoManager.new_with_options(doc, text, invalid_options)
-  end
-
   test "returns error when trying to create undo manager with invalid document", %{text: text} do
     invalid_doc = %{not: "a valid doc"}
     assert {:error, _reason} = UndoManager.new(invalid_doc, text)
+  end
+
+  test "guards prevent invalid scope in new/2" do
+    doc = Doc.new()
+    invalid_scope = %{not: "a valid scope"}
+
+    assert_raise FunctionClauseError, fn ->
+      UndoManager.new(doc, invalid_scope)
+    end
+  end
+
+  test "guards prevent invalid scope in new_with_options/3" do
+    doc = Doc.new()
+    invalid_scope = %{not: "a valid scope"}
+    options = %UndoManager.Options{capture_timeout: 1000}
+
+    assert_raise FunctionClauseError, fn ->
+      UndoManager.new_with_options(doc, invalid_scope, options)
+    end
+  end
+
+  test "guards prevent invalid options in new_with_options/3", %{doc: doc, text: text} do
+    invalid_options = %{not: "valid options"}
+
+    assert_raise FunctionClauseError, fn ->
+      UndoManager.new_with_options(doc, text, invalid_options)
+    end
+  end
+
+  test "guards allow valid scope types", %{doc: doc} do
+    # Test each valid scope type
+    text = Doc.get_text(doc, "text")
+    array = Doc.get_array(doc, "array")
+    map = Doc.get_map(doc, "map")
+    xml_fragment = Doc.get_xml_fragment(doc, "xml_fragment")
+
+    # All of these should work without raising
+    {:ok, _} = UndoManager.new(doc, text)
+    {:ok, _} = UndoManager.new(doc, array)
+    {:ok, _} = UndoManager.new(doc, map)
+    {:ok, _} = UndoManager.new(doc, xml_fragment)
+  end
+
+  test "guards allow valid scope types with options", %{doc: doc} do
+    # Test each valid scope type
+    text = Doc.get_text(doc, "text")
+    array = Doc.get_array(doc, "array")
+    map = Doc.get_map(doc, "map")
+    xml_fragment = Doc.get_xml_fragment(doc, "xml_fragment")
+    options = %UndoManager.Options{capture_timeout: 1000}
+
+    # All of these should work without raising
+    {:ok, _} = UndoManager.new_with_options(doc, text, options)
+    {:ok, _} = UndoManager.new_with_options(doc, array, options)
+    {:ok, _} = UndoManager.new_with_options(doc, map, options)
+    {:ok, _} = UndoManager.new_with_options(doc, xml_fragment, options)
+  end
+
+  # Import the guard macro
+  import Yex.UndoManager, only: [is_valid_scope: 1]
+
+  # Helper function that uses the guard directly
+  defp test_scope(scope) when is_valid_scope(scope), do: :valid
+  defp test_scope(_), do: :invalid
+
+  test "is_valid_scope guard works directly", %{doc: doc} do
+    # Test valid scopes
+    text = Doc.get_text(doc, "text")
+    array = Doc.get_array(doc, "array")
+    map = Doc.get_map(doc, "map")
+    xml_fragment = Doc.get_xml_fragment(doc, "xml_fragment")
+
+    assert test_scope(text) == :valid
+    assert test_scope(array) == :valid
+    assert test_scope(map) == :valid
+    assert test_scope(xml_fragment) == :valid
+
+    # Test invalid scopes
+    assert test_scope(%{not: "a valid scope"}) == :invalid
+    assert test_scope(nil) == :invalid
+    assert test_scope("string") == :invalid
+    assert test_scope(123) == :invalid
   end
 end
