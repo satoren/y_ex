@@ -62,10 +62,9 @@ defmodule Yex.UndoManager do
   def new_with_options(doc, scope, options)
       when is_valid_scope(scope) and
              is_struct(options, Options) do
-    try do
-      Yex.Nif.undo_manager_new_with_options(doc, scope, options)
-    rescue
-      e in ArgumentError -> {:error, "NIF error: #{Exception.message(e)}"}
+    case Yex.Nif.undo_manager_new_with_options(doc, scope, options) do
+      {:ok, manager} -> {:ok, manager}
+      {:error, message} -> {:error, "NIF error: #{message}"}
     end
   end
 
