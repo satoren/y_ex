@@ -15,6 +15,14 @@ end
 defmodule Yex.UndoManager do
   alias Yex.UndoManager.Options
 
+  defguard is_valid_scope(scope)
+           when is_struct(scope, Yex.Text) or
+                  is_struct(scope, Yex.Array) or
+                  is_struct(scope, Yex.Map) or
+                  is_struct(scope, Yex.XmlText) or
+                  is_struct(scope, Yex.XmlElement) or
+                  is_struct(scope, Yex.XmlFragment)
+
   @moduledoc """
   Represents a Y.UndoManager instance.
   """
@@ -35,17 +43,8 @@ defmodule Yex.UndoManager do
   @spec new(Yex.Doc.t(), struct()) ::
           {:ok, Yex.UndoManager.t()} | {:error, term()}
   def new(doc, scope)
-      when is_struct(scope, Yex.Text) or
-             is_struct(scope, Yex.Array) or
-             is_struct(scope, Yex.Map) or
-             is_struct(scope, Yex.XmlText) or
-             is_struct(scope, Yex.XmlElement) or
-             is_struct(scope, Yex.XmlFragment) do
-    if is_struct(scope) do
-      new_with_options(doc, scope, %Options{})
-    else
-      {:error, "Invalid scope: expected a struct"}
-    end
+      when is_valid_scope(scope) do
+    new_with_options(doc, scope, %Options{})
   end
 
   @doc """
@@ -56,36 +55,17 @@ defmodule Yex.UndoManager do
   See `Yex.UndoManager.Options` for available options.
 
   ## Errors
-  - Returns `{:error, "Invalid document: expected a Yex.Doc struct"}` if doc is not a Yex.Doc
-  - Returns `{:error, "Invalid scope: expected a struct"}` if scope is not a struct
-  - Returns `{:error, "Invalid options: expected a Yex.UndoManager.Options struct"}` if options is invalid
-  - Returns `{:error, "Failed to get branch reference"}` if there's an error accessing the scope
+  - Returns `{:error, "NIF error: <message>"}` if underlying NIF returns an error
   """
   @spec new_with_options(Yex.Doc.t(), struct(), Options.t()) ::
           {:ok, Yex.UndoManager.t()} | {:error, term()}
   def new_with_options(doc, scope, options)
-      when is_struct(scope, Yex.Text) or
-             is_struct(scope, Yex.Array) or
-             is_struct(scope, Yex.Map) or
-             is_struct(scope, Yex.XmlText) or
-             is_struct(scope, Yex.XmlElement) or
-             is_struct(scope, Yex.XmlFragment) do
-    cond do
-      not is_struct(doc, Yex.Doc) ->
-        {:error, "Invalid document: expected a Yex.Doc struct"}
-
-      not is_struct(scope) ->
-        {:error, "Invalid scope: expected a struct"}
-
-      not is_struct(options, Options) ->
-        {:error, "Invalid options: expected a Yex.UndoManager.Options struct"}
-
-      true ->
-        try do
-          Yex.Nif.undo_manager_new_with_options(doc, scope, options)
-        rescue
-          e in ArgumentError -> {:error, "NIF error: #{Exception.message(e)}"}
-        end
+      when is_valid_scope(scope) and
+             is_struct(options, Options) do
+    try do
+      Yex.Nif.undo_manager_new_with_options(doc, scope, options)
+    rescue
+      e in ArgumentError -> {:error, "NIF error: #{Exception.message(e)}"}
     end
   end
 
