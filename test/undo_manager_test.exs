@@ -42,6 +42,22 @@ defmodule Yex.UndoManagerTest do
     {:ok, undo_manager} = UndoManager.new(doc, text)
     origin = "test-origin"
     UndoManager.include_origin(undo_manager, origin)
+
+    # Make changes with the tracked origin
+    Doc.transaction(doc, origin, fn ->
+      Text.insert(text, 0, "tracked")
+    end)
+
+    # Make changes with an untracked origin
+    Doc.transaction(doc, "other-origin", fn ->
+      Text.insert(text, 7, " untracked")
+    end)
+
+    assert Text.to_string(text) == "tracked untracked"
+
+    # Undo should only remove changes from tracked origin
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == " untracked"
   end
 
   test "can undo with no origin with text changes, text removed", %{doc: doc, text: text} do
@@ -521,7 +537,8 @@ defmodule Yex.UndoManagerTest do
     {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
 
     Text.insert(text, 0, "a")
-    # Wait longer than capture_timeout
+
+    # se are testing Undo manager's ability to batch after timeout, 150ms should create two batches
     Process.sleep(150)
     Text.insert(text, 1, "b")
 
@@ -530,7 +547,7 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == "a"
   end
 
-  test "demonstrate constructor with options", %{doc: doc, text: text} do
+  test "demonstrates constructor with options", %{doc: doc, text: text} do
     options = %UndoManager.Options{capture_timeout: 100}
     {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
     # prove tests are batched
@@ -543,11 +560,14 @@ defmodule Yex.UndoManagerTest do
 
     # Prove options are respected
     Text.insert(text, 0, "c")
+
+    # sleep longer than capture_timeout to ensure two batches are created
     Process.sleep(150)
     Text.insert(text, 1, "d")
     assert Text.to_string(text) == "cd"
 
     UndoManager.undo(undo_manager)
+
     # 'c' still remains due to timeout
     assert Text.to_string(text) == "c"
     UndoManager.undo(undo_manager)
@@ -556,6 +576,9 @@ defmodule Yex.UndoManagerTest do
 
     # Prove option means insufficient timeout will still batch
     Text.insert(text, 0, "e")
+
+    # undo manager has a timeout of 100ms, so this sleep of 50ms should ...
+    # ... be insufficient and will allow the changes to be in one batch
     Process.sleep(50)
     Text.insert(text, 1, "f")
     assert Text.to_string(text) == "ef"
