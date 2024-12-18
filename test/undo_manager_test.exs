@@ -526,7 +526,7 @@ defmodule Yex.UndoManagerTest do
     Text.insert(text, 1, "b")
 
     UndoManager.undo(undo_manager)
-    # Only 'b' was undone
+    # 'a' still remains due to timeout
     assert Text.to_string(text) == "a"
   end
 
@@ -548,7 +548,7 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == "cd"
 
     UndoManager.undo(undo_manager)
-    # Only 'd' was undone due to timeout
+    # 'c' still remains due to timeout
     assert Text.to_string(text) == "c"
     UndoManager.undo(undo_manager)
     # get back to empty
@@ -561,7 +561,6 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == "ef"
 
     UndoManager.undo(undo_manager)
-    # Only 'b' was undone due to timeout
     assert Text.to_string(text) == ""
   end
 
