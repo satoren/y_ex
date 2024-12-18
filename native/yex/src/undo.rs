@@ -35,7 +35,11 @@ pub struct NifUndoOptions {
 }
 
 #[rustler::nif]
-pub fn undo_manager_new(env: Env<'_>, doc: NifDoc, scope: NifSharedTypeInput) -> Result<NifUndoManager, NifError> {
+pub fn undo_manager_new(
+    env: Env<'_>,
+    doc: NifDoc,
+    scope: NifSharedTypeInput,
+) -> Result<NifUndoManager, NifError> {
     ENV.set(&mut env.clone(), || match scope {
         NifSharedTypeInput::Text(text) => create_undo_manager(env, doc, text),
         NifSharedTypeInput::Array(array) => create_undo_manager(env, doc, array),
@@ -47,9 +51,9 @@ pub fn undo_manager_new(env: Env<'_>, doc: NifDoc, scope: NifSharedTypeInput) ->
 }
 
 fn create_undo_manager<T: NifSharedType>(
-    env: Env<'_>, 
-    doc: NifDoc, 
-    scope: T
+    env: Env<'_>,
+    doc: NifDoc,
+    scope: T,
 ) -> Result<NifUndoManager, NifError> {
     create_undo_manager_with_options(
         env,
@@ -67,7 +71,8 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     scope: T,
     options: NifUndoOptions,
 ) -> Result<NifUndoManager, NifError> {
-    let branch = scope.readonly(None, |txn| scope.get_ref(txn))
+    let branch = scope
+        .readonly(None, |txn| scope.get_ref(txn))
         .map_err(|_| NifError::Message("Failed to get branch reference".to_string()))?;
 
     let undo_options = UndoOptions {
@@ -92,11 +97,19 @@ pub fn undo_manager_new_with_options(
 ) -> Result<NifUndoManager, NifError> {
     ENV.set(&mut env.clone(), || match scope {
         NifSharedTypeInput::Text(text) => create_undo_manager_with_options(env, doc, text, options),
-        NifSharedTypeInput::Array(array) => create_undo_manager_with_options(env, doc, array, options),
+        NifSharedTypeInput::Array(array) => {
+            create_undo_manager_with_options(env, doc, array, options)
+        }
         NifSharedTypeInput::Map(map) => create_undo_manager_with_options(env, doc, map, options),
-        NifSharedTypeInput::XmlText(text) => create_undo_manager_with_options(env, doc, text, options),
-        NifSharedTypeInput::XmlElement(element) => create_undo_manager_with_options(env, doc, element, options),
-        NifSharedTypeInput::XmlFragment(fragment) => create_undo_manager_with_options(env, doc, fragment, options),
+        NifSharedTypeInput::XmlText(text) => {
+            create_undo_manager_with_options(env, doc, text, options)
+        }
+        NifSharedTypeInput::XmlElement(element) => {
+            create_undo_manager_with_options(env, doc, element, options)
+        }
+        NifSharedTypeInput::XmlFragment(fragment) => {
+            create_undo_manager_with_options(env, doc, fragment, options)
+        }
     })
 }
 
