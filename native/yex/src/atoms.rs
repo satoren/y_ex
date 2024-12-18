@@ -35,12 +35,4 @@ rustler::atoms! {
   retain,
   attributes,
 
-  // Type identifiers for branches
-  text,
-  map,
-  array,
-  xml_element,
-  xml_fragment,
-  xml_text,
-  popped,
 }
