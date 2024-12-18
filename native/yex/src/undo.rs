@@ -4,6 +4,7 @@ use crate::{
 };
 
 use rustler::{Env, NifStruct, ResourceArc, Term};
+use std::ops::Deref;
 use std::sync::RwLock;
 use yrs::{undo::Options as UndoOptions, UndoManager};
 
@@ -95,7 +96,11 @@ pub fn undo_manager_new_with_options(
     scope: NifSharedTypeInput,
     options: NifUndoOptions,
 ) -> Result<NifUndoManager, NifError> {
-    ENV.set(&mut env.clone(), || match scope {
+    // Check if the document reference is valid by attempting to access its inner doc
+    // will return an error tuple if it is not
+    let _doc_ref = doc.reference.deref();
+
+    match scope {
         NifSharedTypeInput::Text(text) => create_undo_manager_with_options(env, doc, text, options),
         NifSharedTypeInput::Array(array) => {
             create_undo_manager_with_options(env, doc, array, options)
@@ -110,7 +115,7 @@ pub fn undo_manager_new_with_options(
         NifSharedTypeInput::XmlFragment(fragment) => {
             create_undo_manager_with_options(env, doc, fragment, options)
         }
-    })
+    }
 }
 
 #[rustler::nif]
@@ -126,9 +131,9 @@ pub fn undo_manager_include_origin(
             .write()
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
 
-        if let Some(origin) = term_to_origin_binary(origin_term) {
-            wrapper.manager.include_origin(origin.as_slice());
-        }
+        let origin = term_to_origin_binary(origin_term)
+            .ok_or_else(|| NifError::Message("Invalid origin term".to_string()))?;
+        wrapper.manager.include_origin(origin.as_slice());
 
         Ok(())
     })
@@ -147,9 +152,9 @@ pub fn undo_manager_exclude_origin(
             .write()
             .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
 
-        if let Some(origin) = term_to_origin_binary(origin_term) {
-            wrapper.manager.exclude_origin(origin.as_slice());
-        }
+        let origin = term_to_origin_binary(origin_term)
+            .ok_or_else(|| NifError::Message("Invalid origin term".to_string()))?;
+        wrapper.manager.exclude_origin(origin.as_slice());
 
         Ok(())
     })

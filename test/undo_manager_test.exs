@@ -1,5 +1,6 @@
 defmodule Yex.UndoManagerTest do
   use ExUnit.Case
+  import Mock
 
   alias Yex.{
     Doc,
@@ -958,7 +959,10 @@ defmodule Yex.UndoManagerTest do
 
   test "returns error when trying to create undo manager with invalid document", %{text: text} do
     invalid_doc = %{not: "a valid doc"}
-    assert {:error, _reason} = UndoManager.new(invalid_doc, text)
+
+    assert_raise ArgumentError, fn ->
+      UndoManager.new(invalid_doc, text)
+    end
   end
 
   test "guards prevent invalid scope in new/2" do
@@ -1017,29 +1021,66 @@ defmodule Yex.UndoManagerTest do
     {:ok, _} = UndoManager.new_with_options(doc, xml_fragment, options)
   end
 
-  # Import the guard macro
-  import Yex.UndoManager, only: [is_valid_scope: 1]
-
-  # Helper function that uses the guard directly
-  defp test_scope(scope) when is_valid_scope(scope), do: :valid
-  defp test_scope(_), do: :invalid
-
-  test "is_valid_scope guard works directly", %{doc: doc} do
+  test "scope validation works correctly", %{doc: doc} do
     # Test valid scopes
     text = Doc.get_text(doc, "text")
     array = Doc.get_array(doc, "array")
     map = Doc.get_map(doc, "map")
     xml_fragment = Doc.get_xml_fragment(doc, "xml_fragment")
 
-    assert test_scope(text) == :valid
-    assert test_scope(array) == :valid
-    assert test_scope(map) == :valid
-    assert test_scope(xml_fragment) == :valid
+    # These should all return {:ok, _} results
+    assert {:ok, _} = UndoManager.new(doc, text)
+    assert {:ok, _} = UndoManager.new(doc, array)
+    assert {:ok, _} = UndoManager.new(doc, map)
+    assert {:ok, _} = UndoManager.new(doc, xml_fragment)
 
     # Test invalid scopes
-    assert test_scope(%{not: "a valid scope"}) == :invalid
-    assert test_scope(nil) == :invalid
-    assert test_scope("string") == :invalid
-    assert test_scope(123) == :invalid
+    invalid_scope = %{not: "a valid scope"}
+
+    assert_raise FunctionClauseError, fn ->
+      UndoManager.new(doc, invalid_scope)
+    end
+
+    assert_raise FunctionClauseError, fn ->
+      UndoManager.new(doc, nil)
+    end
+
+    assert_raise FunctionClauseError, fn ->
+      UndoManager.new(doc, "string")
+    end
+
+    assert_raise FunctionClauseError, fn ->
+      UndoManager.new(doc, 123)
+    end
+  end
+
+  test "defguard is_valid_scope can be imported and used" do
+    import Yex.UndoManager, only: [is_valid_scope: 1]
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+    invalid_scope = %{not: "a valid scope"}
+
+    # Test valid scope
+    assert is_valid_scope(text)
+
+    # Test invalid scope
+    refute is_valid_scope(invalid_scope)
+    refute is_valid_scope(nil)
+    refute is_valid_scope("string")
+    refute is_valid_scope(123)
+  end
+
+  test "new_with_options handles NIF errors", %{doc: doc, text: text} do
+    # Invalid timeout to trigger error
+    options = %UndoManager.Options{capture_timeout: -1}
+
+    # Mock the NIF call to return an error
+    with_mock Yex.Nif,
+      undo_manager_new_with_options: fn _doc, _scope, _options ->
+        {:error, "test error message"}
+      end do
+      assert {:error, "NIF error: test error message"} =
+               UndoManager.new_with_options(doc, text, options)
+    end
   end
 end
