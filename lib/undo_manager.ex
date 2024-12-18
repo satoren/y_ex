@@ -34,7 +34,7 @@ defmodule Yex.UndoManager do
 
   @doc """
   Creates a new UndoManager for the given document and scope with default options.
-  The scope can be a Text, Array, or Map type.
+  The scope can be a Text, Array, Map, XmlText, XmlElement, or XmlFragment type.
 
   ## Errors
   - Returns `{:error, "Invalid scope: expected a struct"}` if scope is not a struct
