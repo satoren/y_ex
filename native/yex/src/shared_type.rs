@@ -4,7 +4,6 @@ use std::ops::Deref;
 use yrs::{Hook, ReadTxn, SharedRef, TransactionMut};
 
 use crate::{
-    atoms,
     doc::{DocResource, ReadTransaction, TransactionResource},
     wrap::SliceIntoBinary,
 };
