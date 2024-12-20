@@ -180,6 +180,11 @@ defmodule Yex.Nif do
   def undo_manager_exclude_origin(_undo_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_stop_capturing(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_clear(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
+
+  def undo_manager_observe_item_added(_manager, _observer), do: :erlang.nif_error(:nif_not_loaded)
+
+  def undo_manager_observe_item_popped(_manager, _observer),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
 
 defmodule Yex.Nif.Util do

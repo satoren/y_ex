@@ -3,10 +3,10 @@ use crate::{
     yinput::NifSharedTypeInput, NifDoc, NifError, ENV,
 };
 
-use rustler::{Env, NifStruct, ResourceArc, Term};
+use rustler::{Env, LocalPid, NifStruct, ResourceArc, Term};
 use std::ops::Deref;
 use std::sync::RwLock;
-use yrs::{undo::Options as UndoOptions, UndoManager};
+use yrs::{undo::Options as UndoOptions, UndoManager, Subscription};
 
 #[derive(NifStruct)]
 #[module = "Yex.UndoManager"]
@@ -15,12 +15,14 @@ pub struct NifUndoManager {
 }
 
 pub struct UndoManagerWrapper {
-    manager: UndoManager,
+    pub manager: UndoManager,
+    pub item_added_observer: Option<(LocalPid, Subscription)>,
+    pub item_popped_observer: Option<(LocalPid, Subscription)>,
 }
 
 impl UndoManagerWrapper {
     pub fn new(manager: UndoManager) -> Self {
-        Self { manager }
+        Self { manager, item_added_observer: None, item_popped_observer: None }
     }
 }
 

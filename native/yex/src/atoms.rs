@@ -35,4 +35,8 @@ rustler::atoms! {
   retain,
   attributes,
 
+  // Undo manager related atoms
+  item_added,
+  item_popped,
+
 }
