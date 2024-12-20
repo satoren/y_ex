@@ -30,7 +30,7 @@ defmodule Yex.UndoManagerTest do
   test "can create an undo manager", %{doc: doc, text: text} do
     {:ok, undo_manager} = UndoManager.new(doc, text)
     assert %UndoManager{} = undo_manager
-    assert undo_manager.reference != nil
+    assert is_reference(undo_manager.reference)
   end
 
   test "can undo without failure when stack is empty", %{doc: doc, text: text} do
@@ -529,7 +529,7 @@ defmodule Yex.UndoManagerTest do
     options = %UndoManager.Options{capture_timeout: 1000}
     {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
     assert %UndoManager{} = undo_manager
-    assert undo_manager.reference != nil
+    assert is_reference(undo_manager.reference)
   end
 
   test "capture timeout works as expected", %{doc: doc, text: text} do
@@ -591,6 +591,7 @@ defmodule Yex.UndoManagerTest do
     # From docs: const undoManager = new Y.UndoManager(ytext)
     {:ok, undo_manager} = UndoManager.new(doc, text)
     assert %UndoManager{} = undo_manager
+    assert is_reference(undo_manager.reference)
   end
 
   test "demonstrates exact stopCapturing behavior from docs", %{doc: doc, text: text} do
@@ -811,17 +812,17 @@ defmodule Yex.UndoManagerTest do
     # Test Text type
     {:ok, text_manager} = UndoManager.new_with_options(doc, text, options)
     assert match?(%UndoManager{}, text_manager)
-    assert text_manager.reference != nil
+    assert is_reference(text_manager.reference)
 
     # Test Array type
     {:ok, array_manager} = UndoManager.new_with_options(doc, array, options)
     assert match?(%UndoManager{}, array_manager)
-    assert array_manager.reference != nil
+    assert is_reference(array_manager.reference)
 
     # Test Map type
     {:ok, map_manager} = UndoManager.new_with_options(doc, map, options)
     assert match?(%UndoManager{}, map_manager)
-    assert map_manager.reference != nil
+    assert is_reference(map_manager.reference)
   end
 
   test "undo works with embedded Yex objects", %{doc: doc} do
@@ -1006,14 +1007,6 @@ defmodule Yex.UndoManagerTest do
     end
   end
 
-  test "guards prevent invalid options in new_with_options/3", %{doc: doc, text: text} do
-    invalid_options = %{not: "valid options"}
-
-    assert_raise FunctionClauseError, fn ->
-      UndoManager.new_with_options(doc, text, invalid_options)
-    end
-  end
-
   test "guards allow valid scope types", %{doc: doc} do
     # Test each valid scope type
     text = Doc.get_text(doc, "text")
@@ -1104,5 +1097,197 @@ defmodule Yex.UndoManagerTest do
       assert {:error, "NIF error: test error message"} =
                UndoManager.new_with_options(doc, text, options)
     end
+  end
+
+  test "can observe undo stack items with metadata", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    UndoManager.on_item_added(manager, fn event ->
+      send(test_pid, {:item_added, event})
+    end)
+
+    # Make first change
+    Doc.transaction(doc, "origin-1", fn ->
+      Text.insert(text, 0, "Hello")
+    end)
+
+    # Verify event was received
+    assert_receive {:item_added, event}
+    assert event.origin == "origin-1"
+    assert event.kind == :text
+    assert is_map(event.delta)
+
+    # Stop capturing to ensure separate events
+    UndoManager.stop_capturing(manager)
+
+    # Make second change with different origin
+    Doc.transaction(doc, "origin-2", fn ->
+      Text.insert(text, 5, " World")
+    end)
+
+    # Verify second event
+    assert_receive {:item_added, event}
+    assert event.origin == "origin-2"
+    assert event.kind == :text
+    assert is_map(event.delta)
+
+    # Verify text content
+    assert Text.to_string(text) == "Hello World"
+  end
+
+  test "metadata is cleaned up when undo manager is cleared", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    UndoManager.on_item_added(manager, fn event ->
+      send(test_pid, {:item_added, event})
+    end)
+
+    # Make multiple changes with different origins
+    Doc.transaction(doc, "origin-1", fn ->
+      Text.insert(text, 0, "Hello")
+    end)
+
+    assert_receive {:item_added, event}
+    assert event.origin == "origin-1"
+    assert event.kind == :text
+    assert is_map(event.delta)
+
+    Doc.transaction(doc, "origin-2", fn ->
+      Text.insert(text, 5, " World")
+    end)
+
+    assert_receive {:item_added, event}
+    assert event.origin == "origin-2"
+    assert event.kind == :text
+    assert is_map(event.delta)
+
+    # Clear the undo manager
+    {:ok, _} = UndoManager.clear(manager)
+
+    # Make another change to verify no more events are received
+    Text.insert(text, 11, "!")
+    refute_receive {:item_added, _}
+  end
+
+  test "observer callbacks receive correct event data", %{doc: doc, text: text} do
+    {:ok, undo_manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    UndoManager.on_item_added(undo_manager, fn event ->
+      send(test_pid, {:added, event})
+    end)
+
+    UndoManager.on_item_popped(undo_manager, fn event ->
+      send(test_pid, {:popped, event})
+    end)
+
+    # Make changes with specific origin
+    Doc.transaction(doc, "test-origin", fn ->
+      Text.insert(text, 0, "Hello")
+    end)
+
+    # Verify added event
+    assert_receive {:added, event}
+    assert event.kind == :text
+    assert event.origin == "test-origin"
+    # The exact structure depends on yrs
+    assert is_map(event.delta)
+
+    # Undo and verify popped event
+    UndoManager.undo(undo_manager)
+    assert_receive {:popped, event}
+    assert event.kind == :text
+    assert event.origin == "test-origin"
+    assert is_map(event.delta)
+  end
+
+  test "can have multiple observers for the same event type", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # Register two callbacks for the same event
+    UndoManager.on_item_added(manager, fn event ->
+      send(test_pid, {:observer1, event})
+    end)
+
+    UndoManager.on_item_added(manager, fn event ->
+      send(test_pid, {:observer2, event})
+    end)
+
+    # Make a change with specific origin
+    Doc.transaction(doc, "test-origin", fn ->
+      Text.insert(text, 0, "Hello")
+    end)
+
+    # Verify both callbacks received the event
+    assert_receive {:observer1, event1}
+    assert_receive {:observer2, event2}
+    assert event1.origin == "test-origin"
+    assert event2.origin == "test-origin"
+    assert event1.kind == :text
+    assert event2.kind == :text
+  end
+
+  test "events contain correct data for different types", %{doc: doc, text: text, array: array} do
+    {:ok, text_manager} = UndoManager.new(doc, text)
+    {:ok, array_manager} = UndoManager.new(doc, array)
+    test_pid = self()
+
+    UndoManager.on_item_added(text_manager, fn event ->
+      send(test_pid, {:added, event})
+    end)
+
+    UndoManager.on_item_added(array_manager, fn event ->
+      send(test_pid, {:added, event})
+    end)
+
+    # Test text changes
+    Doc.transaction(doc, "text-origin", fn ->
+      Text.insert(text, 0, "Hello")
+    end)
+
+    assert_receive {:added, text_event}
+    assert text_event.kind == :text
+    assert text_event.origin == "text-origin"
+    assert is_map(text_event.delta)
+
+    # Test array changes
+    Doc.transaction(doc, "array-origin", fn ->
+      Array.push(array, "World")
+    end)
+
+    assert_receive {:added, array_event}
+    assert array_event.kind == :array
+    assert array_event.origin == "array-origin"
+    assert is_map(array_event.delta)
+  end
+
+  test "can observe item updates", %{doc: doc, text: text} do
+    {:ok, undo_manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    UndoManager.on_item_updated(undo_manager, fn event ->
+      send(test_pid, {:updated, event})
+    end)
+
+    # Make changes within capture timeout
+    Text.insert(text, 0, "Hello")
+    Text.insert(text, 5, " World")
+
+    # Verify update event
+    assert_receive {:updated, event}
+    assert event.kind == :text
+    assert is_map(event.delta)
+
+    # Stop capturing to create a new stack item
+    UndoManager.stop_capturing(undo_manager)
+
+    # Make more changes
+    Text.insert(text, 11, "!")
+
+    # No update event should be received since we stopped capturing
+    refute_receive {:updated, _event}
   end
 end

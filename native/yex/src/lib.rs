@@ -13,7 +13,6 @@ mod sync;
 mod term_box;
 mod text;
 mod undo;
-mod undo_observer;
 mod utils;
 mod wrap;
 mod xml;
