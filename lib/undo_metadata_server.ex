@@ -102,24 +102,26 @@ defmodule Yex.UndoMetadataServer do
 
   @impl true
   def handle_info({:item_added, event}, state) do
-    # Convert the metadata map to a struct
-    event = %{event | meta: struct(Yex.UndoManager.UndoMetadata, event.meta)}
+    elixir_metadata = %Yex.UndoManager.UndoMetadata{
+      event_id: event.meta.event_id,
+      data: %{}
+    }
+
+    # Convert to proper Event struct with initial metadata
+    event = %Yex.UndoManager.Event{
+      meta: elixir_metadata,
+      origin: event.origin,
+      kind: event.kind,
+      changed_parent_types: event.changed_parent_types
+    }
 
     if state.item_added_callback do
-      # Get callback metadata and ensure event_id is preserved
       callback_metadata = state.item_added_callback.(event)
 
-      preserved_metadata =
-        case callback_metadata do
-          nil ->
-            event.meta
-
-          metadata when is_map(metadata) ->
-            Map.merge(metadata, %{event_id: event.meta.event_id})
-
-          _ ->
-            event.meta
-        end
+      preserved_metadata = %Yex.UndoManager.UndoMetadata{
+        event_id: event.meta.event_id,
+        data: callback_metadata
+      }
 
       new_state = %{
         state
@@ -151,8 +153,14 @@ defmodule Yex.UndoMetadataServer do
 
         callback ->
           case callback.(event) do
-            nil -> stored_meta
-            meta -> meta
+            nil ->
+              stored_meta
+
+            metadata when is_map(metadata) ->
+              %Yex.UndoManager.UndoMetadata{event_id: event_id, data: metadata}
+
+            _ ->
+              stored_meta
           end
       end
 
@@ -166,16 +174,13 @@ defmodule Yex.UndoMetadataServer do
 
   @impl true
   def handle_info({:item_popped, id, event}, state) do
-    # Get the stored metadata for this event
     stored_meta = Map.get(state.metadata, id)
 
-    # Create event with the stored metadata if it exists
     event =
       if stored_meta do
         %{event | meta: stored_meta}
       else
-        # Fallback to creating a new metadata struct with the id
-        %{event | meta: struct(Yex.UndoManager.UndoMetadata, Map.put(event.meta, :event_id, id))}
+        %{event | meta: struct(Yex.UndoManager.UndoMetadata, %{event_id: id, data: %{}})}
       end
 
     if state.item_popped_callback do

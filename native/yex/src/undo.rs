@@ -310,20 +310,23 @@ pub fn undo_manager_observe_item_added(
     let observer = observer.clone();
 
     let subscription = wrapper.manager.observe_item_added(move |_txn, event| {
-        let event_id = Uuid::new_v4().to_string();
-        
         ENV.with(|env| {
-            // Create metadata and directly assign it to the mutable event
+            // Generate a new UUID for each event
+            let event_id = Uuid::new_v4().to_string();
+            
+            // Update the event metadata
             *event.meta_mut() = UndoMetadata {
                 event_id: event_id.clone(),
             };
             
-            let map = rustler::types::map::map_new(*env)
+            // Create metadata map with event_id
+            let meta_map = rustler::types::map::map_new(*env);
+            let meta_map = meta_map
                 .map_put(atoms::event_id(), event_id.encode(*env))
                 .expect("Failed to put event_id");
 
             let nif_event = NifUndoEvent {
-                meta: map,
+                meta: meta_map,
                 origin: event.origin().map(|o| o.as_ref().to_vec()),
                 kind: map_event_kind(event.kind()),
                 changed_parent_types: map_parent_types(event.changed_parent_types()),

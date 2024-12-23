@@ -793,6 +793,36 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == "Different"
   end
 
+  test "demonstrates metadata persistence across operations", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+    test_metadata = %{custom: "data"}
+
+    # Register callbacks that use metadata
+    {:ok, manager} =
+      UndoManager.on_item_added(manager, fn event ->
+        send(test_pid, {:added, event})
+        test_metadata
+      end)
+
+    {:ok, manager} =
+      UndoManager.on_item_popped(manager, fn id, event ->
+        send(test_pid, {:popped, id, event})
+      end)
+
+    # Make changes
+    Text.insert(text, 0, "test")
+
+    # Verify added event
+    assert_receive {:added, added_event}
+    event_id = added_event.meta.event_id
+
+    # Undo and verify metadata persists
+    UndoManager.undo(manager)
+    assert_receive {:popped, ^event_id, popped_event}
+    assert popped_event.meta.data.custom == test_metadata.custom
+  end
+
   test "redo with multiple types in scope", %{doc: doc, text: text, array: array} do
     {:ok, undo_manager} = UndoManager.new(doc, text)
     UndoManager.expand_scope(undo_manager, array)
@@ -1390,5 +1420,128 @@ defmodule Yex.UndoManagerTest do
     # ID should match between event and metadata lookup
     assert id == popped_event.meta.event_id
     assert is_struct(popped_event, Yex.UndoManager.Event)
+  end
+
+  test "demonstrates callback replacement behavior", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # Register first callback
+    {:ok, manager} =
+      UndoManager.on_item_added(manager, fn _event ->
+        send(test_pid, :first_callback)
+      end)
+
+    # Register second callback - should replace first
+    {:ok, _manager} =
+      UndoManager.on_item_added(manager, fn _event ->
+        send(test_pid, :second_callback)
+      end)
+
+    # Make a change to trigger callback
+    Text.insert(text, 0, "test")
+
+    # Should only receive message from second callback
+    assert_receive :second_callback
+    refute_receive :first_callback
+  end
+
+  test "demonstrates capture timeout behavior", %{doc: doc, text: text} do
+    options = %UndoManager.Options{capture_timeout: 100}
+    {:ok, manager} = UndoManager.new_with_options(doc, text, options)
+
+    # First change
+    Text.insert(text, 0, "First")
+
+    # Second change within timeout - should merge
+    Text.insert(text, 5, " merged")
+
+    # Verify merged changes are undone together
+    UndoManager.undo(manager)
+    assert Text.to_string(text) == ""
+
+    # First change
+    Text.insert(text, 0, "First")
+
+    # Wait longer than timeout
+    Process.sleep(150)
+
+    # Second change after timeout - should not merge
+    Text.insert(text, 5, " separate")
+
+    # Verify changes are undone separately
+    UndoManager.undo(manager)
+    assert Text.to_string(text) == "First"
+  end
+
+  test "handles complex text operations and concurrent updates", %{doc: doc, text: text} do
+    {:ok, undo_manager} = UndoManager.new(doc, text)
+    UndoManager.include_origin(undo_manager, "some-origin")
+    IO.puts("\n=== Test Start ===")
+    IO.puts("Initial text: '#{Text.to_string(text)}'")
+
+    # Test 1: Items added & deleted in same transaction
+    Doc.transaction(doc, "some-origin", fn ->
+      Text.insert(text, 0, "test")
+      IO.puts("After insert 'test': '#{Text.to_string(text)}'")
+      Text.delete(text, 0, 4)
+      IO.puts("After delete: '#{Text.to_string(text)}'")
+    end)
+
+    UndoManager.stop_capturing(undo_manager)
+
+    IO.puts("After transaction 1: '#{Text.to_string(text)}'")
+    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
+
+    UndoManager.undo(undo_manager)
+    IO.puts("After first undo: '#{Text.to_string(text)}'")
+    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
+
+    assert Text.to_string(text) == ""
+    refute UndoManager.can_undo?(undo_manager)
+
+    # Test 2: Follow redone items
+    Doc.transaction(doc, "some-origin", fn ->
+      Text.insert(text, 0, "a")
+      IO.puts("After inserting 'a': '#{Text.to_string(text)}'")
+    end)
+
+    UndoManager.stop_capturing(undo_manager)
+
+    IO.puts("After transaction 2: '#{Text.to_string(text)}'")
+    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
+
+    assert UndoManager.can_undo?(undo_manager)
+    assert Text.to_string(text) == "a"
+
+    Doc.transaction(doc, "some-origin", fn ->
+      Text.delete(text, 0, 1)
+      IO.puts("After deleting 'a': '#{Text.to_string(text)}'")
+    end)
+
+    UndoManager.stop_capturing(undo_manager)
+
+    IO.puts("After transaction 3: '#{Text.to_string(text)}'")
+    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
+
+    assert Text.to_string(text) == ""
+
+    UndoManager.undo(undo_manager)
+    IO.puts("After second undo: '#{Text.to_string(text)}'")
+    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
+
+    assert Text.to_string(text) == "a"
+
+    Doc.transaction(doc, "some-origin", fn ->
+      Text.insert(text, 0, "b")
+      IO.puts("After inserting 'b': '#{Text.to_string(text)}'")
+    end)
+
+    UndoManager.stop_capturing(undo_manager)
+
+    IO.puts("Final state: '#{Text.to_string(text)}'")
+    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
+
+    assert Text.to_string(text) == "ba"
   end
 end
