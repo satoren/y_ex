@@ -35,15 +35,11 @@ rustler::atoms! {
     retain,
     attributes,
 
-    // Undo manager related atoms
-    item_added,
-    item_updated,
-    item_popped,
-
     // Event types
     text,
     array,
     map,
+    xml_element,
     xml_fragment,
     xml_text,
     unknown,
@@ -52,13 +48,21 @@ rustler::atoms! {
     origin,
     kind,
     delta,
+    meta,
+    changed_parent_types,
 
-    // Event message types
+    // Event and Undo manager message types
+    item_added,
+    item_updated,
+    item_popped,
     added,
     updated,
     popped,
 
     // Change fields
     type_,
-    path
+    path,
+    undo,
+    redo,
+    event_id,
 }
