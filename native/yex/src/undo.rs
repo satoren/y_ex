@@ -1,17 +1,17 @@
 use crate::{
-    atoms, shared_type::NifSharedType, utils::term_to_origin_binary,
-    wrap::NifWrap, yinput::NifSharedTypeInput, NifDoc, NifError, ENV,
+    atoms, shared_type::NifSharedType, utils::term_to_origin_binary, wrap::NifWrap,
+    yinput::NifSharedTypeInput, NifDoc, NifError, ENV,
 };
 
 use rustler::{
-    Atom, Env, Error as RustlerError, LocalPid, NifResult, NifStruct, ResourceArc, Term, Encoder,
+    Atom, Encoder, Env, Error as RustlerError, LocalPid, NifResult, NifStruct, ResourceArc, Term,
 };
 use std::ops::Deref;
 use std::sync::RwLock;
-use yrs::{undo::Options as UndoOptions, Subscription};
-use yrs::undo::UndoManager as YrsUndoManager;
-use yrs::branch::BranchPtr;
 use uuid::Uuid;
+use yrs::branch::BranchPtr;
+use yrs::undo::UndoManager as YrsUndoManager;
+use yrs::{undo::Options as UndoOptions, Subscription};
 
 #[derive(Debug, Default, Clone)]
 pub struct UndoMetadata {
@@ -68,11 +68,19 @@ pub fn undo_manager_new_with_options(
 
     match scope {
         NifSharedTypeInput::Text(text) => create_undo_manager_with_options(env, doc, text, options),
-        NifSharedTypeInput::Array(array) => create_undo_manager_with_options(env, doc, array, options),
+        NifSharedTypeInput::Array(array) => {
+            create_undo_manager_with_options(env, doc, array, options)
+        }
         NifSharedTypeInput::Map(map) => create_undo_manager_with_options(env, doc, map, options),
-        NifSharedTypeInput::XmlText(text) => create_undo_manager_with_options(env, doc, text, options),
-        NifSharedTypeInput::XmlElement(element) => create_undo_manager_with_options(env, doc, element, options),
-        NifSharedTypeInput::XmlFragment(fragment) => create_undo_manager_with_options(env, doc, fragment, options),
+        NifSharedTypeInput::XmlText(text) => {
+            create_undo_manager_with_options(env, doc, text, options)
+        }
+        NifSharedTypeInput::XmlElement(element) => {
+            create_undo_manager_with_options(env, doc, element, options)
+        }
+        NifSharedTypeInput::XmlFragment(fragment) => {
+            create_undo_manager_with_options(env, doc, fragment, options)
+        }
     }
 }
 
@@ -92,7 +100,8 @@ fn create_undo_manager_with_options<T: NifSharedType>(
         ..Default::default()
     };
 
-    let undo_manager = YrsUndoManager::<UndoMetadata>::with_scope_and_options(&doc, &branch, undo_options);
+    let undo_manager =
+        YrsUndoManager::<UndoMetadata>::with_scope_and_options(&doc, &branch, undo_options);
     let wrapper = UndoManagerWrapper::new(undo_manager);
     let resource = ResourceArc::new(NifWrap(RwLock::new(wrapper)));
 
@@ -113,7 +122,7 @@ pub fn undo_manager_include_origin(
 
         let origin = term_to_origin_binary(origin_term)
             .ok_or_else(|| RustlerError::Term(Box::new("Invalid origin term")))?;
-        
+
         wrapper.manager.include_origin(origin.as_slice());
         Ok(atoms::ok())
     })
@@ -133,14 +142,17 @@ pub fn undo_manager_exclude_origin(
 
         let origin = term_to_origin_binary(origin_term)
             .ok_or_else(|| RustlerError::Term(Box::new("Invalid origin term")))?;
-        
+
         wrapper.manager.exclude_origin(origin.as_slice());
         Ok(atoms::ok())
     })
 }
 
 #[rustler::nif]
-pub fn undo_manager_undo(env: Env, reference: ResourceArc<UndoManagerResource>) -> Result<(), NifError> {
+pub fn undo_manager_undo(
+    env: Env,
+    reference: ResourceArc<UndoManagerResource>,
+) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = reference
             .0
@@ -156,7 +168,10 @@ pub fn undo_manager_undo(env: Env, reference: ResourceArc<UndoManagerResource>) 
 }
 
 #[rustler::nif]
-pub fn undo_manager_redo(env: Env, reference: ResourceArc<UndoManagerResource>) -> Result<(), NifError> {
+pub fn undo_manager_redo(
+    env: Env,
+    reference: ResourceArc<UndoManagerResource>,
+) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = reference
             .0
@@ -249,7 +264,10 @@ pub fn undo_manager_stop_capturing(
 }
 
 #[rustler::nif]
-pub fn undo_manager_clear(env: Env, reference: ResourceArc<UndoManagerResource>) -> Result<(), NifError> {
+pub fn undo_manager_clear(
+    env: Env,
+    reference: ResourceArc<UndoManagerResource>,
+) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = reference
             .0
@@ -272,25 +290,28 @@ fn map_event_kind(kind: yrs::undo::EventKind) -> Atom {
 
 // Helper function to convert BranchPtr slice to Vec<String>
 fn map_parent_types(types: &[BranchPtr]) -> Vec<String> {
-    types.iter().map(|t| {
-        let type_str = t.to_string();
-        // Extract just the type name from the Y.js type string
-        if type_str.starts_with("YText") {
-            "text".to_string()
-        } else if type_str.starts_with("YArray") {
-            "array".to_string()
-        } else if type_str.starts_with("YMap") {
-            "map".to_string()
-        } else if type_str.starts_with("YXmlText") {
-            "xml_text".to_string()
-        } else if type_str.starts_with("YXmlElement") {
-            "xml_element".to_string()
-        } else if type_str.starts_with("YXmlFragment") {
-            "xml_fragment".to_string()
-        } else {
-            "unknown".to_string()
-        }
-    }).collect()
+    types
+        .iter()
+        .map(|t| {
+            let type_str = t.to_string();
+            // Extract just the type name from the Y.js type string
+            if type_str.starts_with("YText") {
+                "text".to_string()
+            } else if type_str.starts_with("YArray") {
+                "array".to_string()
+            } else if type_str.starts_with("YMap") {
+                "map".to_string()
+            } else if type_str.starts_with("YXmlText") {
+                "xml_text".to_string()
+            } else if type_str.starts_with("YXmlElement") {
+                "xml_element".to_string()
+            } else if type_str.starts_with("YXmlFragment") {
+                "xml_fragment".to_string()
+            } else {
+                "unknown".to_string()
+            }
+        })
+        .collect()
 }
 
 #[rustler::nif]
@@ -313,12 +334,12 @@ pub fn undo_manager_observe_item_added(
         ENV.with(|env| {
             // Generate a new UUID for each event
             let event_id = Uuid::new_v4().to_string();
-            
+
             // Update the event metadata
             *event.meta_mut() = UndoMetadata {
                 event_id: event_id.clone(),
             };
-            
+
             // Create metadata map with event_id
             let meta_map = rustler::types::map::map_new(*env);
             let meta_map = meta_map
@@ -331,7 +352,7 @@ pub fn undo_manager_observe_item_added(
                 kind: map_event_kind(event.kind()),
                 changed_parent_types: map_parent_types(event.changed_parent_types()),
             };
-            
+
             let message = (atoms::item_added(), nif_event);
             let _ = env.send(&observer, message);
         });
@@ -361,21 +382,21 @@ pub fn undo_manager_observe_item_popped(
         ENV.with(|env| {
             // Get the existing metadata with its ID
             let meta = event.meta();
-            
+
             let map = rustler::types::map::map_new(*env)
                 .map_put(atoms::event_id(), meta.event_id.encode(*env))
                 .expect("Failed to put event_id");
-            
+
             let nif_event = NifUndoEvent {
                 meta: map,
                 origin: event.origin().map(|o| o.as_ref().to_vec()),
                 kind: map_event_kind(event.kind()),
                 changed_parent_types: map_parent_types(event.changed_parent_types()),
             };
-            
+
             // Use the same ID from the metadata
             let message = (atoms::item_popped(), meta.event_id.clone(), nif_event);
-            
+
             let _ = env.send(&observer, message);
         });
     });
@@ -408,7 +429,7 @@ pub fn undo_manager_observe_item_updated(
                 kind: map_event_kind(event.kind()),
                 changed_parent_types: map_parent_types(event.changed_parent_types()),
             };
-            
+
             let message = (atoms::item_updated(), nif_event);
             let _ = env.send(&observer, message);
         });
@@ -419,9 +440,7 @@ pub fn undo_manager_observe_item_updated(
 }
 
 #[rustler::nif]
-pub fn undo_manager_can_undo(
-    reference: ResourceArc<UndoManagerResource>,
-) -> NifResult<bool> {
+pub fn undo_manager_can_undo(reference: ResourceArc<UndoManagerResource>) -> NifResult<bool> {
     let wrapper = reference
         .0
         .read()
