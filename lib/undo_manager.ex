@@ -10,6 +10,82 @@ defmodule Yex.UndoManager do
 
   Each type of callback can have only one active handler at a time.
   Registering a new callback replaces any existing one.
+
+  ## Understanding Yrs and Transaction Synchronization
+
+  Yrs (the underlying CRDT library) uses an eventual consistency model where changes are
+  synchronized asynchronously. The UndoManager batches changes within a capture timeout window
+  (default 500ms) to group related operations together.
+
+  To ensure reliable undo/redo behavior, use `stop_capturing/1` when you need to explicitly
+  separate operations into distinct undo steps. This is preferable to relying on timing or
+  the capture timeout, as it guarantees proper transaction boundaries.
+
+  ## Capture Timeout Configuration
+
+  The UndoManager's capture timeout determines how long it will wait to batch related operations
+  together into a single undo step. You can configure this when creating the UndoManager:
+
+      # Create an UndoManager with a 1-second capture timeout
+      {:ok, manager} = UndoManager.new_with_options(doc, text, %Options{capture_timeout: 1000})
+
+  A longer timeout will group more operations together, while a shorter timeout will create
+  more granular undo steps. However, relying on timeouts for operation grouping can be
+  unpredictable, especially in networked environments. It's recommended to use `stop_capturing/1`
+  to explicitly control operation boundaries for more reliable behavior.
+
+  ## Basic Usage
+
+      # Create a new document and text type
+      {:ok, doc} = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc, "mytext")
+
+      # Create an undo manager for the text
+      {:ok, manager} = Yex.UndoManager.new(doc, text)
+
+      # Make some changes that should be one undo operation
+      Yex.Text.insert(text, 0, "Hello")
+      Yex.Text.insert(text, 5, " World")
+
+      # Stop capturing to ensure the next change is a separate undo operation
+      Yex.UndoManager.stop_capturing(manager)
+
+      # This will be a separate undo operation
+      Yex.Text.insert(text, 11, "!")
+
+      # Undo the last change (removes "!")
+      Yex.UndoManager.undo(manager)
+
+      # Undo the previous changes (removes "Hello World")
+      Yex.UndoManager.undo(manager)
+
+  ## Working with Origins
+
+      # Track changes from specific origins
+      Yex.UndoManager.include_origin(manager, "user1")
+
+      # Ignore changes from specific origins
+      Yex.UndoManager.exclude_origin(manager, "system")
+
+  ## Observing Changes
+
+      # Register a callback for when items are added
+      Yex.UndoManager.on_item_added(manager, fn event ->
+        IO.puts "New undo item added: \#{inspect(event)}"
+      end)
+
+      # Register a callback for when items are popped
+      Yex.UndoManager.on_item_popped(manager, fn id, event ->
+        IO.puts "Item \#{id} was popped: \#{inspect(event)}"
+      end)
+
+  ## Managing Capture Groups
+
+      # Stop capturing changes to create a new undo group
+      Yex.Text.insert(text, 0, "First ")
+      Yex.UndoManager.stop_capturing(manager)
+      Yex.Text.insert(text, 6, "Second ")
+      # Now these will be separate undo operations
   """
 
   @doc false
@@ -44,13 +120,12 @@ defmodule Yex.UndoManager do
     ```
     """
     @type t :: %__MODULE__{
-            id: String.t(),
-            meta: term(),
+            meta: %{event_id: String.t()} | UndoMetadata.t(),
             origin: String.t() | nil,
             kind: :undo | :redo,
             changed_parent_types: [String.t()]
           }
-    defstruct [:id, :meta, :origin, :kind, :changed_parent_types]
+    defstruct [:meta, :origin, :kind, :changed_parent_types]
   end
 
   defstruct [
@@ -96,12 +171,13 @@ defmodule Yex.UndoManager do
 
   defmodule UndoMetadata do
     @moduledoc """
-    Metadata for undo events, including a unique identifier.
+    Metadata for undo events, including a unique identifier (from undo.rs) and custom data (managed by UndoMetadataServer).
     """
     @type t :: %__MODULE__{
-            event_id: String.t()
+            event_id: String.t(),
+            data: map()
           }
-    defstruct [:event_id]
+    defstruct [:event_id, data: %{}]
   end
 
   # Client API
@@ -278,19 +354,39 @@ defmodule Yex.UndoManager do
   end
 
   @doc """
-  Stops capturing changes for the current stack item.
-  This ensures that the next change will create a new stack item instead of
-  being merged with the previous one, even if it occurs within the normal timeout window.
+  Stops capturing changes for the current stack item and ensures the next change creates a new undo operation.
 
-  ## Example:
+  Due to Yrs' eventual consistency model, changes are typically batched within a capture timeout window.
+  Using `stop_capturing/1` provides explicit control over undo operation boundaries, which is more
+  reliable than depending on timing.
+
+  ## When to use
+
+  - When you want to ensure changes are split into separate undo operations
+  - After completing a logical group of changes that should be undone together
+  - Before starting a new set of changes that should be undone separately
+
+  ## Example
+
       text = Doc.get_text(doc, "text")
       undo_manager = UndoManager.new(doc, text)
 
-      Text.insert(text, 0, "a")
+      # These changes will be grouped together
+      Text.insert(text, 0, "Hello")
+      Text.insert(text, 5, " ")
+      Text.insert(text, 6, "World")
+
+      # Ensure the next change is a separate undo operation
       UndoManager.stop_capturing(undo_manager)
-      Text.insert(text, 1, "b")
-      UndoManager.undo(undo_manager)
-      # Text.to_string(text) will be "a" (only "b" was removed)
+
+      # This will be a separate undo operation
+      Text.insert(text, 11, "!")
+
+      UndoManager.undo(undo_manager)  # Removes "!"
+      assert Text.to_string(text) == "Hello World"
+
+      UndoManager.undo(undo_manager)  # Removes "Hello World"
+      assert Text.to_string(text) == ""
   """
   def stop_capturing(undo_manager) do
     Yex.Nif.undo_manager_stop_capturing(undo_manager.reference)
