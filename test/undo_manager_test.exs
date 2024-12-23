@@ -1477,25 +1477,16 @@ defmodule Yex.UndoManagerTest do
   test "handles complex text operations and concurrent updates", %{doc: doc, text: text} do
     {:ok, undo_manager} = UndoManager.new(doc, text)
     UndoManager.include_origin(undo_manager, "some-origin")
-    IO.puts("\n=== Test Start ===")
-    IO.puts("Initial text: '#{Text.to_string(text)}'")
 
     # Test 1: Items added & deleted in same transaction
     Doc.transaction(doc, "some-origin", fn ->
       Text.insert(text, 0, "test")
-      IO.puts("After insert 'test': '#{Text.to_string(text)}'")
       Text.delete(text, 0, 4)
-      IO.puts("After delete: '#{Text.to_string(text)}'")
     end)
 
     UndoManager.stop_capturing(undo_manager)
 
-    IO.puts("After transaction 1: '#{Text.to_string(text)}'")
-    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
-
     UndoManager.undo(undo_manager)
-    IO.puts("After first undo: '#{Text.to_string(text)}'")
-    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
 
     assert Text.to_string(text) == ""
     refute UndoManager.can_undo?(undo_manager)
@@ -1503,45 +1494,272 @@ defmodule Yex.UndoManagerTest do
     # Test 2: Follow redone items
     Doc.transaction(doc, "some-origin", fn ->
       Text.insert(text, 0, "a")
-      IO.puts("After inserting 'a': '#{Text.to_string(text)}'")
     end)
 
     UndoManager.stop_capturing(undo_manager)
-
-    IO.puts("After transaction 2: '#{Text.to_string(text)}'")
-    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
 
     assert UndoManager.can_undo?(undo_manager)
     assert Text.to_string(text) == "a"
 
     Doc.transaction(doc, "some-origin", fn ->
       Text.delete(text, 0, 1)
-      IO.puts("After deleting 'a': '#{Text.to_string(text)}'")
     end)
 
     UndoManager.stop_capturing(undo_manager)
 
-    IO.puts("After transaction 3: '#{Text.to_string(text)}'")
-    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
-
     assert Text.to_string(text) == ""
 
     UndoManager.undo(undo_manager)
-    IO.puts("After second undo: '#{Text.to_string(text)}'")
-    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
 
     assert Text.to_string(text) == "a"
 
     Doc.transaction(doc, "some-origin", fn ->
       Text.insert(text, 0, "b")
-      IO.puts("After inserting 'b': '#{Text.to_string(text)}'")
     end)
 
     UndoManager.stop_capturing(undo_manager)
 
-    IO.puts("Final state: '#{Text.to_string(text)}'")
-    IO.puts("Can undo? #{UndoManager.can_undo?(undo_manager)}")
-
     assert Text.to_string(text) == "ba"
+  end
+
+  test "constructor variations work as expected", %{doc: doc, text: text} do
+    # Basic constructor
+    {:ok, undo_manager} = UndoManager.new(doc, text)
+    assert %UndoManager{} = undo_manager
+    assert is_reference(undo_manager.reference)
+
+    # Constructor with options
+    options = %UndoManager.Options{capture_timeout: 1000}
+    {:ok, undo_manager_with_opts} = UndoManager.new_with_options(doc, text, options)
+    assert %UndoManager{} = undo_manager_with_opts
+    assert is_reference(undo_manager_with_opts.reference)
+  end
+
+  test "handles empty stack operations safely", %{doc: doc, text: text} do
+    {:ok, undo_manager} = UndoManager.new(doc, text)
+    UndoManager.undo(undo_manager)
+    UndoManager.redo(undo_manager)
+    # Both operations should complete without error
+  end
+
+  test "origin tracking works with text type", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    origin = "test-origin"
+    UndoManager.include_origin(manager, origin)
+
+    # Make tracked changes
+    Doc.transaction(doc, origin, fn ->
+      Text.insert(text, 0, "tracked")
+    end)
+
+    # Make untracked changes
+    Doc.transaction(doc, "other-origin", fn ->
+      Text.insert(text, 0, "tracked")
+    end)
+
+    # Undo should only remove tracked changes
+    UndoManager.undo(manager)
+
+    # Verify only untracked changes remain
+    assert Text.to_string(text) == "tracked"
+  end
+
+  test "origin tracking works with array type", %{doc: doc, array: array} do
+    {:ok, manager} = UndoManager.new(doc, array)
+    origin = "test-origin"
+    UndoManager.include_origin(manager, origin)
+
+    # Make tracked changes
+    Doc.transaction(doc, origin, fn ->
+      Array.push(array, "tracked")
+    end)
+
+    # Make untracked changes
+    Doc.transaction(doc, "other-origin", fn ->
+      Array.push(array, "tracked")
+    end)
+
+    # Undo should only remove tracked changes
+    UndoManager.undo(manager)
+
+    # Verify only untracked changes remain
+    assert Array.to_list(array) == ["tracked"]
+  end
+
+  test "origin tracking works with map type", %{doc: doc, map: map} do
+    {:ok, manager} = UndoManager.new(doc, map)
+    origin = "test-origin"
+    UndoManager.include_origin(manager, origin)
+
+    # Make tracked changes
+    Doc.transaction(doc, origin, fn ->
+      Yex.Map.set(map, "tracked_key", "value")
+    end)
+
+    # Make untracked changes
+    Doc.transaction(doc, "other-origin", fn ->
+      Yex.Map.set(map, "tracked_key", "value")
+    end)
+
+    # Undo should only remove tracked changes
+    UndoManager.undo(manager)
+
+    # Verify only untracked changes remain
+    assert Yex.Map.to_map(map) == %{"tracked_key" => "value"}
+  end
+
+  test "origin tracking works with xml fragment", %{doc: doc, xml_fragment: xml_fragment} do
+    {:ok, manager} = UndoManager.new(doc, xml_fragment)
+    origin = "test-origin"
+    UndoManager.include_origin(manager, origin)
+
+    # Make tracked changes
+    Doc.transaction(doc, origin, fn ->
+      XmlFragment.push(xml_fragment, XmlTextPrelim.from("tracked"))
+    end)
+
+    # Make untracked changes
+    Doc.transaction(doc, "other-origin", fn ->
+      XmlFragment.push(xml_fragment, XmlElementPrelim.empty("div"))
+    end)
+
+    # Undo should only remove tracked changes
+    UndoManager.undo(manager)
+
+    # Verify only untracked changes remain
+    assert XmlFragment.to_string(xml_fragment) == "<div></div>"
+  end
+
+  test "origin tracking works with xml element", %{doc: doc, xml_fragment: xml_fragment} do
+    # First create an element in the fragment
+    XmlFragment.push(xml_fragment, XmlElementPrelim.empty("div"))
+    {:ok, element} = XmlFragment.fetch(xml_fragment, 0)
+
+    {:ok, manager} = UndoManager.new(doc, element)
+    origin = "test-origin"
+    UndoManager.include_origin(manager, origin)
+
+    # Make tracked changes
+    Doc.transaction(doc, origin, fn ->
+      XmlElement.insert_attribute(element, "class", "tracked")
+    end)
+
+    # Make untracked changes
+    Doc.transaction(doc, "other-origin", fn ->
+      XmlElement.push(element, XmlTextPrelim.from("content"))
+    end)
+
+    # Undo should only remove tracked changes
+    UndoManager.undo(manager)
+
+    # Verify only untracked changes remain
+    assert XmlElement.to_string(element) == "<div>content</div>"
+  end
+
+  test "origin tracking works with xml text", %{doc: doc, xml_fragment: xml_fragment} do
+    # First create a text node in the fragment
+    XmlFragment.push(xml_fragment, XmlTextPrelim.from(""))
+    {:ok, text_node} = XmlFragment.fetch(xml_fragment, 0)
+
+    {:ok, manager} = UndoManager.new(doc, text_node)
+    origin = "test-origin"
+    UndoManager.include_origin(manager, origin)
+
+    # Make tracked changes
+    Doc.transaction(doc, origin, fn ->
+      XmlText.format(text_node, 0, 5, %{"bold" => true})
+    end)
+
+    # Make untracked changes
+    Doc.transaction(doc, "other-origin", fn ->
+      XmlText.insert(text_node, 0, "Hello")
+    end)
+
+    # Undo should only remove tracked changes
+    UndoManager.undo(manager)
+
+    # Verify only untracked changes remain
+    assert XmlText.to_string(text_node) == "Hello"
+  end
+
+  test "redo works correctly with origin tracking", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    origin = "test-origin"
+    UndoManager.include_origin(manager, origin)
+
+    # Make tracked changes
+    Doc.transaction(doc, origin, fn ->
+      Text.insert(text, 0, "tracked")
+    end)
+
+    # Make untracked changes
+    Doc.transaction(doc, "other-origin", fn ->
+      Text.insert(text, 7, " untracked")
+    end)
+
+    # Initial state
+    assert Text.to_string(text) == "tracked untracked"
+
+    # Undo tracked changes
+    UndoManager.undo(manager)
+    assert Text.to_string(text) == " untracked"
+
+    # Redo tracked changes
+    UndoManager.redo(manager)
+    assert Text.to_string(text) == "tracked untracked"
+  end
+
+  test "multiple origins can be tracked simultaneously", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    origin1 = "origin-1"
+    origin2 = "origin-2"
+    UndoManager.include_origin(manager, origin1)
+    UndoManager.include_origin(manager, origin2)
+
+    # Make changes with first tracked origin
+    Doc.transaction(doc, origin1, fn ->
+      Text.insert(text, 0, "first ")
+    end)
+
+    # Make changes with second tracked origin
+    Doc.transaction(doc, origin2, fn ->
+      Text.insert(text, 6, "second ")
+    end)
+
+    # Make untracked changes
+    Doc.transaction(doc, "untracked", fn ->
+      Text.insert(text, 13, "third")
+    end)
+
+    assert Text.to_string(text) == "first second third"
+
+    # Both tracked origins should be undone
+    UndoManager.undo(manager)
+    assert Text.to_string(text) == "third"
+  end
+
+  test "excluded origins override included origins", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    origin = "test-origin"
+
+    # Include and then exclude the same origin
+    UndoManager.include_origin(manager, origin)
+    UndoManager.exclude_origin(manager, origin)
+
+    # Make changes with the excluded origin
+    Doc.transaction(doc, origin, fn ->
+      Text.insert(text, 0, "excluded")
+    end)
+
+    # Make changes with another origin
+    Doc.transaction(doc, "other-origin", fn ->
+      Text.insert(text, 8, " tracked")
+    end)
+
+    assert Text.to_string(text) == "excluded tracked"
+
+    # Undo should not affect any changes since the origin is excluded
+    UndoManager.undo(manager)
+    assert Text.to_string(text) == "excluded tracked"
   end
 end
