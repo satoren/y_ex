@@ -183,16 +183,15 @@ defmodule Yex.Nif do
   def undo_manager_clear(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
 
   def undo_manager_observe_item_added(_manager, _observer), do: :erlang.nif_error(:nif_not_loaded)
-  def undo_manager_unobserve_item_added(_manager), do: :erlang.nif_error(:nif_not_loaded)
 
   def undo_manager_observe_item_updated(_manager, _observer),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def undo_manager_unobserve_item_updated(_manager), do: :erlang.nif_error(:nif_not_loaded)
-
   def undo_manager_observe_item_popped(_manager, _observer),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def undo_manager_unobserve_item_added(_manager), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_unobserve_item_updated(_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_unobserve_item_popped(_manager), do: :erlang.nif_error(:nif_not_loaded)
 end
 
