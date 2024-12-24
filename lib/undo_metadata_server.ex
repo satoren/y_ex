@@ -9,16 +9,16 @@ defmodule Yex.UndoMetadataServer do
 
   1. When an undo item is added in Rust, we need to:
      - Generate a unique event ID (UUID)
-     - Attach this ID to the Rust event's metadata
+     - Store this ID in the Rust stack item's metadata
      - Allow Elixir callbacks to associate custom metadata with this ID
      - Preserve this metadata for future updates and when the item is popped
 
   2. The flow is:
      - Rust generates a UUID when an item is added (`undo_manager_observe_item_added`)
-     - This ID is stored in the Rust event's mutable metadata
+     - This ID is stored in the Rust stack item's mutable metadata
      - The event and ID are sent to this GenServer
-     - Elixir callbacks can add custom metadata, which we store in the `metadata` map
-     - Future updates/pops reference this ID to maintain metadata consistency
+     - Elixir callbacks can add custom metadata, which we store in the `metadata` map in GenServer state
+     - Future updates/pops reference this ID to retrieve and update the metadata
 
   ## Why This Design?
 
@@ -27,13 +27,6 @@ defmodule Yex.UndoMetadataServer do
   2. NIFs don't allow complex data modifications across the boundary
   3. We need persistent metadata storage between events
 
-  Instead, we:
-  1. Generate and attach IDs in Rust where we have mutable access
-  2. Store actual metadata in this Elixir server
-  3. Use the event ID as a bridge between the two systems
-
-  This design maintains clean boundaries while allowing rich metadata
-  to persist throughout the undo/redo lifecycle.
   """
   use GenServer
   alias Yex.UndoManager.Event

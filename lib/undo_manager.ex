@@ -112,14 +112,10 @@ defmodule Yex.UndoManager do
         changed_parent_types: Vec<BranchPtr>,
     }
 
-    WE ADD AN ID TO meta as event.meta.event_id
-    Event.id is added in undo.rs for a specific reason: we need a unique id to track each stack item and no unique info is provided in the Event.
-    So when we get an event from Rust, we add an id to it.
+    Before sending the event to Elixir, we add an event_id to the meta field.
     This is used by the metadata GenServer to track the metadata for each stack item.
-    Why not use yrs UndoManager to track the metadata?  Because we cannot update the mutable metadata in a NIF callback context without potentially blocking.
+    It is stored in meta so that it persists with the Stack Item in yrs.
 
-
-    ```
     """
     @type t :: %__MODULE__{
             meta: %{event_id: String.t()} | Yex.UndoManager.UndoMetadata.t(),
