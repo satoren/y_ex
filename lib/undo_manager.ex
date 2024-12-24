@@ -444,12 +444,12 @@ defmodule Yex.UndoManager do
   """
   def clear(%__MODULE__{} = manager) do
     case Yex.Nif.undo_manager_clear(manager.reference) do
-      :ok ->
+      {:ok, {}} ->
         if manager.metadata_server_pid do
           Yex.UndoMetadataServer.clear_metadata(manager.metadata_server_pid)
         end
 
-        :ok
+        {:ok, %{}}
 
       error ->
         error
