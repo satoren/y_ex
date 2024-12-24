@@ -1559,9 +1559,12 @@ defmodule Yex.UndoManagerTest do
 
   test "handles empty stack operations safely", %{doc: doc, text: text} do
     {:ok, undo_manager} = UndoManager.new(doc, text)
+    refute UndoManager.can_undo?(undo_manager)
+    refute UndoManager.can_redo?(undo_manager)
+
+    # Both operations should complete without error
     UndoManager.undo(undo_manager)
     UndoManager.redo(undo_manager)
-    # Both operations should complete without error
   end
 
   test "origin tracking works with text type", %{doc: doc, text: text} do
@@ -1963,5 +1966,43 @@ defmodule Yex.UndoManagerTest do
 
     # Verify we receive the update event and invalid return is handled
     assert_receive {:item_updated_invalid, _event}
+  end
+
+  test "can_undo? and can_redo? correctly reflect stack state", %{doc: doc, text: text} do
+    {:ok, undo_manager} = UndoManager.new(doc, text)
+
+    # Initially should have no items to undo or redo
+    refute UndoManager.can_undo?(undo_manager)
+    refute UndoManager.can_redo?(undo_manager)
+
+    # Make a change
+    Doc.transaction(doc, nil, fn ->
+      Text.insert(text, 0, "Hello")
+    end)
+
+    # Should now have an item to undo but not redo
+    assert UndoManager.can_undo?(undo_manager)
+    refute UndoManager.can_redo?(undo_manager)
+
+    # Undo the change
+    UndoManager.undo(undo_manager)
+
+    # Should now have an item to redo but not undo
+    refute UndoManager.can_undo?(undo_manager)
+    assert UndoManager.can_redo?(undo_manager)
+
+    # Redo the change
+    UndoManager.redo(undo_manager)
+
+    # Should now have an item to undo but not redo
+    assert UndoManager.can_undo?(undo_manager)
+    refute UndoManager.can_redo?(undo_manager)
+
+    # Clear the undo manager
+    UndoManager.clear(undo_manager)
+
+    # Should have no items to undo or redo
+    refute UndoManager.can_undo?(undo_manager)
+    refute UndoManager.can_redo?(undo_manager)
   end
 end
