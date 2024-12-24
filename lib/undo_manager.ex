@@ -1,4 +1,6 @@
 defmodule Yex.UndoManager do
+  require Logger
+
   @moduledoc """
   Manages undo/redo operations and observation for Yex shared types.
 
@@ -239,7 +241,8 @@ defmodule Yex.UndoManager do
   """
   @spec on_item_added(t(), item_added_callback()) :: {:ok, t()} | {:error, term()}
   def on_item_added(%__MODULE__{} = manager, callback) when is_function(callback, 1) do
-    with manager <- ensure_metadata_server(manager),
+    # ensure_metadata_server will only return {:ok, manager} upon starting server successfully
+    with {:ok, manager} <- ensure_metadata_server(manager),
          :ok <-
            Yex.UndoMetadataServer.set_item_added_callback(manager.metadata_server_pid, callback),
          :ok <-
@@ -262,7 +265,8 @@ defmodule Yex.UndoManager do
   """
   @spec on_item_updated(t(), item_updated_callback()) :: {:ok, t()} | {:error, term()}
   def on_item_updated(%__MODULE__{} = manager, callback) when is_function(callback, 1) do
-    with manager <- ensure_metadata_server(manager),
+    # ensure_metadata_server will only return {:ok, manager} upon starting server successfully
+    with {:ok, manager} <- ensure_metadata_server(manager),
          :ok <-
            Yex.UndoMetadataServer.set_item_updated_callback(manager.metadata_server_pid, callback),
          :ok <-
@@ -288,7 +292,8 @@ defmodule Yex.UndoManager do
   """
   @spec on_item_popped(t(), item_popped_callback()) :: {:ok, t()} | {:error, term()}
   def on_item_popped(%__MODULE__{} = manager, callback) when is_function(callback, 2) do
-    with manager <- ensure_metadata_server(manager),
+    # ensure_metadata_server will only return {:ok, manager} upon starting server successfully
+    with {:ok, manager} <- ensure_metadata_server(manager),
          :ok <-
            Yex.UndoMetadataServer.set_item_popped_callback(manager.metadata_server_pid, callback),
          :ok <-
@@ -305,12 +310,16 @@ defmodule Yex.UndoManager do
     case manager.metadata_server_pid do
       nil ->
         case Yex.UndoMetadataServer.start_link(manager.reference) do
-          {:ok, pid} -> %{manager | metadata_server_pid: pid}
-          {:error, _reason} = error -> error
+          {:ok, pid} ->
+            {:ok, %{manager | metadata_server_pid: pid}}
+
+          {:error, reason} = error ->
+            Logger.error("Failed to start metadata server: #{inspect(reason)}")
+            error
         end
 
       _pid ->
-        manager
+        {:ok, manager}
     end
   end
 
