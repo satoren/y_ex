@@ -109,7 +109,6 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     Ok(resource)
 }
 
-
 #[rustler::nif]
 pub fn undo_manager_include_origin(
     env: Env<'_>,
@@ -157,11 +156,11 @@ pub fn undo_manager_undo(
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = try_write_lock(&reference.0)?;
-        
+
         if wrapper.manager.can_undo() {
             match wrapper.manager.try_undo() {
                 Ok(_) => Ok(()),
-                Err(e) => Err(NifError::Message(format!("Failed to undo: {}", e)))
+                Err(e) => Err(NifError::Message(format!("Failed to undo: {}", e))),
             }
         } else {
             Ok(())
@@ -176,11 +175,11 @@ pub fn undo_manager_redo(
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = try_write_lock(&reference.0)?;
-        
+
         if wrapper.manager.can_redo() {
             match wrapper.manager.try_redo() {
                 Ok(_) => Ok(()),
-                Err(e) => Err(NifError::Message(format!("Failed to redo: {}", e)))
+                Err(e) => Err(NifError::Message(format!("Failed to redo: {}", e))),
             }
         } else {
             Ok(())
@@ -522,7 +521,7 @@ impl Drop for UndoManagerWrapper {
         if let Some((_pid, sub)) = self.item_popped_observer.take() {
             drop(sub);
         }
-        
+
         // Try to clear the manager, but don't panic if we can't
         let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             // Best effort to clear - if it fails, we'll just continue
@@ -540,7 +539,10 @@ impl rustler::Encoder for UndoMetadata {
     }
 }
 
-fn try_write_lock(wrapper: &RwLock<UndoManagerWrapper>) -> Result<std::sync::RwLockWriteGuard<UndoManagerWrapper>, NifError> {
-    wrapper.try_write()
+fn try_write_lock(
+    wrapper: &RwLock<UndoManagerWrapper>,
+) -> Result<std::sync::RwLockWriteGuard<UndoManagerWrapper>, NifError> {
+    wrapper
+        .try_write()
         .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))
 }
