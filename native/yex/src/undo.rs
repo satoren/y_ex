@@ -465,6 +465,38 @@ pub fn undo_manager_unobserve_item_added(
     Ok(atoms::ok())
 }
 
+#[rustler::nif]
+pub fn undo_manager_unobserve_item_updated(
+    reference: ResourceArc<UndoManagerResource>,
+) -> NifResult<rustler::Atom> {
+    let mut wrapper = reference
+        .0
+        .write()
+        .map_err(|_| RustlerError::Term(Box::new("Failed to acquire write lock")))?;
+
+    if let Some((_pid, sub)) = wrapper.item_updated_observer.take() {
+        drop(sub);
+    }
+
+    Ok(atoms::ok())
+}
+
+#[rustler::nif]
+pub fn undo_manager_unobserve_item_popped(
+    reference: ResourceArc<UndoManagerResource>,
+) -> NifResult<rustler::Atom> {
+    let mut wrapper = reference
+        .0
+        .write()
+        .map_err(|_| RustlerError::Term(Box::new("Failed to acquire write lock")))?;
+
+    if let Some((_pid, sub)) = wrapper.item_popped_observer.take() {
+        drop(sub);
+    }
+
+    Ok(atoms::ok())
+}
+
 // Implement Drop to ensure cleanup
 impl Drop for UndoManagerWrapper {
     fn drop(&mut self) {
