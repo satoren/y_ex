@@ -16,6 +16,7 @@ scoped_thread_local = "1.0.0"
 serde = "1.0.210"
 serde_json = "1.0.120"
 yrs = { version ="0.21.0", features=["sync"] }
+uuid = { version = "1.0", features = ["v4"] }
 
 [features]
 default = ["nif_version_2_15"]
