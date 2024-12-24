@@ -12,6 +12,7 @@ use uuid::Uuid;
 use yrs::branch::BranchPtr;
 use yrs::undo::UndoManager as YrsUndoManager;
 use yrs::{undo::Options as UndoOptions, Subscription};
+// use std::panic::catch_unwind;
 
 #[derive(Debug, Default, Clone)]
 pub struct UndoMetadata {
@@ -108,6 +109,7 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     Ok(resource)
 }
 
+
 #[rustler::nif]
 pub fn undo_manager_include_origin(
     env: Env<'_>,
@@ -154,16 +156,16 @@ pub fn undo_manager_undo(
     reference: ResourceArc<UndoManagerResource>,
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        let mut wrapper = reference
-            .0
-            .write()
-            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
-
+        let mut wrapper = try_write_lock(&reference.0)?;
+        
         if wrapper.manager.can_undo() {
-            wrapper.manager.undo_blocking();
+            match wrapper.manager.try_undo() {
+                Ok(_) => Ok(()),
+                Err(e) => Err(NifError::Message(format!("Failed to undo: {}", e)))
+            }
+        } else {
+            Ok(())
         }
-
-        Ok(())
     })
 }
 
@@ -173,16 +175,16 @@ pub fn undo_manager_redo(
     reference: ResourceArc<UndoManagerResource>,
 ) -> Result<(), NifError> {
     ENV.set(&mut env.clone(), || {
-        let mut wrapper = reference
-            .0
-            .write()
-            .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))?;
-
+        let mut wrapper = try_write_lock(&reference.0)?;
+        
         if wrapper.manager.can_redo() {
-            wrapper.manager.redo_blocking();
+            match wrapper.manager.try_redo() {
+                Ok(_) => Ok(()),
+                Err(e) => Err(NifError::Message(format!("Failed to redo: {}", e)))
+            }
+        } else {
+            Ok(())
         }
-
-        Ok(())
     })
 }
 
@@ -510,7 +512,7 @@ pub fn undo_manager_unobserve_item_popped(
 // Implement Drop to ensure cleanup
 impl Drop for UndoManagerWrapper {
     fn drop(&mut self) {
-        // Remove all observers first
+        // Cleanup observers first
         if let Some((_pid, sub)) = self.item_added_observer.take() {
             drop(sub);
         }
@@ -520,8 +522,12 @@ impl Drop for UndoManagerWrapper {
         if let Some((_pid, sub)) = self.item_popped_observer.take() {
             drop(sub);
         }
-        // Clear the manager
-        self.manager.clear();
+        
+        // Try to clear the manager, but don't panic if we can't
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // Best effort to clear - if it fails, we'll just continue
+            let _ = self.manager.clear();
+        }));
     }
 }
 
@@ -532,4 +538,9 @@ impl rustler::Encoder for UndoMetadata {
         map.map_put(atoms::event_id(), self.event_id.encode(env))
             .expect("Failed to put event_id")
     }
+}
+
+fn try_write_lock(wrapper: &RwLock<UndoManagerWrapper>) -> Result<std::sync::RwLockWriteGuard<UndoManagerWrapper>, NifError> {
+    wrapper.try_write()
+        .map_err(|_| NifError::Message("Failed to acquire write lock".to_string()))
 }

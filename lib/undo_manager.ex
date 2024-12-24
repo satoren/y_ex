@@ -195,6 +195,15 @@ defmodule Yex.UndoManager do
   def new_with_options(doc, scope, options)
       when is_valid_scope(scope) and
              is_struct(options, Options) do
+    # Add a retry mechanism for creation
+    try_create_manager(doc, scope, options, 3)
+  end
+
+  defp try_create_manager(_doc, _scope, _options, 0) do
+    {:error, "Failed to create undo manager after multiple attempts"}
+  end
+
+  defp try_create_manager(doc, scope, options, attempts) do
     case Yex.Nif.undo_manager_new_with_options(doc, scope, options) do
       {:ok, rust_ref} ->
         {:ok,
@@ -202,6 +211,9 @@ defmodule Yex.UndoManager do
            reference: rust_ref,
            metadata_server_pid: nil
          }}
+
+      {:error, _} when attempts > 1 ->
+        try_create_manager(doc, scope, options, attempts - 1)
 
       error ->
         error
@@ -469,5 +481,24 @@ defmodule Yex.UndoManager do
   """
   def can_redo?(manager) do
     Yex.Nif.undo_manager_can_redo(manager.reference)
+  end
+
+  # Add a cleanup function
+  def cleanup(%__MODULE__{} = manager) do
+    # First clear any observers
+    unobserve_item_added(manager)
+    unobserve_item_updated(manager)
+    unobserve_item_popped(manager)
+
+    # Clear the undo stack
+    _ = clear(manager)
+
+    # If there's a metadata server, stop it
+    if manager.metadata_server_pid do
+      # Ignore errors since we're cleaning up
+      _ = GenServer.stop(manager.metadata_server_pid)
+    end
+
+    :ok
   end
 end
