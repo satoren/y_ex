@@ -467,7 +467,17 @@ defmodule Yex.UndoManager do
     end
   end
 
+  @doc """
+  Checks if the undo manager has items in the undo stack.
+  """
   def can_undo?(manager) do
     Yex.Nif.undo_manager_can_undo(manager.reference)
+  end
+
+  @doc """
+  Checks if the undo manager has items in the redo stack.
+  """
+  def can_redo?(manager) do
+    Yex.Nif.undo_manager_can_redo(manager.reference)
   end
 end

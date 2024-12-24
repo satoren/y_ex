@@ -450,6 +450,16 @@ pub fn undo_manager_can_undo(reference: ResourceArc<UndoManagerResource>) -> Nif
 }
 
 #[rustler::nif]
+pub fn undo_manager_can_redo(reference: ResourceArc<UndoManagerResource>) -> NifResult<bool> {
+    let wrapper = reference
+        .0
+        .read()
+        .map_err(|_| RustlerError::Term(Box::new("Failed to acquire read lock")))?;
+
+    Ok(wrapper.manager.can_redo())
+}
+
+#[rustler::nif]
 pub fn undo_manager_unobserve_item_added(
     reference: ResourceArc<UndoManagerResource>,
 ) -> NifResult<rustler::Atom> {
