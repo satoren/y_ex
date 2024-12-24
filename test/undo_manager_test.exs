@@ -2109,6 +2109,12 @@ defmodule Yex.UndoManagerTest do
     # Set up counter for tracking retry attempts
     :ets.new(:retry_counter, [:set, :public, :named_table])
     :ets.insert(:retry_counter, {:attempts, 0})
+    
+    on_exit(fn ->
+      if :ets.whereis(:retry_counter) != :undefined do
+        :ets.delete(:retry_counter)
+      end
+    end)
 
     with_mock Yex.Nif,
       undo_manager_new_with_options: fn _doc, _scope, _options ->
@@ -2131,9 +2137,6 @@ defmodule Yex.UndoManagerTest do
       [{:attempts, final_count}] = :ets.lookup(:retry_counter, :attempts)
       assert final_count == 3
     end
-
-    # Cleanup
-    :ets.delete(:retry_counter)
   end
 
   test "fails after maximum retries exceeded", %{doc: doc, text: text} do
