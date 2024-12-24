@@ -2104,4 +2104,102 @@ defmodule Yex.UndoManagerTest do
       assert manager.metadata_server_pid == nil
     end
   end
+
+  test "retries creation of undo manager on temporary failures", %{doc: doc, text: text} do
+    # Set up counter for tracking retry attempts
+    :ets.new(:retry_counter, [:set, :public, :named_table])
+    :ets.insert(:retry_counter, {:attempts, 0})
+
+    with_mock Yex.Nif,
+      undo_manager_new_with_options: fn _doc, _scope, _options ->
+        [{:attempts, count}] = :ets.lookup(:retry_counter, :attempts)
+        :ets.insert(:retry_counter, {:attempts, count + 1})
+
+        # Fail first two attempts, succeed on third
+        case count do
+          0 -> {:error, "First attempt failure"}
+          1 -> {:error, "Second attempt failure"}
+          _ -> {:ok, make_ref()}
+        end
+      end do
+      # Attempt to create the undo manager
+      assert {:ok, manager} = UndoManager.new(doc, text)
+      assert is_struct(manager, UndoManager)
+      assert is_reference(manager.reference)
+
+      # Verify we made exactly 3 attempts
+      [{:attempts, final_count}] = :ets.lookup(:retry_counter, :attempts)
+      assert final_count == 3
+    end
+
+    # Cleanup
+    :ets.delete(:retry_counter)
+  end
+
+  test "fails after maximum retries exceeded", %{doc: doc, text: text} do
+    with_mock Yex.Nif,
+      undo_manager_new_with_options: fn _doc, _scope, _options ->
+        {:error, "Persistent failure"}
+      end do
+      assert {:error, "Persistent failure"} =
+               UndoManager.new(doc, text)
+    end
+  end
+
+  test "cleanup properly handles all cleanup tasks", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # Set up observers
+    {:ok, manager} =
+      UndoManager.on_item_added(manager, fn event ->
+        send(test_pid, {:item_added, event})
+      end)
+
+    {:ok, manager} =
+      UndoManager.on_item_updated(manager, fn event ->
+        send(test_pid, {:item_updated, event})
+      end)
+
+    {:ok, manager} =
+      UndoManager.on_item_popped(manager, fn id, event ->
+        send(test_pid, {:item_popped, id, event})
+      end)
+
+    # Wait for metadata server to be ready
+    {:ok, manager} = wait_for_metadata_server(manager)
+    metadata_server_pid = manager.metadata_server_pid
+
+    # Make some changes to create undo history
+    Doc.transaction(doc, nil, fn ->
+      Text.insert(text, 0, "Hello")
+    end)
+
+    UndoManager.stop_capturing(manager)
+
+    # Verify we have undo history and an active metadata server
+    assert UndoManager.can_undo?(manager)
+    assert Process.alive?(metadata_server_pid)
+    assert_receive {:item_added, _}
+
+    # Call cleanup
+    assert :ok = UndoManager.cleanup(manager)
+
+    # Verify:
+    # 1. Undo stack is cleared
+    refute UndoManager.can_undo?(manager)
+    refute UndoManager.can_redo?(manager)
+
+    # 2. Metadata server is stopped
+    refute Process.alive?(metadata_server_pid)
+
+    # 3. Observers are removed (make a change and verify no callbacks)
+    Doc.transaction(doc, nil, fn ->
+      Text.insert(text, 0, "Test")
+    end)
+
+    refute_receive {:item_added, _}
+    refute_receive {:item_updated, _}
+    refute_receive {:item_popped, _, _}
+  end
 end
