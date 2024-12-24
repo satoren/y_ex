@@ -29,6 +29,28 @@ defmodule Yex.UndoManagerTest do
     {:ok, doc: doc, text: text, array: array, map: map, xml_fragment: xml_fragment}
   end
 
+  defp wait_for_metadata_server(manager, timeout \\ 2000) do
+    start_time = System.monotonic_time(:millisecond)
+    wait_for_metadata_server(manager, timeout, start_time)
+  end
+
+  defp wait_for_metadata_server(manager, timeout, start_time) do
+    cond do
+      # Check if we have a pid and it's alive
+      is_pid(manager.metadata_server_pid) && Process.alive?(manager.metadata_server_pid) ->
+        {:ok, manager}
+
+      # Check if we've exceeded our timeout
+      System.monotonic_time(:millisecond) - start_time > timeout ->
+        {:error, :timeout}
+
+      # If not, sleep briefly and try again
+      true ->
+        Process.sleep(10)
+        wait_for_metadata_server(manager, timeout, start_time)
+    end
+  end
+
   test "can create an undo manager", %{doc: doc, text: text} do
     {:ok, undo_manager} = UndoManager.new(doc, text)
     assert %UndoManager{} = undo_manager
@@ -1319,7 +1341,7 @@ defmodule Yex.UndoManagerTest do
 
     {:ok, undo_manager} =
       UndoManager.on_item_updated(undo_manager, fn event ->
-        send(test_pid, {:updated, event})
+        send(test_pid, {:item_updated, event})
       end)
 
     # Make changes within capture timeout
@@ -1327,7 +1349,7 @@ defmodule Yex.UndoManagerTest do
     Text.insert(text, 5, " World")
 
     # Verify update event
-    assert_receive {:updated, event}
+    assert_receive {:item_updated, event}
     assert is_struct(event, Yex.UndoManager.Event)
     assert event.kind == :redo
     assert "text" in event.changed_parent_types
@@ -1339,7 +1361,7 @@ defmodule Yex.UndoManagerTest do
     Text.insert(text, 11, "!")
 
     # No update event should be received since we stopped capturing
-    refute_receive {:updated, _event}
+    refute_receive {:item_updated, _event}
   end
 
   test "observer callbacks receive correct event data with IDs", %{doc: doc, text: text} do
@@ -1623,11 +1645,17 @@ defmodule Yex.UndoManagerTest do
       XmlFragment.push(xml_fragment, XmlElementPrelim.empty("div"))
     end)
 
+    # Make more untracked changes
+    Doc.transaction(doc, "untracked-origin", fn ->
+      XmlFragment.push(xml_fragment, XmlTextPrelim.from("more-untracked"))
+    end)
+
+    # Verify initial state
+    assert XmlFragment.to_string(xml_fragment) == "tracked<div></div>more-untracked"
+
     # Undo should only remove tracked changes
     UndoManager.undo(manager)
-
-    # Verify only untracked changes remain
-    assert XmlFragment.to_string(xml_fragment) == "<div></div>"
+    assert XmlFragment.to_string(xml_fragment) == "<div></div>more-untracked"
   end
 
   test "origin tracking works with xml element", %{doc: doc, xml_fragment: xml_fragment} do
@@ -1694,19 +1722,19 @@ defmodule Yex.UndoManagerTest do
 
     # Make untracked changes
     Doc.transaction(doc, "other-origin", fn ->
-      Text.insert(text, 7, " untracked")
+      Text.insert(text, 7, "untracked")
     end)
 
     # Initial state
-    assert Text.to_string(text) == "tracked untracked"
+    assert Text.to_string(text) == "trackeduntracked"
 
     # Undo tracked changes
     UndoManager.undo(manager)
-    assert Text.to_string(text) == " untracked"
+    assert Text.to_string(text) == "untracked"
 
     # Redo tracked changes
     UndoManager.redo(manager)
-    assert Text.to_string(text) == "tracked untracked"
+    assert Text.to_string(text) == "trackeduntracked"
   end
 
   test "multiple origins can be tracked simultaneously", %{doc: doc, text: text} do
@@ -1761,5 +1789,179 @@ defmodule Yex.UndoManagerTest do
     # Undo should not affect any changes since the origin is excluded
     UndoManager.undo(manager)
     assert Text.to_string(text) == "excluded tracked"
+  end
+
+  test "child_spec returns valid supervisor child specification", %{doc: doc, text: text} do
+    child_spec = UndoManager.child_spec({doc, text})
+
+    assert child_spec == %{
+             id: Yex.UndoManager,
+             start: {Yex.UndoManager, :new, [doc, text]},
+             type: :worker
+           }
+  end
+
+  test "unobserve_item_added stops callback and restores default observer", %{
+    doc: doc,
+    text: text
+  } do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # First register a callback
+    {:ok, manager} =
+      UndoManager.on_item_added(manager, fn event ->
+        send(test_pid, {:item_added, event})
+      end)
+
+    # Make a change to verify callback is working
+    Text.insert(text, 0, "test")
+    assert_receive {:item_added, _event}
+
+    # Unobserve and verify the callback is removed
+    _manager = UndoManager.unobserve_item_added(manager)
+
+    # Make another change
+    Text.insert(text, 4, " more")
+
+    # Verify we don't receive any more callbacks
+    refute_receive {:item_added, _event}
+  end
+
+  test "unobserve_item_updated stops callback", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # First register a callback
+    {:ok, manager} =
+      UndoManager.on_item_updated(manager, fn event ->
+        send(test_pid, {:item_updated, event})
+      end)
+
+    # Make changes within capture timeout to trigger update
+    Text.insert(text, 0, "Hello")
+    Text.insert(text, 5, " World")
+
+    # Verify we receive the update event
+    assert_receive {:item_updated, _event}
+
+    # Unobserve and verify the callback is removed
+    _manager = UndoManager.unobserve_item_updated(manager)
+
+    # Make more changes that would trigger an update
+    Text.insert(text, 11, "!")
+    Text.insert(text, 12, "!")
+
+    # Verify we don't receive any more callbacks
+    refute_receive {:item_updated, _event}
+  end
+
+  test "unobserve_item_popped stops callback", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # First register a callback
+    {:ok, manager} =
+      UndoManager.on_item_popped(manager, fn id, event ->
+        send(test_pid, {:item_popped, id, event})
+      end)
+
+    # Make a change and then undo it to trigger pop
+    Text.insert(text, 0, "test")
+    UndoManager.undo(manager)
+
+    # Verify we receive the pop event
+    assert_receive {:item_popped, _id, _event}
+
+    # Unobserve and verify the callback is removed
+    manager = UndoManager.unobserve_item_popped(manager)
+
+    # Make another change and undo to verify callback is removed
+    Text.insert(text, 0, "more")
+    UndoManager.undo(manager)
+
+    # Verify we don't receive any more callbacks
+    refute_receive {:item_popped, _id, _event}
+  end
+
+  test "clear handles all cases correctly", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+
+    # Case 1: Without metadata server
+    assert manager.metadata_server_pid == nil
+    assert {:ok, %{}} = UndoManager.clear(manager)
+
+    # Case 2: With metadata server
+    test_pid = self()
+
+    {:ok, manager_with_server} =
+      UndoManager.on_item_added(manager, fn event ->
+        send(test_pid, {:item_added, event})
+        %{test: "metadata"}
+      end)
+
+    # Wait for metadata server to be ready
+    {:ok, manager_with_server} = wait_for_metadata_server(manager_with_server)
+
+    # Make some changes and wait for the callback to be triggered
+    Text.insert(text, 0, "test")
+
+    assert_receive {:item_added, _event}, 1000
+
+    # Now try to clear
+    assert {:ok, %{}} = UndoManager.clear(manager_with_server)
+
+    # Case 3: With error from NIF
+    with_mock Yex.Nif,
+      undo_manager_clear: fn _ref -> {:error, "test error"} end do
+      assert {:error, "test error"} = UndoManager.clear(manager)
+    end
+  end
+
+  test "item_updated callback handles different return values", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # Test case 1: Callback returns nil
+    {:ok, manager} =
+      UndoManager.on_item_updated(manager, fn event ->
+        send(test_pid, {:item_updated_nil, event})
+        nil
+      end)
+
+    # Make changes within capture timeout to trigger update
+    Text.insert(text, 0, "Hello")
+    Text.insert(text, 5, " World")
+
+    # Verify we receive the update event and nil is handled
+    assert_receive {:item_updated_nil, _event}
+
+    # Test case 2: Callback returns valid metadata map
+    {:ok, manager} =
+      UndoManager.on_item_updated(manager, fn event ->
+        send(test_pid, {:item_updated_map, event})
+        %{custom: "data"}
+      end)
+
+    # Make more changes to trigger update
+    Text.insert(text, 11, "!")
+    Text.insert(text, 12, "!")
+
+    # Verify we receive the update event and map is handled
+    assert_receive {:item_updated_map, _event}
+
+    # Test case 3: Callback returns invalid value (not nil or map)
+    {:ok, _manager} =
+      UndoManager.on_item_updated(manager, fn event ->
+        send(test_pid, {:item_updated_invalid, event})
+        "invalid return value"
+      end)
+
+    # Make more changes to trigger update
+    Text.insert(text, 13, "?")
+    Text.insert(text, 14, "?")
+
+    # Verify we receive the update event and invalid return is handled
+    assert_receive {:item_updated_invalid, _event}
   end
 end
