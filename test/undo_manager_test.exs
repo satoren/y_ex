@@ -1233,7 +1233,7 @@ defmodule Yex.UndoManagerTest do
     assert UndoManager.can_undo?(manager)
 
     # Clear the undo manager
-    {:ok, _} = UndoManager.clear(manager)
+    :ok = UndoManager.clear(manager)
     refute UndoManager.can_undo?(manager)
 
     # Make another change with an included origin
@@ -1889,7 +1889,7 @@ defmodule Yex.UndoManagerTest do
 
     # Case 1: Without metadata server
     assert manager.metadata_server_pid == nil
-    assert {:ok, %{}} = UndoManager.clear(manager)
+    assert :ok = UndoManager.clear(manager)
 
     # Case 2: With metadata server
     test_pid = self()
@@ -1909,7 +1909,7 @@ defmodule Yex.UndoManagerTest do
     assert_receive {:item_added, _event}, 1000
 
     # Now try to clear
-    assert {:ok, %{}} = UndoManager.clear(manager_with_server)
+    assert :ok = UndoManager.clear(manager_with_server)
 
     # Case 3: With error from NIF
     with_mock Yex.Nif,

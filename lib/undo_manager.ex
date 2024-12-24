@@ -451,7 +451,7 @@ defmodule Yex.UndoManager do
           :ok = Yex.UndoMetadataServer.clear_metadata(manager.metadata_server_pid)
         end
 
-        {:ok, %{}}
+        :ok
 
       error ->
         error
