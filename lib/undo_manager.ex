@@ -199,6 +199,7 @@ defmodule Yex.UndoManager do
     try_create_manager(doc, scope, options, 3)
   end
 
+  @dialyzer {:nowarn_function, try_create_manager: 4}
   defp try_create_manager(_doc, _scope, _options, 0) do
     {:error, "Failed to create undo manager after multiple attempts"}
   end
