@@ -54,7 +54,23 @@ defmodule Yex.UndoMetadataServer do
 
   # Server Implementation
   defmodule State do
-    @moduledoc false
+    @moduledoc """
+    Internal state for the UndoMetadataServer.
+
+    Fields:
+      * rust_ref - Reference to the Rust undo manager instance
+      * item_added_callback - Optional function called when new undo items are added
+      * item_updated_callback - Optional function called when existing undo items are updated
+      * item_popped_callback - Optional function called when items are popped from the undo stack
+      * metadata - Map of event_id => UndoMetadata entries storing persistent metadata for undo events
+          The metadata map structure is:
+          %{
+            event_id => %UndoMetadata{
+              event_id: UUID,
+              data: map()  # Custom metadata provided by callbacks
+            }
+          }
+    """
     defstruct [
       :rust_ref,
       :item_added_callback,
