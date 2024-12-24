@@ -120,7 +120,7 @@ defmodule Yex.UndoManager do
     ```
     """
     @type t :: %__MODULE__{
-            meta: %{event_id: String.t()} | UndoMetadata.t(),
+            meta: %{event_id: String.t()} | Yex.UndoManager.UndoMetadata.t(),
             origin: String.t() | nil,
             kind: :undo | :redo,
             changed_parent_types: [String.t()]
