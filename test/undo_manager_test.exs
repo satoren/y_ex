@@ -2062,4 +2062,46 @@ defmodule Yex.UndoManagerTest do
     UndoManager.undo(undo_manager)
     assert Text.to_string(text) == ""
   end
+
+  test "handles metadata server startup failure for on_item_updated", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # Mock the metadata server to simulate startup failure
+    with_mock Yex.UndoMetadataServer,
+      start_link: fn _ref -> {:error, :test_startup_failure} end do
+      # Attempt to register a callback which requires the metadata server
+      result =
+        UndoManager.on_item_updated(manager, fn event ->
+          send(test_pid, {:item_updated, event})
+        end)
+
+      # Verify we get the error result
+      assert result == {:error, :test_startup_failure}
+
+      # Verify the manager's metadata_server_pid is still nil
+      assert manager.metadata_server_pid == nil
+    end
+  end
+
+  test "handles metadata server startup failure for on_item_popped", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # Mock the metadata server to simulate startup failure
+    with_mock Yex.UndoMetadataServer,
+      start_link: fn _ref -> {:error, :test_startup_failure} end do
+      # Attempt to register a callback which requires the metadata server
+      result =
+        UndoManager.on_item_popped(manager, fn id, event ->
+          send(test_pid, {:item_popped, id, event})
+        end)
+
+      # Verify we get the error result
+      assert result == {:error, :test_startup_failure}
+
+      # Verify the manager's metadata_server_pid is still nil
+      assert manager.metadata_server_pid == nil
+    end
+  end
 end
