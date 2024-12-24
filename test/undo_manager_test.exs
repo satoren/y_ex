@@ -1846,7 +1846,10 @@ defmodule Yex.UndoManagerTest do
     Text.insert(text, 5, " World")
 
     # Verify we receive the update event
-    assert_receive {:item_updated, _event}
+    assert_receive {:item_updated, event}
+    assert is_struct(event, Yex.UndoManager.Event)
+    assert event.kind == :redo
+    assert "text" in event.changed_parent_types
 
     # Unobserve and verify the callback is removed
     _manager = UndoManager.unobserve_item_updated(manager)
@@ -2004,5 +2007,59 @@ defmodule Yex.UndoManagerTest do
     # Should have no items to undo or redo
     refute UndoManager.can_undo?(undo_manager)
     refute UndoManager.can_redo?(undo_manager)
+  end
+
+  test "handles metadata server startup failure", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # Mock the metadata server to simulate startup failure
+    with_mock Yex.UndoMetadataServer,
+      start_link: fn _ref -> {:error, :test_startup_failure} end do
+      # Attempt to register a callback which requires the metadata server
+      result =
+        UndoManager.on_item_added(manager, fn event ->
+          send(test_pid, {:item_added, event})
+        end)
+
+      # Verify we get the error result
+      assert result == {:error, :test_startup_failure}
+
+      # Verify the manager's metadata_server_pid is still nil
+      assert manager.metadata_server_pid == nil
+    end
+  end
+
+  test "capture_timeout option works", %{doc: doc, text: text} do
+    options = %UndoManager.Options{
+      # Short timeout for testing
+      capture_timeout: 100
+    }
+
+    {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
+
+    # Make changes
+    Text.insert(text, 0, "Hello")
+    # Less than capture_timeout
+    Process.sleep(50)
+    Text.insert(text, 5, " World")
+
+    assert Text.to_string(text) == "Hello World"
+
+    # Should undo both changes together since they were within timeout
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
+
+    # Make changes with pause longer than capture_timeout
+    Text.insert(text, 0, "Hello")
+    # Longer than capture_timeout
+    Process.sleep(150)
+    Text.insert(text, 5, " World")
+
+    # Should undo changes separately
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == "Hello"
+    UndoManager.undo(undo_manager)
+    assert Text.to_string(text) == ""
   end
 end

@@ -23,19 +23,6 @@ defmodule Yex.UndoManager do
   separate operations into distinct undo steps. This is preferable to relying on timing or
   the capture timeout, as it guarantees proper transaction boundaries.
 
-  ## Capture Timeout Configuration
-
-  The UndoManager's capture timeout determines how long it will wait to batch related operations
-  together into a single undo step. You can configure this when creating the UndoManager:
-
-      # Create an UndoManager with a 1-second capture timeout
-      {:ok, manager} = UndoManager.new_with_options(doc, text, %Options{capture_timeout: 1000})
-
-  A longer timeout will group more operations together, while a shorter timeout will create
-  more granular undo steps. However, relying on timeouts for operation grouping can be
-  unpredictable, especially in networked environments. It's recommended to use `stop_capturing/1`
-  to explicitly control operation boundaries for more reliable behavior.
-
   ## Basic Usage
 
       # Create a new document and text type
@@ -88,6 +75,16 @@ defmodule Yex.UndoManager do
       Yex.UndoManager.stop_capturing(manager)
       Yex.Text.insert(text, 6, "Second ")
       # Now these will be separate undo operations
+
+  ## Capture Timeout Configuration
+
+  In addition to capture groups, the UndoManager's capture timeout also effects batching of undo items.
+  It determines how long it will wait to batch related operations together into a single undo step.
+  You can configure this when creating the UndoManager:
+
+      # Create an UndoManager with a 1-second capture timeout
+      {:ok, manager} = UndoManager.new_with_options(doc, text, %Options{capture_timeout: 1000})
+
   """
 
   @doc false
@@ -244,6 +241,9 @@ defmodule Yex.UndoManager do
          :ok <-
            Yex.Nif.undo_manager_observe_item_added(manager.reference, manager.metadata_server_pid) do
       {:ok, manager}
+    else
+      error ->
+        error
     end
   end
 
@@ -271,6 +271,9 @@ defmodule Yex.UndoManager do
              manager.metadata_server_pid
            ) do
       {:ok, manager}
+    else
+      error ->
+        error
     end
   end
 
@@ -298,6 +301,9 @@ defmodule Yex.UndoManager do
              manager.metadata_server_pid
            ) do
       {:ok, manager}
+    else
+      error ->
+        error
     end
   end
 
@@ -309,8 +315,7 @@ defmodule Yex.UndoManager do
           {:ok, pid} ->
             {:ok, %{manager | metadata_server_pid: pid}}
 
-          {:error, reason} = error ->
-            Logger.error("Failed to start metadata server: #{inspect(reason)}")
+          error ->
             error
         end
 
