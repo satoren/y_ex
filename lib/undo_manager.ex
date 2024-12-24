@@ -153,17 +153,6 @@ defmodule Yex.UndoManager do
           }
   end
 
-  defmodule State do
-    @moduledoc false
-    defstruct item_added_callback: nil,
-              item_updated_callback: nil,
-              item_popped_callback: nil,
-              # Stores metadata for undo events
-              metadata: %{},
-              # Counter for generating event IDs
-              next_id: 0
-  end
-
   defmodule UndoMetadata do
     @moduledoc """
     Metadata for undo events, including a unique identifier (from undo.rs) and custom data (managed by UndoMetadataServer).
