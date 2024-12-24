@@ -304,8 +304,10 @@ defmodule Yex.UndoManager do
   defp ensure_metadata_server(%__MODULE__{} = manager) do
     case manager.metadata_server_pid do
       nil ->
-        {:ok, pid} = Yex.UndoMetadataServer.start_link(manager.reference)
-        %{manager | metadata_server_pid: pid}
+        case Yex.UndoMetadataServer.start_link(manager.reference) do
+          {:ok, pid} -> %{manager | metadata_server_pid: pid}
+          {:error, _reason} = error -> error
+        end
 
       _pid ->
         manager
@@ -446,7 +448,7 @@ defmodule Yex.UndoManager do
     case Yex.Nif.undo_manager_clear(manager.reference) do
       {:ok, {}} ->
         if manager.metadata_server_pid do
-          Yex.UndoMetadataServer.clear_metadata(manager.metadata_server_pid)
+          :ok = Yex.UndoMetadataServer.clear_metadata(manager.metadata_server_pid)
         end
 
         {:ok, %{}}
