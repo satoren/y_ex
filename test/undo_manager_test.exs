@@ -2064,6 +2064,13 @@ defmodule Yex.UndoManagerTest do
     end
   end
 
+  defp measure_time(fun) do
+    start_time = System.monotonic_time(:millisecond)
+    result = fun.()
+    end_time = System.monotonic_time(:millisecond)
+    {result, end_time - start_time}
+  end
+
   test "capture_timeout option works", %{doc: doc, text: text} do
     # Use a longer timeout and larger margins for system load variations
     options = %UndoManager.Options{
@@ -2071,22 +2078,17 @@ defmodule Yex.UndoManagerTest do
     }
 
     {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
-    
+
     # Helper function to measure time
-    measure_time = fn fun ->
-      start_time = System.monotonic_time(:millisecond)
-      result = fun.()
-      end_time = System.monotonic_time(:millisecond)
-      {result, end_time - start_time}
-    end
 
     # Make changes
-    {_, duration} = measure_time(fn ->
-      Text.insert(text, 0, "Hello")
-      # Wait for 1/4 of timeout
-      Process.sleep(div(options.capture_timeout, 4))
-      Text.insert(text, 5, " World")
-    end)
+    {_, duration} =
+      measure_time(fn ->
+        Text.insert(text, 0, "Hello")
+        # Wait for 1/4 of timeout
+        Process.sleep(div(options.capture_timeout, 4))
+        Text.insert(text, 5, " World")
+      end)
 
     # Verify duration was less than timeout
     assert duration < options.capture_timeout
@@ -2097,12 +2099,13 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == ""
 
     # Make changes with pause longer than capture_timeout
-    {_, duration} = measure_time(fn ->
-      Text.insert(text, 0, "Hello")
-      # Wait for 2x timeout
-      Process.sleep(options.capture_timeout * 2)
-      Text.insert(text, 5, " World")
-    end)
+    {_, duration} =
+      measure_time(fn ->
+        Text.insert(text, 0, "Hello")
+        # Wait for 2x timeout
+        Process.sleep(options.capture_timeout * 2)
+        Text.insert(text, 5, " World")
+      end)
 
     # Verify duration exceeded timeout
     assert duration > options.capture_timeout
@@ -2160,7 +2163,7 @@ defmodule Yex.UndoManagerTest do
     # Set up counter for tracking retry attempts
     :ets.new(:retry_counter, [:set, :public, :named_table])
     :ets.insert(:retry_counter, {:attempts, 0})
-    
+
     on_exit(fn ->
       if :ets.whereis(:retry_counter) != :undefined do
         :ets.delete(:retry_counter)
