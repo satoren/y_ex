@@ -2065,19 +2065,31 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "capture_timeout option works", %{doc: doc, text: text} do
+    # Use a longer timeout and larger margins for system load variations
     options = %UndoManager.Options{
-      # Short timeout for testing
-      capture_timeout: 100
+      capture_timeout: 500
     }
 
     {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
+    
+    # Helper function to measure time
+    measure_time = fn fun ->
+      start_time = System.monotonic_time(:millisecond)
+      result = fun.()
+      end_time = System.monotonic_time(:millisecond)
+      {result, end_time - start_time}
+    end
 
     # Make changes
-    Text.insert(text, 0, "Hello")
-    # Less than capture_timeout
-    Process.sleep(50)
-    Text.insert(text, 5, " World")
+    {_, duration} = measure_time(fn ->
+      Text.insert(text, 0, "Hello")
+      # Wait for 1/4 of timeout
+      Process.sleep(div(options.capture_timeout, 4))
+      Text.insert(text, 5, " World")
+    end)
 
+    # Verify duration was less than timeout
+    assert duration < options.capture_timeout
     assert Text.to_string(text) == "Hello World"
 
     # Should undo both changes together since they were within timeout
@@ -2085,10 +2097,15 @@ defmodule Yex.UndoManagerTest do
     assert Text.to_string(text) == ""
 
     # Make changes with pause longer than capture_timeout
-    Text.insert(text, 0, "Hello")
-    # Longer than capture_timeout
-    Process.sleep(150)
-    Text.insert(text, 5, " World")
+    {_, duration} = measure_time(fn ->
+      Text.insert(text, 0, "Hello")
+      # Wait for 2x timeout
+      Process.sleep(options.capture_timeout * 2)
+      Text.insert(text, 5, " World")
+    end)
+
+    # Verify duration exceeded timeout
+    assert duration > options.capture_timeout
 
     # Should undo changes separately
     UndoManager.undo(undo_manager)
@@ -2143,6 +2160,12 @@ defmodule Yex.UndoManagerTest do
     # Set up counter for tracking retry attempts
     :ets.new(:retry_counter, [:set, :public, :named_table])
     :ets.insert(:retry_counter, {:attempts, 0})
+    
+    on_exit(fn ->
+      if :ets.whereis(:retry_counter) != :undefined do
+        :ets.delete(:retry_counter)
+      end
+    end)
 
     with_mock Yex.Nif,
       undo_manager_new_with_options: fn _doc, _scope, _options ->
@@ -2165,9 +2188,6 @@ defmodule Yex.UndoManagerTest do
       [{:attempts, final_count}] = :ets.lookup(:retry_counter, :attempts)
       assert final_count == 3
     end
-
-    # Cleanup
-    :ets.delete(:retry_counter)
   end
 
   test "fails after maximum retries exceeded", %{doc: doc, text: text} do
