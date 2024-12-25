@@ -928,17 +928,11 @@ defmodule Yex.UndoManagerTest do
       XmlFragment.push(xml_fragment, XmlElementPrelim.empty("div"))
     end)
 
-    # Give time for the transaction to complete
-    # Process.sleep(10)
-
     # Verify initial state
     assert XmlFragment.to_string(xml_fragment) == "Hello<div></div>"
 
     # Undo changes
     UndoManager.undo(undo_manager)
-
-    # Give time for the undo operation to complete
-    # Process.sleep(10)
 
     assert XmlFragment.to_string(xml_fragment) == ""
   end
@@ -1567,6 +1561,46 @@ defmodule Yex.UndoManagerTest do
     UndoManager.redo(undo_manager)
   end
 
+  test "handles observer callback errors gracefully", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # Register callback that raises an error
+    {:ok, _manager} =
+      UndoManager.on_item_added(manager, fn event ->
+        send(test_pid, {:before_error, event})
+        raise "Simulated callback error"
+      end)
+
+    # Make changes - should not crash
+    Text.insert(text, 0, "test")
+
+    # Verify the error was handled
+    assert_receive {:before_error, _}
+    assert Text.to_string(text) == "test"
+  end
+
+  test "handles observer callback timeouts", %{doc: doc, text: text} do
+    {:ok, manager} = UndoManager.new(doc, text)
+    test_pid = self()
+
+    # Register callback that times out
+    {:ok, _manager} =
+      UndoManager.on_item_added(manager, fn event ->
+        send(test_pid, {:before_sleep, event})
+        # Longer than default timeout
+        Process.sleep(5000)
+        send(test_pid, :after_sleep)
+      end)
+
+    # Make changes - should not hang
+    Text.insert(text, 0, "test")
+    # Verify the timeout was handled
+    assert_receive {:before_sleep, _}
+    refute_receive :after_sleep
+    assert Text.to_string(text) == "test"
+  end
+
   test "origin tracking works with text type", %{doc: doc, text: text} do
     {:ok, manager} = UndoManager.new(doc, text)
     origin = "test-origin"
@@ -2009,7 +2043,7 @@ defmodule Yex.UndoManagerTest do
     refute UndoManager.can_redo?(undo_manager)
   end
 
-  test "handles metadata server startup failure", %{doc: doc, text: text} do
+  test "handles metadata server startup failure for on_item_added", %{doc: doc, text: text} do
     {:ok, manager} = UndoManager.new(doc, text)
     test_pid = self()
 
@@ -2201,5 +2235,9 @@ defmodule Yex.UndoManagerTest do
     refute_receive {:item_added, _}
     refute_receive {:item_updated, _}
     refute_receive {:item_popped, _, _}
+
+    # 4. verify no memory leaks
+    {:memory, memory} = Process.info(self(), :memory)
+    assert memory < 1_000_000
   end
 end
