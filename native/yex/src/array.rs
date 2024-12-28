@@ -4,9 +4,10 @@ use yrs::*;
 
 use crate::{
     atoms,
-    doc::{DocResource, TransactionResource},
+    doc::DocResource,
     event::{NifArrayEvent, NifSharedTypeDeepObservable, NifSharedTypeObservable},
     shared_type::{NifSharedType, SharedTypeId},
+    transaction::TransactionResource,
     yinput::NifYInput,
     youtput::NifYOut,
     NifAny,

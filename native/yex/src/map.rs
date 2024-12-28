@@ -1,8 +1,8 @@
 use crate::atoms;
-use crate::doc::TransactionResource;
 use crate::event::{NifMapEvent, NifSharedTypeDeepObservable, NifSharedTypeObservable};
 use crate::shared_type::NifSharedType;
 use crate::shared_type::SharedTypeId;
+use crate::transaction::TransactionResource;
 use crate::{doc::DocResource, yinput::NifYInput, youtput::NifYOut, NifAny};
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
 use std::collections::HashMap;

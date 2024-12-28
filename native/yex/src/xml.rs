@@ -9,10 +9,11 @@ use yrs::{
 use crate::{
     any::NifAttr,
     atoms,
-    doc::{DocResource, TransactionResource},
+    doc::DocResource,
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifXmlEvent, NifXmlTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
     text::encode_diffs,
+    transaction::TransactionResource,
     yinput::{NifXmlIn, NifYInputDelta},
     youtput::NifYOut,
     ENV,

@@ -3,11 +3,8 @@ use serde::{Deserialize as _, Serialize as _};
 use yrs::{Assoc, IndexedSequence, StickyIndex};
 
 use crate::{
-    atoms,
-    doc::{DocResource, TransactionResource},
-    shared_type::NifSharedType,
-    wrap::SliceIntoBinary,
-    yinput::NifSharedTypeInput,
+    atoms, doc::DocResource, shared_type::NifSharedType, transaction::TransactionResource,
+    wrap::SliceIntoBinary, yinput::NifSharedTypeInput,
 };
 
 pub struct StickyIndexRef(pub StickyIndex);

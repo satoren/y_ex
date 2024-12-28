@@ -4,7 +4,8 @@ use std::ops::Deref;
 use yrs::{Hook, ReadTxn, SharedRef, TransactionMut};
 
 use crate::{
-    doc::{DocResource, ReadTransaction, TransactionResource},
+    doc::DocResource,
+    transaction::{ReadTransaction, TransactionResource},
     wrap::SliceIntoBinary,
 };
 
@@ -63,9 +64,9 @@ where
         env: Env<'_>,
         current_transaction: Option<ResourceArc<TransactionResource>>,
         f: F,
-    ) -> T
+    ) -> NifResult<T>
     where
-        F: FnOnce(&mut TransactionMut<'_>) -> T,
+        F: FnOnce(&mut TransactionMut<'_>) -> NifResult<T>,
     {
         self.doc().mutably(env, current_transaction, f)
     }
@@ -74,9 +75,9 @@ where
         &self,
         current_transaction: Option<ResourceArc<TransactionResource>>,
         f: F,
-    ) -> T
+    ) -> NifResult<T>
     where
-        F: FnOnce(&ReadTransaction) -> T,
+        F: FnOnce(&ReadTransaction) -> NifResult<T>,
     {
         self.doc().readonly(current_transaction, f)
     }

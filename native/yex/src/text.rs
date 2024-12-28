@@ -7,9 +7,10 @@ use yrs::*;
 use crate::{
     any::NifAttr,
     atoms,
-    doc::{DocResource, TransactionResource},
+    doc::DocResource,
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
+    transaction::TransactionResource,
     yinput::NifYInputDelta,
     youtput::NifYOut,
 };
