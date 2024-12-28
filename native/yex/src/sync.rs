@@ -1,6 +1,7 @@
+use crate::atoms;
+use crate::error::Error;
 use crate::wrap::SliceIntoBinary;
-use crate::{atoms, error::NifError};
-use rustler::{Atom, Binary, Encoder as NifEncoder, Env, Term};
+use rustler::{Atom, Binary, Encoder as NifEncoder, Env, NifResult, Term};
 
 use yrs::encoding::read::Cursor;
 use yrs::sync::protocol::{
@@ -10,10 +11,7 @@ use yrs::sync::protocol::{
 use yrs::updates::decoder::{Decoder, DecoderV1, DecoderV2};
 use yrs::updates::encoder::{Encoder, EncoderV1, EncoderV2};
 
-fn decode_sync_message<'a, D: Decoder>(
-    env: Env<'a>,
-    decoder: &mut D,
-) -> Result<Term<'a>, NifError> {
+fn decode_sync_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<'a>, Error> {
     let tag: u8 = decoder.read_var()?;
     match tag {
         MSG_SYNC_STEP_1 => {
@@ -28,11 +26,11 @@ fn decode_sync_message<'a, D: Decoder>(
             let buf = decoder.read_buf()?;
             Ok((atoms::sync_update(), SliceIntoBinary::new(buf)).encode(env))
         }
-        _ => Err(NifError::Message(format!("Unexpected tag value: {}", tag))),
+        _ => Err(Error::Message(format!("Unexpected tag value: {}", tag))),
     }
 }
 
-fn encode_sync_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Result<(), NifError> {
+fn encode_sync_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Result<(), Error> {
     if let Ok((atom, value)) = term.decode::<(Atom, Term<'a>)>() {
         if atom == atoms::sync_step1() {
             encoder.write_var(MSG_SYNC_STEP_1);
@@ -51,10 +49,10 @@ fn encode_sync_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Resul
             return Ok(());
         }
     }
-    Err(NifError::Message(format!("Unexpected structure")))
+    Err(Error::Message(format!("Unexpected structure")))
 }
 
-fn decode_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<'a>, NifError> {
+fn decode_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<'a>, Error> {
     let tag: u8 = decoder.read_var()?;
     match tag {
         MSG_SYNC => {
@@ -81,7 +79,7 @@ fn decode_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<
     }
 }
 
-fn encode_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Result<(), NifError> {
+fn encode_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Result<(), Error> {
     if let Ok((atom, value)) = term.decode::<(Atom, Term<'a>)>() {
         if atom == atoms::sync() {
             encoder.write_var(MSG_SYNC);
@@ -117,31 +115,42 @@ fn encode_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Result<(),
             return Ok(());
         }
     }
-    return Err(NifError::Message("Unexpected structure".into()));
+    return Err(Error::Message("Unexpected structure".into()));
 }
 
 #[rustler::nif]
-fn sync_message_decode_v1<'a>(env: Env<'a>, msg: Binary<'a>) -> Result<Term<'a>, NifError> {
+fn sync_message_decode_v1<'a>(env: Env<'a>, msg: Binary<'a>) -> NifResult<(Atom, Term<'a>)> {
     let mut decoder = DecoderV1::new(Cursor::new(msg.as_slice()));
     decode_message(env, &mut decoder)
+        .map(|term| (atoms::ok(), term))
+        .map_err(|e| e.into())
 }
 
 #[rustler::nif]
-fn sync_message_encode_v1<'a>(env: Env<'a>, msg: Term<'a>) -> Result<Term<'a>, NifError> {
+fn sync_message_encode_v1<'a>(env: Env<'a>, msg: Term<'a>) -> NifResult<(Atom, Term<'a>)> {
     let mut encoder = EncoderV1::new();
     encode_message(msg, &mut encoder)?;
-    Ok(SliceIntoBinary::new(encoder.to_vec().as_slice()).encode(env))
+    Ok((
+        atoms::ok(),
+        SliceIntoBinary::new(encoder.to_vec().as_slice()).encode(env),
+    ))
 }
 
 #[rustler::nif]
-fn sync_message_decode_v2<'a>(env: Env<'a>, msg: Binary<'a>) -> Result<Term<'a>, NifError> {
-    let mut decoder = DecoderV2::new(Cursor::new(msg.as_slice()))?;
+fn sync_message_decode_v2<'a>(env: Env<'a>, msg: Binary<'a>) -> NifResult<(Atom, Term<'a>)> {
+    let mut decoder = DecoderV2::new(Cursor::new(msg.as_slice())).map_err(Error::from)?;
     decode_message(env, &mut decoder)
+        .map(|term| (atoms::ok(), term))
+        .map_err(|e| e.into())
 }
 
 #[rustler::nif]
-fn sync_message_encode_v2<'a>(env: Env<'a>, msg: Term<'a>) -> Result<Term<'a>, NifError> {
+fn sync_message_encode_v2<'a>(env: Env<'a>, msg: Term<'a>) -> NifResult<Term<'a>> {
     let mut encoder = EncoderV2::new();
     encode_message(msg, &mut encoder)?;
-    Ok(SliceIntoBinary::new(encoder.to_vec().as_slice()).encode(env))
+    Ok((
+        atoms::ok(),
+        SliceIntoBinary::new(encoder.to_vec().as_slice()),
+    )
+        .encode(env))
 }

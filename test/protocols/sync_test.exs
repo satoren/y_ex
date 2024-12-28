@@ -37,9 +37,18 @@ defmodule Yex.SyncTest do
         Sync.message_encode({:custom, 100, <<1, 2, 3, 4, 5, 6, 7>>})
     end
 
+    test "unexpected tag" do
+      {:error, "Unexpected tag value: 5"} = Sync.message_decode(<<0, 5, 3, 0>>)
+
+      assert_raise RuntimeError, fn ->
+        Sync.message_decode!(<<0, 5, 3, 0>>)
+      end
+    end
+
     test "error" do
       {:error,
-       "while trying to read more data (expected: 10 bytes), an unexpected end of buffer was reached"} =
+       {:encoding_exception,
+        "while trying to read more data (expected: 10 bytes), an unexpected end of buffer was reached"}} =
         Sync.message_decode(<<0, 0, 10, 1, 217, 239, 244, 171, 5, 13>>)
     end
 
@@ -61,7 +70,7 @@ defmodule Yex.SyncTest do
     end
 
     test "decode error" do
-      {:error, "failed to decode variable length integer"} =
+      {:error, {:encoding_exception, "failed to decode variable length integer"}} =
         Sync.message_decode_v2(<<0, 0, 1, 0>>)
     end
   end

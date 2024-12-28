@@ -1,14 +1,17 @@
 use std::{collections::HashMap, sync::Mutex};
 
+use crate::error::Error;
 use crate::term_box::TermBox;
 use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::{
     atoms,
     subscription::SubscriptionResource,
     wrap::{NifWrap, SliceIntoBinary},
-    NifAny, NifDoc, NifError, ENV,
+    NifAny, NifDoc, ENV,
 };
-use rustler::{Binary, Encoder, Env, LocalPid, NifMap, NifStruct, ResourceArc, Term};
+use rustler::{
+    Atom, Binary, Encoder, Env, LocalPid, NifMap, NifResult, NifStruct, ResourceArc, Term,
+};
 use yrs::{
     block::ClientID,
     sync::{Awareness, AwarenessUpdate},
@@ -92,20 +95,21 @@ fn awareness_set_local_state(
     env: Env<'_>,
     awareness: NifAwareness,
     json: NifAny,
-) -> Result<(), NifError> {
+) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         awareness
             .reference
             .set_local_state(json.0)
-            .map_err(|e| NifError::Message(e.to_string()))
+            .map(|_| atoms::ok())
+            .map_err(|e| Error::from(e).into())
     })
 }
 
 #[rustler::nif]
-fn awareness_clean_local_state(env: Env<'_>, awareness: NifAwareness) -> Result<(), NifError> {
+fn awareness_clean_local_state(env: Env<'_>, awareness: NifAwareness) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         awareness.reference.clean_local_state();
-        Ok(())
+        Ok(atoms::ok())
     })
 }
 
@@ -180,20 +184,21 @@ pub fn awareness_encode_update_v1(
     env: Env<'_>,
     awareness: NifAwareness,
     clients: Option<Vec<ClientID>>,
-) -> Result<Term<'_>, NifError> {
+) -> NifResult<Term<'_>> {
     let update = if let Some(clients) = clients {
         awareness
             .reference
             .update_with_clients(clients)
-            .map_err(|e| NifError::Message(e.to_string()))?
+            .map_err(Error::from)?
     } else {
-        awareness
-            .reference
-            .update()
-            .map_err(|e| NifError::Message(e.to_string()))?
+        awareness.reference.update().map_err(Error::from)?
     };
 
-    Ok(SliceIntoBinary::new(update.encode_v1().as_slice()).encode(env))
+    Ok((
+        atoms::ok(),
+        SliceIntoBinary::new(update.encode_v1().as_slice()),
+    )
+        .encode(env))
 }
 #[rustler::nif]
 pub fn awareness_apply_update_v1(
@@ -201,20 +206,22 @@ pub fn awareness_apply_update_v1(
     awareness: NifAwareness,
     update: Binary,
     origin: Term<'_>,
-) -> Result<(), NifError> {
+) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        let update = AwarenessUpdate::decode_v1(update.as_slice())?;
+        let update = AwarenessUpdate::decode_v1(update.as_slice()).map_err(Error::from)?;
 
         if let Some(origin) = term_to_origin_binary(origin) {
             awareness
                 .reference
                 .apply_update_with(update, origin.as_slice())
-                .map_err(|e| NifError::Message(e.to_string()))
+                .map(|_| atoms::ok())
+                .map_err(|e| Error::from(e).into())
         } else {
             awareness
                 .reference
                 .apply_update(update)
-                .map_err(|e| NifError::Message(e.to_string()))
+                .map(|_| atoms::ok())
+                .map_err(|e| Error::from(e).into())
         }
     })
 }

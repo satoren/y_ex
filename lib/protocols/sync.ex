@@ -46,6 +46,7 @@ defmodule Yex.Sync do
   def message_decode!(message) do
     case message_decode(message) do
       {:ok, message} -> message
+      {:error, {:encoding_exception, reason}} -> raise reason
       {:error, reason} -> raise reason
     end
   end
