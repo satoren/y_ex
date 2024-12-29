@@ -253,8 +253,8 @@ fn doc_begin_transaction(
 
         Ok(TransactionResource(RefCell::new(Some(txn))).into())
     } else {
-        let txn: TransactionMut = yrs::Transact::try_transact_mut(&doc.reference.doc)
-        .map_err(Error::from)?;
+        let txn: TransactionMut =
+            yrs::Transact::try_transact_mut(&doc.reference.doc).map_err(Error::from)?;
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
         Ok(TransactionResource(RefCell::new(Some(txn))).into())
     }
