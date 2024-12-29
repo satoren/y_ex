@@ -101,12 +101,12 @@ defmodule Yex do
 
   @spec apply_update_v1(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v1(%Yex.Doc{} = doc, update) do
-    Yex.Nif.apply_update_v1(doc, cur_txn(doc), update) |> Yex.Nif.Util.unwrap_ok_tuple()
+    Yex.Nif.apply_update_v1(doc, cur_txn(doc), update)
   end
 
   @spec apply_update_v2(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v2(%Yex.Doc{} = doc, update) do
-    Yex.Nif.apply_update_v2(doc, cur_txn(doc), update) |> Yex.Nif.Util.unwrap_ok_tuple()
+    Yex.Nif.apply_update_v2(doc, cur_txn(doc), update)
   end
 
   defp cur_txn(%Yex.Doc{reference: doc_ref}) do

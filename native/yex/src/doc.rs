@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use crate::error::Error;
 use crate::subscription::SubscriptionResource;
 use crate::term_box::TermBox;
+use crate::transaction::{ReadTransaction, TransactionResource};
 use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::wrap::SliceIntoBinary;
 use crate::xml::NifXmlFragment;
@@ -28,19 +29,22 @@ impl DocInner {
         env: Env<'_>,
         current_transaction: Option<ResourceArc<TransactionResource>>,
         f: F,
-    ) -> T
+    ) -> NifResult<T>
     where
-        F: FnOnce(&mut TransactionMut<'_>) -> T,
+        F: FnOnce(&mut TransactionMut<'_>) -> NifResult<T>,
     {
         ENV.set(&mut env.clone(), || {
             if let Some(txn) = current_transaction {
                 if let Some(txn) = txn.0.borrow_mut().as_mut() {
                     f(txn)
                 } else {
-                    f(&mut yrs::Transact::transact_mut(&self.doc))
+                    let txn =
+                        &mut yrs::Transact::try_transact_mut(&self.doc).map_err(Error::from)?;
+                    f(txn)
                 }
             } else {
-                f(&mut yrs::Transact::transact_mut(&self.doc))
+                let txn = &mut yrs::Transact::try_transact_mut(&self.doc).map_err(Error::from)?;
+                f(txn)
             }
         })
     }
@@ -49,9 +53,9 @@ impl DocInner {
         &self,
         current_transaction: Option<ResourceArc<TransactionResource>>,
         f: F,
-    ) -> T
+    ) -> NifResult<T>
     where
-        F: FnOnce(&ReadTransaction) -> T,
+        F: FnOnce(&ReadTransaction) -> NifResult<T>,
     {
         // TODO:
         if let Some(txn) = current_transaction {
@@ -59,42 +63,20 @@ impl DocInner {
                 txn.store();
                 f(&ReadTransaction::ReadWrite(txn))
             } else {
-                f(&ReadTransaction::ReadOnly(&yrs::Transact::transact(
-                    &self.doc,
-                )))
+                let txn: &Transaction<'_> =
+                    &yrs::Transact::try_transact(&self.doc).map_err(Error::from)?;
+                f(&ReadTransaction::ReadOnly(txn))
             }
         } else {
-            f(&ReadTransaction::ReadOnly(&yrs::Transact::transact(
-                &self.doc,
-            )))
-        }
-    }
-}
-
-pub enum ReadTransaction<'a, 'doc> {
-    ReadOnly(&'a yrs::Transaction<'doc>),
-    ReadWrite(&'a yrs::TransactionMut<'doc>),
-}
-
-impl ReadTxn for ReadTransaction<'_, '_> {
-    fn store(&self) -> &Store {
-        match &self {
-            ReadTransaction::ReadOnly(txn) => txn.store(),
-            ReadTransaction::ReadWrite(txn) => txn.store(),
+            let txn: &Transaction<'_> =
+                &yrs::Transact::try_transact(&self.doc).map_err(Error::from)?;
+            f(&ReadTransaction::ReadOnly(txn))
         }
     }
 }
 
 #[rustler::resource_impl]
 impl rustler::Resource for DocResource {}
-
-pub struct TransactionResource(pub RefCell<Option<TransactionMut<'static>>>);
-
-unsafe impl Send for TransactionResource {}
-unsafe impl Sync for TransactionResource {}
-
-#[rustler::resource_impl]
-impl rustler::Resource for TransactionResource {}
 
 #[derive(NifUnitEnum)]
 pub enum NifOffsetKind {
@@ -259,17 +241,22 @@ fn doc_get_or_insert_xml_fragment(env: Env<'_>, doc: NifDoc, name: &str) -> NifX
 }
 
 #[rustler::nif]
-fn doc_begin_transaction(doc: NifDoc, origin: Term<'_>) -> ResourceArc<TransactionResource> {
+fn doc_begin_transaction(
+    doc: NifDoc,
+    origin: Term<'_>,
+) -> NifResult<ResourceArc<TransactionResource>> {
     if let Some(origin) = term_to_origin_binary(origin) {
         let txn: TransactionMut =
-            yrs::Transact::transact_mut_with(&doc.reference.doc, origin.as_slice());
+            yrs::Transact::try_transact_mut_with(&doc.reference.doc, origin.as_slice())
+                .map_err(Error::from)?;
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
 
-        TransactionResource(RefCell::new(Some(txn))).into()
+        Ok(TransactionResource(RefCell::new(Some(txn))).into())
     } else {
-        let txn: TransactionMut = yrs::Transact::transact_mut(&doc.reference.doc);
+        let txn: TransactionMut =
+            yrs::Transact::try_transact_mut(&doc.reference.doc).map_err(Error::from)?;
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
-        TransactionResource(RefCell::new(Some(txn))).into()
+        Ok(TransactionResource(RefCell::new(Some(txn))).into())
     }
 }
 
@@ -353,7 +340,9 @@ fn apply_update_v2(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     update: Binary,
 ) -> NifResult<Atom> {
-    let update = Update::decode_v2(update.as_slice()).map_err(Error::from)?;
+    let update = Update::decode_v2(update.as_slice()).map_err(|e| {
+        rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
+    })?;
 
     doc.reference.mutably(env, current_transaction, |txn| {
         txn.apply_update(update)
@@ -398,9 +387,9 @@ fn encode_state_vector_v2(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Term<'_>> {
-    let vec = doc
-        .reference
-        .readonly(current_transaction, |txn| txn.state_vector().encode_v2());
+    let vec = doc.reference.readonly(current_transaction, |txn| {
+        Ok(txn.state_vector().encode_v2())
+    })?;
     Ok((atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
 }
 #[rustler::nif]
@@ -416,7 +405,9 @@ fn encode_state_as_update_v2<'a>(
         StateVector::default()
     };
 
-    doc.reference
-        .readonly(current_transaction, |txn| Ok(txn.encode_diff_v2(&sv)))
-        .map(|vec| (atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
+    let vec = doc
+        .reference
+        .readonly(current_transaction, |txn| Ok(txn.encode_diff_v2(&sv)))?;
+
+    Ok((atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
 }

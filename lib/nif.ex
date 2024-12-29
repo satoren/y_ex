@@ -181,9 +181,3 @@ defmodule Yex.Nif do
   def undo_manager_stop_capturing(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_clear(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
 end
-
-defmodule Yex.Nif.Util do
-  @moduledoc false
-  def unwrap_ok_tuple({:ok, {}}), do: :ok
-  def unwrap_ok_tuple(other), do: other
-end

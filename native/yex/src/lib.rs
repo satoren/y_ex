@@ -12,6 +12,7 @@ mod subscription;
 mod sync;
 mod term_box;
 mod text;
+mod transaction;
 mod undo;
 mod utils;
 mod wrap;

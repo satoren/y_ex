@@ -16,21 +16,10 @@ use yrs::{
 };
 
 use crate::{
-    any::NifAny,
-    array::NifArray,
-    atoms,
-    doc::{DocResource, TransactionResource},
-    map::NifMap,
-    shared_type::NifSharedType,
-    subscription::SubscriptionResource,
-    term_box::TermBox,
-    text::NifText,
-    utils::origin_to_term,
-    wrap::NifWrap,
-    xml::NifXmlText,
-    yinput::NifSharedTypeInput,
-    youtput::NifYOut,
-    ENV,
+    any::NifAny, array::NifArray, atoms, doc::DocResource, map::NifMap, shared_type::NifSharedType,
+    subscription::SubscriptionResource, term_box::TermBox, text::NifText,
+    transaction::TransactionResource, utils::origin_to_term, wrap::NifWrap, xml::NifXmlText,
+    yinput::NifSharedTypeInput, youtput::NifYOut, ENV,
 };
 
 #[derive(NifUntaggedEnum)]

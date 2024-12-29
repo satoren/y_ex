@@ -1,4 +1,13 @@
 defmodule Yex.Doc do
+  @moduledoc """
+  Document module.
+
+  ### Important
+    It is not recommended to perform operations on a single document from multiple processes simultaneously.
+    If blocked by a transaction, the Beam scheduler threads may potentially deadlock.
+    This limitation is due to the underlying yrs and beam specifications and may be resolved in the future.
+  """
+
   defmodule Options do
     @moduledoc """
     Document options.
