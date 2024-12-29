@@ -167,7 +167,7 @@ defmodule Yex.Awareness do
   """
   @spec apply_update(t, binary(), origin :: term() | nil) :: :ok
   def apply_update(awareness, update, origin \\ nil) do
-    Yex.Nif.awareness_apply_update_v1(awareness, update, origin) |> Yex.Nif.Util.unwrap_ok_tuple()
+    Yex.Nif.awareness_apply_update_v1(awareness, update, origin)
   end
 
   @doc """
