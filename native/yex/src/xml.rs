@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
-use types::text::YChange;
-use yrs::*;
+use yrs::{
+    types::text::YChange, GetString, SharedRef as _, Text, Xml, XmlElementRef, XmlFragment,
+    XmlFragmentRef, XmlTextRef,
+};
 
 use crate::{
     any::NifAttr,
@@ -489,7 +491,7 @@ fn xml_text_to_delta(
     xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<rustler::Term<'_>> {
-    let diff = xml.readonly(current_transaction, |txn| {
+    let diff = xml.readonly(current_transaction, |txn| -> Result<_, rustler::Error> {
         let xml = xml.get_ref(txn)?;
         Ok(xml.diff(txn, YChange::identity))
     })?;

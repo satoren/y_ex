@@ -137,10 +137,13 @@ fn text_to_delta(
     text: NifText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<rustler::Term<'_>> {
-    let diff = text.readonly(current_transaction, |txn| {
-        let text = text.get_ref(txn)?;
-        Ok(text.diff(txn, YChange::identity))
-    })?;
+    let diff = text.readonly(
+        current_transaction,
+        |txn| -> Result<Vec<Diff<YChange>>, rustler::Error> {
+            let text = text.get_ref(txn)?;
+            Ok(text.diff(txn, YChange::identity))
+        },
+    )?;
     encode_diffs(diff, &text.doc, env)
 }
 

@@ -2,14 +2,17 @@ use std::cell::RefCell;
 use std::ops::Deref;
 use std::sync::Mutex;
 
+use crate::error::Error;
 use crate::subscription::SubscriptionResource;
 use crate::term_box::TermBox;
 use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::wrap::SliceIntoBinary;
 use crate::xml::NifXmlFragment;
 use crate::{atoms, ENV};
-use crate::{wrap::NifWrap, NifArray, NifError, NifMap, NifText};
-use rustler::{Binary, Encoder, Env, LocalPid, NifStruct, NifUnitEnum, ResourceArc, Term};
+use crate::{wrap::NifWrap, NifArray, NifMap, NifText};
+use rustler::{
+    Atom, Binary, Encoder, Env, LocalPid, NifResult, NifStruct, NifUnitEnum, ResourceArc, Term,
+};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::*;
@@ -283,7 +286,7 @@ fn doc_monitor_update_v1(
     doc: NifDoc,
     pid: LocalPid,
     metadata: Term<'_>,
-) -> Result<ResourceArc<SubscriptionResource>, NifError> {
+) -> NifResult<(Atom, ResourceArc<SubscriptionResource>)> {
     let metadata = TermBox::new(metadata);
     doc.observe_update_v1(move |txn, event| {
         ENV.with(|env| {
@@ -299,15 +302,15 @@ fn doc_monitor_update_v1(
             );
         })
     })
-    .map(|sub| ResourceArc::new(Mutex::new(Some(sub)).into()))
-    .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))
+    .map(|sub| (atoms::ok(), ResourceArc::new(Mutex::new(Some(sub)).into())))
+    .map_err(|e| Error::from(e).into())
 }
 #[rustler::nif]
 fn doc_monitor_update_v2(
     doc: NifDoc,
     pid: LocalPid,
     metadata: Term<'_>,
-) -> Result<ResourceArc<SubscriptionResource>, NifError> {
+) -> NifResult<(Atom, ResourceArc<SubscriptionResource>)> {
     let metadata = TermBox::new(metadata);
     doc.observe_update_v2(move |txn, event| {
         ENV.with(|env| {
@@ -323,8 +326,8 @@ fn doc_monitor_update_v2(
             );
         })
     })
-    .map(|sub| ResourceArc::new(Mutex::new(Some(sub)).into()))
-    .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))
+    .map(|sub| (atoms::ok(), ResourceArc::new(Mutex::new(Some(sub)).into())))
+    .map_err(|e| Error::from(e).into())
 }
 
 #[rustler::nif]
@@ -333,13 +336,13 @@ fn apply_update_v1(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     update: Binary,
-) -> Result<(), NifError> {
-    let update = Update::decode_v1(update.as_slice())
-        .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))?;
+) -> NifResult<Atom> {
+    let update = Update::decode_v1(update.as_slice()).map_err(Error::from)?;
 
     doc.reference.mutably(env, current_transaction, |txn| {
         txn.apply_update(update)
-            .map_err(|e| NifError::Message(e.to_string()))
+            .map(|_| atoms::ok())
+            .map_err(|e| Error::from(e).into())
     })
 }
 
@@ -349,13 +352,13 @@ fn apply_update_v2(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     update: Binary,
-) -> Result<(), NifError> {
-    let update = Update::decode_v2(update.as_slice())
-        .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))?;
+) -> NifResult<Atom> {
+    let update = Update::decode_v2(update.as_slice()).map_err(Error::from)?;
 
     doc.reference.mutably(env, current_transaction, |txn| {
         txn.apply_update(update)
-            .map_err(|e| NifError::Message(e.to_string()))
+            .map(|_| atoms::ok())
+            .map_err(|e| Error::from(e).into())
     })
 }
 
@@ -364,10 +367,10 @@ fn encode_state_vector_v1(
     env: Env<'_>,
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> Result<Term<'_>, NifError> {
+) -> NifResult<Term<'_>> {
     doc.reference.readonly(current_transaction, |txn| {
         let vec = txn.state_vector().encode_v1();
-        Ok(SliceIntoBinary::new(vec.as_slice()).encode(env))
+        Ok((atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
     })
 }
 
@@ -377,17 +380,16 @@ fn encode_state_as_update_v1<'a>(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     state_vector: Option<Binary>,
-) -> Result<Term<'a>, NifError> {
+) -> NifResult<Term<'a>> {
     let sv = if let Some(vector) = state_vector {
-        StateVector::decode_v1(vector.as_slice())
-            .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))?
+        StateVector::decode_v1(vector.as_slice()).map_err(Error::from)?
     } else {
         StateVector::default()
     };
 
     doc.reference
         .readonly(current_transaction, |txn| Ok(txn.encode_diff_v1(&sv)))
-        .map(|vec| SliceIntoBinary::new(vec.as_slice()).encode(env))
+        .map(|vec| (atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
 }
 
 #[rustler::nif]
@@ -395,11 +397,11 @@ fn encode_state_vector_v2(
     env: Env<'_>,
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> Result<Term<'_>, NifError> {
+) -> NifResult<Term<'_>> {
     let vec = doc
         .reference
         .readonly(current_transaction, |txn| txn.state_vector().encode_v2());
-    Ok(SliceIntoBinary::new(vec.as_slice()).encode(env))
+    Ok((atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
 }
 #[rustler::nif]
 fn encode_state_as_update_v2<'a>(
@@ -407,15 +409,14 @@ fn encode_state_as_update_v2<'a>(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     state_vector: Option<Binary>,
-) -> Result<Term<'a>, NifError> {
+) -> NifResult<Term<'a>> {
     let sv = if let Some(vector) = state_vector {
-        StateVector::decode_v2(vector.as_slice())
-            .map_err(|e| NifError::AtomTuple((atoms::encoding_exception(), e.to_string())))?
+        StateVector::decode_v2(vector.as_slice()).map_err(Error::from)?
     } else {
         StateVector::default()
     };
 
     doc.reference
         .readonly(current_transaction, |txn| Ok(txn.encode_diff_v2(&sv)))
-        .map(|vec| SliceIntoBinary::new(vec.as_slice()).encode(env))
+        .map(|vec| (atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
 }

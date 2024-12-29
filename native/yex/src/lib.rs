@@ -22,7 +22,7 @@ mod youtput;
 use any::NifAny;
 use array::NifArray;
 use doc::{DocResource, NifDoc};
-use error::NifError;
+use error::Error;
 use map::NifMap;
 use rustler::{Env, NifStruct, ResourceArc};
 use scoped_thread_local::scoped_thread_local;
