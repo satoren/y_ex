@@ -12,6 +12,9 @@ defmodule Yex.Map do
           reference: reference()
         }
 
+  alias Yex.Doc
+  require Yex.Doc
+
   @doc """
   set a key-value pair in the map.
   ## Examples
@@ -21,8 +24,10 @@ defmodule Yex.Map do
       :ok
   """
   @spec set(t, term(), term()) :: term()
-  def set(%__MODULE__{} = map, key, content) do
-    Yex.Nif.map_set(map, cur_txn(map), key, content)
+  def set(%__MODULE__{doc: doc} = map, key, content) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_set(map, cur_txn(map), key, content)
+    )
   end
 
   @doc """
@@ -35,8 +40,10 @@ defmodule Yex.Map do
       :ok
   """
   @spec delete(t, term()) :: :ok
-  def delete(%__MODULE__{} = map, key) do
-    Yex.Nif.map_delete(map, cur_txn(map), key)
+  def delete(%__MODULE__{doc: doc} = map, key) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_delete(map, cur_txn(map), key)
+    )
   end
 
   @doc """
@@ -52,7 +59,7 @@ defmodule Yex.Map do
   """
   @deprecated "Rename to `fetch/2`"
   @spec get(t, binary()) :: {:ok, term()} | :error
-  def get(map, key) do
+  def get(%__MODULE__{} = map, key) do
     fetch(map, key)
   end
 
@@ -68,8 +75,10 @@ defmodule Yex.Map do
       :error
   """
   @spec fetch(t, binary()) :: {:ok, term()} | :error
-  def fetch(%__MODULE__{} = map, key) do
-    Yex.Nif.map_get(map, cur_txn(map), key)
+  def fetch(%__MODULE__{doc: doc} = map, key) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_get(map, cur_txn(map), key)
+    )
   end
 
   @spec fetch(t, binary()) :: {:ok, term()} | :error
@@ -91,13 +100,17 @@ defmodule Yex.Map do
       iex> assert %{"plane" => ["Hello", "World"], "array" => %Yex.Array{}} = Yex.Map.to_map(map)
   """
   @spec to_map(t) :: map()
-  def to_map(%__MODULE__{} = map) do
-    Yex.Nif.map_to_map(map, cur_txn(map))
+  def to_map(%__MODULE__{doc: doc} = map) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_to_map(map, cur_txn(map))
+    )
   end
 
   @spec size(t) :: integer()
-  def size(%__MODULE__{} = map) do
-    Yex.Nif.map_size(map, cur_txn(map))
+  def size(%__MODULE__{doc: doc} = map) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_size(map, cur_txn(map))
+    )
   end
 
   @doc """
@@ -111,8 +124,10 @@ defmodule Yex.Map do
       iex> assert %{"plane" => ["Hello", "World"], "array" => ["Hello", "World"]} = Yex.Map.to_json(map)
   """
   @spec to_json(t) :: map()
-  def to_json(%__MODULE__{} = map) do
-    Yex.Nif.map_to_json(map, cur_txn(map))
+  def to_json(%__MODULE__{doc: doc} = map) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_to_json(map, cur_txn(map))
+    )
   end
 
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do

@@ -11,13 +11,16 @@ defmodule Yex.XmlFragment do
     :reference
   ]
 
+  alias Yex.Doc
+  require Yex.Doc
+
   @type t :: %__MODULE__{
           doc: Yex.Doc.t(),
           reference: reference()
         }
 
   def first_child(%__MODULE__{} = xml_fragment) do
-    get(xml_fragment, 0)
+    fetch(xml_fragment, 0)
     |> case do
       {:ok, node} -> node
       :error -> nil
@@ -25,27 +28,36 @@ defmodule Yex.XmlFragment do
   end
 
   @spec children(t) :: Enumerable.t(Yex.XmlElement.t() | Yex.XmlText.t())
-  def children(%__MODULE__{} = xml_fragment) do
-    Stream.unfold(first_child(xml_fragment), fn
-      nil -> nil
-      xml -> {xml, Xml.next_sibling(xml)}
-    end)
+  def children(%__MODULE__{doc: doc} = xml_fragment) do
+    Doc.run_in_worker_process(doc,
+      do:
+        Stream.unfold(first_child(xml_fragment), fn
+          nil -> nil
+          xml -> {xml, Xml.next_sibling(xml)}
+        end)
+    )
   end
 
   @doc """
   The parent that holds this type. Is null if this xml is a top-level XML type.
   """
   @spec parent(t) :: Yex.XmlElement.t() | Yex.XmlFragment.t() | nil
-  def parent(%__MODULE__{} = xml_fragment) do
-    Yex.Nif.xml_fragment_parent(xml_fragment, cur_txn(xml_fragment))
+  def parent(%__MODULE__{doc: doc} = xml_fragment) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_fragment_parent(xml_fragment, cur_txn(xml_fragment))
+    )
   end
 
-  def length(%__MODULE__{} = xml_fragment) do
-    Yex.Nif.xml_fragment_length(xml_fragment, cur_txn(xml_fragment))
+  def length(%__MODULE__{doc: doc} = xml_fragment) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_fragment_length(xml_fragment, cur_txn(xml_fragment))
+    )
   end
 
-  def insert(%__MODULE__{} = xml_fragment, index, content) do
-    Yex.Nif.xml_fragment_insert(xml_fragment, cur_txn(xml_fragment), index, content)
+  def insert(%__MODULE__{doc: doc} = xml_fragment, index, content) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_fragment_insert(xml_fragment, cur_txn(xml_fragment), index, content)
+    )
   end
 
   @spec insert_after(
@@ -53,22 +65,28 @@ defmodule Yex.XmlFragment do
           Yex.XmlElement.t() | Yex.XmlText.t(),
           Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()
         ) :: :ok | :error
-  def insert_after(%__MODULE__{} = xml_fragment, ref, content) do
-    index = children(xml_fragment) |> Enum.find_index(&(&1 == ref))
+  def insert_after(%__MODULE__{doc: doc} = xml_fragment, ref, content) do
+    Doc.run_in_worker_process doc do
+      index = children(xml_fragment) |> Enum.find_index(&(&1 == ref))
 
-    if index == nil do
-      insert(xml_fragment, 0, content)
-    else
-      insert(xml_fragment, index + 1, content)
+      if index == nil do
+        insert(xml_fragment, 0, content)
+      else
+        insert(xml_fragment, index + 1, content)
+      end
     end
   end
 
-  def delete(%__MODULE__{} = xml_fragment, index, length) do
-    Yex.Nif.xml_fragment_delete_range(xml_fragment, cur_txn(xml_fragment), index, length)
+  def delete(%__MODULE__{doc: doc} = xml_fragment, index, length) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_fragment_delete_range(xml_fragment, cur_txn(xml_fragment), index, length)
+    )
   end
 
-  def push(%__MODULE__{} = xml_fragment, content) do
-    insert(xml_fragment, __MODULE__.length(xml_fragment), content)
+  def push(%__MODULE__{doc: doc} = xml_fragment, content) do
+    Doc.run_in_worker_process(doc,
+      do: insert(xml_fragment, __MODULE__.length(xml_fragment), content)
+    )
   end
 
   def unshift(%__MODULE__{} = xml_fragment, content) do
@@ -82,8 +100,10 @@ defmodule Yex.XmlFragment do
   end
 
   @spec fetch(t, integer()) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
-  def fetch(%__MODULE__{} = xml_fragment, index) do
-    Yex.Nif.xml_fragment_get(xml_fragment, cur_txn(xml_fragment), index)
+  def fetch(%__MODULE__{doc: doc} = xml_fragment, index) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_fragment_get(xml_fragment, cur_txn(xml_fragment), index)
+    )
   end
 
   @spec fetch(t, integer()) :: Yex.XmlElement.t() | Yex.XmlText.t()
@@ -95,8 +115,10 @@ defmodule Yex.XmlFragment do
   end
 
   @spec to_string(t) :: binary()
-  def to_string(%__MODULE__{} = xml_fragment) do
-    Yex.Nif.xml_fragment_to_string(xml_fragment, cur_txn(xml_fragment))
+  def to_string(%__MODULE__{doc: doc} = xml_fragment) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_fragment_to_string(xml_fragment, cur_txn(xml_fragment))
+    )
   end
 
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do

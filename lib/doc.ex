@@ -32,27 +32,64 @@ defmodule Yex.Doc do
   end
 
   defstruct [
-    :reference
+    :reference,
+    worker_pid: nil
   ]
 
   @type t :: %__MODULE__{
-          reference: any()
+          reference: any(),
+          worker_pid: pid() | nil
         }
 
   @doc """
-  Create a new document.
+  Executes the given block in the document's worker process.
+  If the current process is already the worker process, executes directly.
+  Otherwise, delegates execution to the worker process via GenServer.call.
+
+  Raises if worker_pid is not set.
   """
-  @spec new() :: Yex.Doc.t()
-  def new() do
-    Yex.Nif.doc_new()
+  defmacro run_in_worker_process(doc, do: block) do
+    quote do
+      case unquote(doc).worker_pid do
+        pid when pid == self() ->
+          unquote(block)
+
+        nil ->
+          raise "Document has no worker process assigned"
+
+        worker_pid ->
+          GenServer.call(worker_pid, {Yex.Doc, :run, fn -> unquote(block) end})
+      end
+    end
+  end
+
+  @doc """
+  Create a new document.
+
+  worker_pid:
+     If there is a possibility of passing the created document to another process, please specify the process responsible for operating the document.
+     This process needs to handle the GenServer handle_call messages as follows:
+
+      @impl true
+      def handle_call(
+            {Yex.Doc, :run, fun},
+            _from,
+            state
+          ) do
+        {:reply, fun.(), state}
+      end
+  """
+  @spec new(pid()) :: Yex.Doc.t()
+  def new(worker_pid \\ self()) do
+    Yex.Nif.doc_new() |> Map.put(:worker_pid, worker_pid)
   end
 
   @doc """
   Create a new document with options.
   """
-  @spec with_options(Options.t()) :: Yex.Doc.t()
-  def with_options(%Options{} = option) do
-    Yex.Nif.doc_with_options(option)
+  @spec with_options(Options.t(), pid()) :: Yex.Doc.t()
+  def with_options(%Options{} = option, worker_pid \\ self()) do
+    Yex.Nif.doc_with_options(option) |> Map.put(:worker_pid, worker_pid)
   end
 
   @doc """
@@ -60,7 +97,7 @@ defmodule Yex.Doc do
   """
   @spec get_text(t, String.t()) :: Yex.Text.t()
   def get_text(%__MODULE__{} = doc, name) do
-    Yex.Nif.doc_get_or_insert_text(doc, name)
+    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_text(doc, name))
   end
 
   @doc """
@@ -68,7 +105,7 @@ defmodule Yex.Doc do
   """
   @spec get_array(t, String.t()) :: Yex.Array.t()
   def get_array(%__MODULE__{} = doc, name) do
-    Yex.Nif.doc_get_or_insert_array(doc, name)
+    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_array(doc, name))
   end
 
   @doc """
@@ -76,14 +113,14 @@ defmodule Yex.Doc do
   """
   @spec get_map(t, String.t()) :: Yex.Map.t()
   def get_map(%__MODULE__{} = doc, name) do
-    Yex.Nif.doc_get_or_insert_map(doc, name)
+    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_map(doc, name))
   end
 
   @doc """
   Get or insert the xml fragment type.
   """
   def get_xml_fragment(%__MODULE__{} = doc, name) do
-    Yex.Nif.doc_get_or_insert_xml_fragment(doc, name)
+    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_xml_fragment(doc, name))
   end
 
   @doc """
@@ -103,16 +140,18 @@ defmodule Yex.Doc do
   """
   @spec transaction(t, origin :: term(), fun()) :: :ok | {:error, term()}
   def transaction(%__MODULE__{reference: ref} = doc, origin \\ nil, exec) do
-    if cur_txn(doc) do
-      raise "Transaction already in progress"
-    end
+    run_in_worker_process doc do
+      if cur_txn(doc) do
+        raise "Transaction already in progress"
+      end
 
-    txn = Yex.Nif.doc_begin_transaction(doc, origin)
-    Process.put(ref, txn)
-    exec.()
-    Process.delete(ref)
-    Yex.Nif.commit_transaction(txn)
-    :ok
+      txn = Yex.Nif.doc_begin_transaction(doc, origin)
+      Process.put(ref, txn)
+      exec.()
+      Process.delete(ref)
+      Yex.Nif.commit_transaction(txn)
+      :ok
+    end
   end
 
   @doc """
@@ -125,11 +164,13 @@ defmodule Yex.Doc do
   end
 
   def monitor_update_v1(%__MODULE__{} = doc, opt \\ []) do
-    case Yex.Nif.doc_monitor_update_v1(doc, self(), Keyword.get(opt, :metadata, doc)) do
-      {:ok, ref} ->
-        # Subscription should not be automatically released by gc, so put it in the process dictionary
-        Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
-        {:ok, ref}
+    notify_pid = self()
+
+    case run_in_worker_process(doc,
+           do: Yex.Nif.doc_monitor_update_v1(doc, notify_pid, Keyword.get(opt, :metadata, doc))
+         ) do
+      {:ok, sub} ->
+        {:ok, Yex.Subscription.register(sub)}
 
       error ->
         error
@@ -137,11 +178,13 @@ defmodule Yex.Doc do
   end
 
   def monitor_update_v2(%__MODULE__{} = doc, opt \\ []) do
-    case Yex.Nif.doc_monitor_update_v2(doc, self(), Keyword.get(opt, :metadata, doc)) do
-      {:ok, ref} ->
-        # Subscription should not be automatically released by gc, so put it in the process dictionary
-        Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
-        {:ok, ref}
+    notify_pid = self()
+
+    case run_in_worker_process(doc,
+           do: Yex.Nif.doc_monitor_update_v2(doc, notify_pid, Keyword.get(opt, :metadata, doc))
+         ) do
+      {:ok, sub} ->
+        {:ok, Yex.Subscription.register(sub)}
 
       error ->
         error
@@ -157,13 +200,11 @@ defmodule Yex.Doc do
   end
 
   def demonitor_update_v1(sub) do
-    Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
-    Yex.Nif.sub_unsubscribe(sub)
+    Yex.Subscription.unsubscribe(sub)
   end
 
   def demonitor_update_v2(sub) do
-    Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
-    Yex.Nif.sub_unsubscribe(sub)
+    Yex.Subscription.unsubscribe(sub)
   end
 
   defp cur_txn(%__MODULE__{reference: ref}) do

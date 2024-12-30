@@ -7,6 +7,9 @@ defmodule Yex.Text do
     :reference
   ]
 
+  alias Yex.Doc
+  require Yex.Doc
+
   @type delta ::
           [%{:insert => Yex.input_type(), optional(:attributes) => map()}]
           | [%{delete: integer()}]
@@ -17,24 +20,32 @@ defmodule Yex.Text do
         }
 
   @spec insert(t, integer(), Yex.input_type()) :: :ok | :error
-  def insert(%__MODULE__{} = text, index, content) do
-    Yex.Nif.text_insert(text, cur_txn(text), index, content)
+  def insert(%__MODULE__{doc: doc} = text, index, content) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_insert(text, cur_txn(text), index, content)
+    )
   end
 
   @spec insert(t, integer(), Yex.input_type(), map()) :: :ok | :error
-  def insert(%__MODULE__{} = text, index, content, attr) do
-    Yex.Nif.text_insert_with_attributes(text, cur_txn(text), index, content, attr)
+  def insert(%__MODULE__{doc: doc} = text, index, content, attr) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_insert_with_attributes(text, cur_txn(text), index, content, attr)
+    )
   end
 
   @spec delete(t, integer(), integer()) :: :ok | :error
-  def delete(%__MODULE__{} = text, index, length) do
-    index = if index < 0, do: __MODULE__.length(text) + index, else: index
-    Yex.Nif.text_delete(text, cur_txn(text), index, length)
+  def delete(%__MODULE__{doc: doc} = text, index, length) do
+    Doc.run_in_worker_process doc do
+      index = if index < 0, do: __MODULE__.length(text) + index, else: index
+      Yex.Nif.text_delete(text, cur_txn(text), index, length)
+    end
   end
 
   @spec format(t, integer(), integer(), map()) :: :ok | :error
-  def format(%__MODULE__{} = text, index, length, attr) do
-    Yex.Nif.text_format(text, cur_txn(text), index, length, attr)
+  def format(%__MODULE__{doc: doc} = text, index, length, attr) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_format(text, cur_txn(text), index, length, attr)
+    )
   end
 
   @doc """
@@ -50,18 +61,24 @@ defmodule Yex.Text do
       [%{insert: "15"}]
   """
   @spec apply_delta(t, delta) :: :ok | :error
-  def apply_delta(%__MODULE__{} = text, delta) do
-    Yex.Nif.text_apply_delta(text, cur_txn(text), delta)
+  def apply_delta(%__MODULE__{doc: doc} = text, delta) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_apply_delta(text, cur_txn(text), delta)
+    )
   end
 
   @spec to_string(t) :: binary()
-  def to_string(%__MODULE__{} = text) do
-    Yex.Nif.text_to_string(text, cur_txn(text))
+  def to_string(%__MODULE__{doc: doc} = text) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_to_string(text, cur_txn(text))
+    )
   end
 
   @spec length(t) :: integer()
-  def length(%__MODULE__{} = text) do
-    Yex.Nif.text_length(text, cur_txn(text))
+  def length(%__MODULE__{doc: doc} = text) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_length(text, cur_txn(text))
+    )
   end
 
   @doc """
@@ -76,8 +93,10 @@ defmodule Yex.Text do
       [%{insert: "0", attributes: %{"bold" => true}}, %{insert: "12345"}]
   """
   @spec to_delta(t) :: delta()
-  def to_delta(%__MODULE__{} = text) do
-    Yex.Nif.text_to_delta(text, cur_txn(text))
+  def to_delta(%__MODULE__{doc: doc} = text) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_to_delta(text, cur_txn(text))
+    )
   end
 
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do

@@ -121,6 +121,15 @@ defmodule Yex.DocServer.Worker do
   end
 
   @impl true
+  def handle_call(
+        {Yex.Doc, :run, fun},
+        _from,
+        state
+      ) do
+    {:reply, fun.(), state}
+  end
+
+  @impl true
   def handle_call(request, from, %{module: module} = state) do
     module.handle_call(request, from, state)
   end

@@ -40,6 +40,9 @@ defmodule Yex.StickyIndex do
           assoc: :before | :after
         }
 
+  alias Yex.Doc
+  require Yex.Doc
+
   @type shared_type ::
           %Yex.Array{}
           | %Yex.Text{}
@@ -47,13 +50,17 @@ defmodule Yex.StickyIndex do
           | %Yex.XmlText{}
           | %Yex.XmlFragment{}
   @spec new(shared_type, integer(), :before | :after) :: t
-  def new(shared_type, index, assoc) do
-    Yex.Nif.sticky_index_new(shared_type, cur_txn(shared_type), index, assoc)
+  def new(%{doc: doc} = shared_type, index, assoc) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.sticky_index_new(shared_type, cur_txn(shared_type), index, assoc)
+    )
   end
 
   @spec get_offset(t) :: {:ok, %{index: integer(), assoc: :before | :after}} | :error
-  def get_offset(%__MODULE__{} = sticky_index) do
-    Yex.Nif.sticky_index_get_offset(sticky_index, cur_txn(sticky_index))
+  def get_offset(%__MODULE__{doc: doc} = sticky_index) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.sticky_index_get_offset(sticky_index, cur_txn(sticky_index))
+    )
   end
 
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do

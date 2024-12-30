@@ -982,7 +982,7 @@ defmodule Yex.UndoManagerTest do
   test "returns error when trying to create undo manager with invalid document", %{text: text} do
     invalid_doc = %{not: "a valid doc"}
 
-    assert_raise ArgumentError, fn ->
+    assert_raise FunctionClauseError, fn ->
       UndoManager.new(invalid_doc, text)
     end
   end

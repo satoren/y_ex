@@ -1,11 +1,11 @@
 use std::{collections::HashMap, sync::Mutex};
 
 use crate::error::Error;
+use crate::subscription::NifSubscription;
 use crate::term_box::TermBox;
 use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::{
     atoms,
-    subscription::SubscriptionResource,
     wrap::{NifWrap, SliceIntoBinary},
     NifAny, NifDoc, ENV,
 };
@@ -26,6 +26,7 @@ impl rustler::Resource for AwarenessResource {}
 #[module = "Yex.Awareness"]
 pub struct NifAwareness {
     reference: ResourceArc<AwarenessResource>,
+    doc: NifDoc,
 }
 
 #[derive(NifMap)]
@@ -44,6 +45,7 @@ fn awareness_new(doc: NifDoc) -> NifAwareness {
     let resource = AwarenessResource::from(awareness);
     NifAwareness {
         reference: ResourceArc::new(resource),
+        doc: doc,
     }
 }
 
@@ -118,7 +120,7 @@ fn awareness_monitor_update(
     awareness: NifAwareness,
     pid: LocalPid,
     metadata: Term<'_>,
-) -> ResourceArc<SubscriptionResource> {
+) -> NifSubscription {
     let metadata = TermBox::new(metadata);
     let sub = awareness
         .reference
@@ -143,7 +145,10 @@ fn awareness_monitor_update(
                 );
             })
         });
-    ResourceArc::new(Mutex::new(Some(sub)).into())
+    NifSubscription {
+        reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
+        doc: awareness.doc.clone(),
+    }
 }
 
 #[rustler::nif]
@@ -151,7 +156,7 @@ fn awareness_monitor_change(
     awareness: NifAwareness,
     pid: LocalPid,
     metadata: Term<'_>,
-) -> ResourceArc<SubscriptionResource> {
+) -> NifSubscription {
     let metadata = TermBox::new(metadata);
     let sub = awareness
         .reference
@@ -176,7 +181,10 @@ fn awareness_monitor_change(
                 );
             })
         });
-    ResourceArc::new(Mutex::new(Some(sub)).into())
+    NifSubscription {
+        reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
+        doc: awareness.doc.clone(),
+    }
 }
 
 #[rustler::nif]

@@ -97,18 +97,15 @@ defmodule Yex.Awareness do
   """
   @spec monitor_update(t, keyword()) :: reference()
   def monitor_update(%__MODULE__{} = awareness, opt \\ []) do
-    ref =
+    sub =
       Yex.Nif.awareness_monitor_update(awareness, self(), Keyword.get(opt, :metadata, awareness))
 
-    # Subscription should not be automatically released by gc, so put it in the process dictionary
-    Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
-    ref
+    Yex.Subscription.register(sub)
   end
 
   @spec demonitor_update(reference()) :: :ok
-  def demonitor_update(sub) do
-    Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
-    Yex.Nif.sub_unsubscribe(sub)
+  def demonitor_update(ref) do
+    Yex.Subscription.unsubscribe(ref)
   end
 
   @doc """
@@ -123,19 +120,15 @@ defmodule Yex.Awareness do
   """
   @spec monitor_change(t, keyword()) :: reference()
   def monitor_change(%__MODULE__{} = awareness, opt \\ []) do
-    ref =
+    sub =
       Yex.Nif.awareness_monitor_change(awareness, self(), Keyword.get(opt, :metadata, awareness))
 
-    # Subscription should not be automatically released by gc, so put it in the process dictionary
-    Process.put(__MODULE__.Subscriptions, [ref | Process.get(__MODULE__.Subscriptions, [])])
-
-    ref
+    Yex.Subscription.register(sub)
   end
 
   @spec demonitor_change(reference()) :: :ok
-  def demonitor_change(sub) do
-    Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
-    Yex.Nif.sub_unsubscribe(sub)
+  def demonitor_change(ref) do
+    Yex.Subscription.unsubscribe(ref)
   end
 
   # protocols

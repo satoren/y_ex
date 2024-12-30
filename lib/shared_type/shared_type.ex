@@ -22,6 +22,9 @@ defmodule Yex.SharedType do
 
   """
 
+  alias Yex.Doc
+  require Yex.Doc
+
   @type t ::
           %Yex.Array{}
           | %Yex.Map{}
@@ -31,21 +34,22 @@ defmodule Yex.SharedType do
           | %Yex.XmlFragment{}
 
   @spec observe(t, keyword()) :: reference()
-  def observe(shared_type, opt \\ []) do
+  def observe(%{doc: doc} = shared_type, opt \\ []) do
     ref = make_ref()
 
     sub =
-      Yex.Nif.shared_type_observe(
-        shared_type,
-        cur_txn(shared_type),
-        self(),
-        ref,
-        Keyword.get(opt, :metadata)
+      Doc.run_in_worker_process(doc,
+        do:
+          Yex.Nif.shared_type_observe(
+            shared_type,
+            cur_txn(shared_type),
+            self(),
+            ref,
+            Keyword.get(opt, :metadata)
+          )
       )
 
-    Process.put(ref, sub)
-
-    ref
+    Yex.Subscription.register(sub, ref)
   end
 
   @doc """
@@ -76,20 +80,22 @@ defmodule Yex.SharedType do
 
   """
   @spec observe_deep(t, keyword()) :: reference()
-  def observe_deep(shared_type, opt \\ []) do
+  def observe_deep(%{doc: doc} = shared_type, opt \\ []) do
     ref = make_ref()
 
     sub =
-      Yex.Nif.shared_type_observe_deep(
-        shared_type,
-        cur_txn(shared_type),
-        self(),
-        ref,
-        Keyword.get(opt, :metadata)
+      Doc.run_in_worker_process(doc,
+        do:
+          Yex.Nif.shared_type_observe_deep(
+            shared_type,
+            cur_txn(shared_type),
+            self(),
+            ref,
+            Keyword.get(opt, :metadata)
+          )
       )
 
-    Process.put(ref, sub)
-    ref
+    Yex.Subscription.register(sub, ref)
   end
 
   @doc """
@@ -106,13 +112,6 @@ defmodule Yex.SharedType do
   end
 
   defp unsubscribe(ref) do
-    case Process.get(ref) do
-      nil ->
-        :ok
-
-      sub ->
-        Process.delete(ref)
-        Yex.Nif.sub_unsubscribe(sub)
-    end
+    Yex.Subscription.unsubscribe(ref)
   end
 end
