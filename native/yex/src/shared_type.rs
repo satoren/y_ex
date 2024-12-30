@@ -4,7 +4,7 @@ use std::ops::Deref;
 use yrs::{Hook, ReadTxn, SharedRef, TransactionMut};
 
 use crate::{
-    doc::DocResource,
+    doc::NifDoc,
     transaction::{ReadTransaction, TransactionResource},
     wrap::SliceIntoBinary,
 };
@@ -50,7 +50,7 @@ where
     type RefType;
     const DELETED_ERROR: &'static str;
 
-    fn doc(&self) -> &ResourceArc<DocResource>;
+    fn doc(&self) -> &NifDoc;
     fn reference(&self) -> &SharedTypeId<Self::RefType>;
 
     fn get_ref<T: ReadTxn>(&self, txn: &T) -> NifResult<Self::RefType> {

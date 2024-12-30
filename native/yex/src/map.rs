@@ -1,9 +1,10 @@
 use crate::atoms;
+use crate::doc::NifDoc;
 use crate::event::{NifMapEvent, NifSharedTypeDeepObservable, NifSharedTypeObservable};
 use crate::shared_type::NifSharedType;
 use crate::shared_type::SharedTypeId;
 use crate::transaction::TransactionResource;
-use crate::{doc::DocResource, yinput::NifYInput, youtput::NifYOut, NifAny};
+use crate::{yinput::NifYInput, youtput::NifYOut, NifAny};
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
 use std::collections::HashMap;
 use yrs::types::ToJson;
@@ -13,11 +14,11 @@ pub type MapRefId = SharedTypeId<MapRef>;
 #[derive(NifStruct)]
 #[module = "Yex.Map"]
 pub struct NifMap {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     reference: MapRefId,
 }
 impl NifMap {
-    pub fn new(doc: ResourceArc<DocResource>, map: MapRef) -> Self {
+    pub fn new(doc: NifDoc, map: MapRef) -> Self {
         NifMap {
             doc,
             reference: MapRefId::new(map.hook()),
@@ -28,7 +29,7 @@ impl NifMap {
 impl NifSharedType for NifMap {
     type RefType = MapRef;
 
-    fn doc(&self) -> &ResourceArc<DocResource> {
+    fn doc(&self) -> &NifDoc {
         &self.doc
     }
     fn reference(&self) -> &SharedTypeId<Self::RefType> {

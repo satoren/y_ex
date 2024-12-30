@@ -9,7 +9,7 @@ use yrs::{
 use crate::{
     any::NifAttr,
     atoms,
-    doc::DocResource,
+    doc::NifDoc,
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifXmlEvent, NifXmlTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
     text::encode_diffs,
@@ -26,12 +26,12 @@ pub type XmlTextId = SharedTypeId<XmlTextRef>;
 #[derive(NifStruct)]
 #[module = "Yex.XmlFragment"]
 pub struct NifXmlFragment {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     reference: XmlFragmentId,
 }
 
 impl NifXmlFragment {
-    pub fn new(doc: ResourceArc<DocResource>, xml: XmlFragmentRef) -> Self {
+    pub fn new(doc: NifDoc, xml: XmlFragmentRef) -> Self {
         Self {
             doc,
             reference: XmlFragmentId::new(xml.hook()),
@@ -42,7 +42,7 @@ impl NifXmlFragment {
 impl NifSharedType for NifXmlFragment {
     type RefType = XmlFragmentRef;
 
-    fn doc(&self) -> &ResourceArc<DocResource> {
+    fn doc(&self) -> &NifDoc {
         &self.doc
     }
     fn reference(&self) -> &SharedTypeId<Self::RefType> {
@@ -59,12 +59,12 @@ impl NifSharedTypeObservable for NifXmlFragment {
 #[derive(NifStruct)]
 #[module = "Yex.XmlElement"]
 pub struct NifXmlElement {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     reference: XmlElementId,
 }
 
 impl NifXmlElement {
-    pub fn new(doc: ResourceArc<DocResource>, xml: XmlElementRef) -> Self {
+    pub fn new(doc: NifDoc, xml: XmlElementRef) -> Self {
         Self {
             doc,
             reference: XmlElementId::new(xml.hook()),
@@ -79,7 +79,7 @@ impl NifSharedTypeObservable for NifXmlElement {
 impl NifSharedType for NifXmlElement {
     type RefType = XmlElementRef;
 
-    fn doc(&self) -> &ResourceArc<DocResource> {
+    fn doc(&self) -> &NifDoc {
         &self.doc
     }
     fn reference(&self) -> &SharedTypeId<Self::RefType> {
@@ -92,12 +92,12 @@ impl NifSharedType for NifXmlElement {
 #[derive(NifStruct)]
 #[module = "Yex.XmlText"]
 pub struct NifXmlText {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     reference: XmlTextId,
 }
 
 impl NifXmlText {
-    pub fn new(doc: ResourceArc<DocResource>, xml: XmlTextRef) -> Self {
+    pub fn new(doc: NifDoc, xml: XmlTextRef) -> Self {
         Self {
             doc,
             reference: XmlTextId::new(xml.hook()),
@@ -108,7 +108,7 @@ impl NifXmlText {
 impl NifSharedType for NifXmlText {
     type RefType = XmlTextRef;
 
-    fn doc(&self) -> &ResourceArc<DocResource> {
+    fn doc(&self) -> &NifDoc {
         &self.doc
     }
     fn reference(&self) -> &SharedTypeId<Self::RefType> {

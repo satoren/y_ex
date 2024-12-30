@@ -12,7 +12,7 @@ defmodule Yex.Text do
           | [%{delete: integer()}]
           | [%{:retain => integer(), optional(:attributes) => map()}]
   @type t :: %__MODULE__{
-          doc: reference(),
+          doc: Yex.Doc.t(),
           reference: reference()
         }
 
@@ -80,7 +80,7 @@ defmodule Yex.Text do
     Yex.Nif.text_to_delta(text, cur_txn(text))
   end
 
-  defp cur_txn(%__MODULE__{doc: doc_ref}) do
+  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
 end

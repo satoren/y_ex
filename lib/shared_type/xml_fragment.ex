@@ -12,7 +12,7 @@ defmodule Yex.XmlFragment do
   ]
 
   @type t :: %__MODULE__{
-          doc: reference(),
+          doc: Yex.Doc.t(),
           reference: reference()
         }
 
@@ -99,7 +99,7 @@ defmodule Yex.XmlFragment do
     Yex.Nif.xml_fragment_to_string(xml_fragment, cur_txn(xml_fragment))
   end
 
-  defp cur_txn(%__MODULE__{doc: doc_ref}) do
+  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
 end

@@ -3,7 +3,7 @@ use serde::{Deserialize as _, Serialize as _};
 use yrs::{Assoc, IndexedSequence, StickyIndex};
 
 use crate::{
-    atoms, doc::DocResource, shared_type::NifSharedType, transaction::TransactionResource,
+    atoms, doc::NifDoc, shared_type::NifSharedType, transaction::TransactionResource,
     wrap::SliceIntoBinary, yinput::NifSharedTypeInput,
 };
 
@@ -35,7 +35,7 @@ impl<'a> Decoder<'a> for StickyIndexRef {
 #[derive(NifStruct)]
 #[module = "Yex.StickyIndex"]
 pub struct NifStickyIndex {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     reference: StickyIndexRef,
     assoc: NifAssoc,
 }

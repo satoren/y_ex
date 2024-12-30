@@ -7,7 +7,7 @@ use yrs::*;
 use crate::{
     any::NifAttr,
     atoms,
-    doc::DocResource,
+    doc::NifDoc,
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
     transaction::TransactionResource,
@@ -20,11 +20,11 @@ pub type TextRefId = SharedTypeId<TextRef>;
 #[derive(NifStruct)]
 #[module = "Yex.Text"]
 pub struct NifText {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     reference: TextRefId,
 }
 impl NifText {
-    pub fn new(doc: ResourceArc<DocResource>, text: TextRef) -> Self {
+    pub fn new(doc: NifDoc, text: TextRef) -> Self {
         NifText {
             doc,
             reference: TextRefId::new(text.hook()),
@@ -35,7 +35,7 @@ impl NifText {
 impl NifSharedType for NifText {
     type RefType = TextRef;
 
-    fn doc(&self) -> &ResourceArc<DocResource> {
+    fn doc(&self) -> &NifDoc {
         &self.doc
     }
     fn reference(&self) -> &SharedTypeId<Self::RefType> {
@@ -164,7 +164,7 @@ fn text_apply_delta(
 
 pub fn encode_diffs<'a>(
     diff: Vec<Diff<YChange>>,
-    doc: &ResourceArc<DocResource>,
+    doc: &NifDoc,
     env: Env<'a>,
 ) -> NifResult<Term<'a>> {
     let deltas: Vec<Term<'a>> = diff
@@ -173,11 +173,7 @@ pub fn encode_diffs<'a>(
         .collect::<Result<Vec<Term<'a>>, rustler::Error>>()?;
     Ok(deltas.encode(env))
 }
-pub fn encode_diff<'a>(
-    diff: &Diff<YChange>,
-    doc: &ResourceArc<DocResource>,
-    env: Env<'a>,
-) -> NifResult<Term<'a>> {
+pub fn encode_diff<'a>(diff: &Diff<YChange>, doc: &NifDoc, env: Env<'a>) -> NifResult<Term<'a>> {
     let insert = NifYOut::from_native(diff.insert.clone(), doc.clone());
 
     let mut attribute = diff.attributes.as_deref().map(|attr| {

@@ -4,7 +4,7 @@ use yrs::*;
 
 use crate::{
     atoms,
-    doc::DocResource,
+    doc::NifDoc,
     event::{NifArrayEvent, NifSharedTypeDeepObservable, NifSharedTypeObservable},
     shared_type::{NifSharedType, SharedTypeId},
     transaction::TransactionResource,
@@ -18,12 +18,12 @@ pub type ArrayRefId = SharedTypeId<ArrayRef>;
 #[derive(NifStruct)]
 #[module = "Yex.Array"]
 pub struct NifArray {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     reference: ArrayRefId,
 }
 
 impl NifArray {
-    pub fn new(doc: ResourceArc<DocResource>, array: ArrayRef) -> Self {
+    pub fn new(doc: NifDoc, array: ArrayRef) -> Self {
         NifArray {
             doc,
             reference: ArrayRefId::new(array.hook()),
@@ -33,7 +33,7 @@ impl NifArray {
 impl NifSharedType for NifArray {
     type RefType = ArrayRef;
 
-    fn doc(&self) -> &ResourceArc<DocResource> {
+    fn doc(&self) -> &NifDoc {
         &self.doc
     }
     fn reference(&self) -> &SharedTypeId<Self::RefType> {
