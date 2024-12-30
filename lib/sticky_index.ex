@@ -35,7 +35,7 @@ defmodule Yex.StickyIndex do
   ]
 
   @type t :: %__MODULE__{
-          doc: reference(),
+          doc: Yex.Doc.t(),
           reference: reference(),
           assoc: :before | :after
         }
@@ -56,7 +56,7 @@ defmodule Yex.StickyIndex do
     Yex.Nif.sticky_index_get_offset(sticky_index, cur_txn(sticky_index))
   end
 
-  defp cur_txn(%{doc: doc_ref}) do
+  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
 end

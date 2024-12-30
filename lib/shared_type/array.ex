@@ -8,7 +8,7 @@ defmodule Yex.Array do
   ]
 
   @type t :: %__MODULE__{
-          doc: reference(),
+          doc: Yex.Doc.t(),
           reference: reference()
         }
 
@@ -158,7 +158,7 @@ defmodule Yex.Array do
     Yex.Nif.array_to_json(array, cur_txn(array))
   end
 
-  defp cur_txn(%__MODULE__{doc: doc_ref}) do
+  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
 end

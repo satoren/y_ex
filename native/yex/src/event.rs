@@ -16,7 +16,7 @@ use yrs::{
 };
 
 use crate::{
-    any::NifAny, array::NifArray, atoms, doc::DocResource, map::NifMap, shared_type::NifSharedType,
+    any::NifAny, array::NifArray, atoms, doc::NifDoc, map::NifMap, shared_type::NifSharedType,
     subscription::SubscriptionResource, term_box::TermBox, text::NifText,
     transaction::TransactionResource, utils::origin_to_term, wrap::NifWrap, xml::NifXmlText,
     yinput::NifSharedTypeInput, youtput::NifYOut, ENV,
@@ -78,7 +78,7 @@ impl<'a> rustler::Decoder<'a> for NifPath {
 }
 
 pub struct NifYArrayChange {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     change: Vec<yrs::types::Change>,
 }
 
@@ -125,7 +125,7 @@ pub trait NifEventConstructor<Event>
 where
     Self: Sized + Encoder,
 {
-    fn new(doc: &ResourceArc<DocResource>, event: &Event, txn: &TransactionMut<'_>) -> Self;
+    fn new(doc: &NifDoc, event: &Event, txn: &TransactionMut<'_>) -> Self;
 }
 
 #[derive(NifStruct)]
@@ -137,7 +137,7 @@ pub struct NifArrayEvent {
 }
 
 impl NifEventConstructor<ArrayEvent> for NifArrayEvent {
-    fn new(doc: &ResourceArc<DocResource>, event: &ArrayEvent, txn: &TransactionMut<'_>) -> Self {
+    fn new(doc: &NifDoc, event: &ArrayEvent, txn: &TransactionMut<'_>) -> Self {
         NifArrayEvent {
             path: event.path().into(),
             target: NifArray::new(doc.clone(), event.target().clone()),
@@ -150,7 +150,7 @@ impl NifEventConstructor<ArrayEvent> for NifArrayEvent {
 }
 
 pub struct NifYTextDelta {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     delta: Vec<yrs::types::Delta>,
 }
 
@@ -212,7 +212,7 @@ pub struct NifTextEvent {
 }
 
 impl NifEventConstructor<TextEvent> for NifTextEvent {
-    fn new(doc: &ResourceArc<DocResource>, event: &TextEvent, txn: &TransactionMut<'_>) -> Self {
+    fn new(doc: &NifDoc, event: &TextEvent, txn: &TransactionMut<'_>) -> Self {
         NifTextEvent {
             path: event.path().into(),
             target: NifText::new(doc.clone(), event.target().clone()),
@@ -225,7 +225,7 @@ impl NifEventConstructor<TextEvent> for NifTextEvent {
 }
 
 pub struct NifYMapChange {
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
     change: HashMap<Arc<str>, EntryChange>,
 }
 
@@ -287,7 +287,7 @@ pub struct NifMapEvent {
 }
 
 impl NifEventConstructor<MapEvent> for NifMapEvent {
-    fn new(doc: &ResourceArc<DocResource>, event: &MapEvent, txn: &TransactionMut<'_>) -> Self {
+    fn new(doc: &NifDoc, event: &MapEvent, txn: &TransactionMut<'_>) -> Self {
         NifMapEvent {
             path: event.path().into(),
             target: NifMap::new(doc.clone(), event.target().clone()),
@@ -311,7 +311,7 @@ pub struct NifXmlEvent {
 }
 
 impl NifEventConstructor<XmlEvent> for NifXmlEvent {
-    fn new(doc: &ResourceArc<DocResource>, event: &XmlEvent, txn: &TransactionMut<'_>) -> Self {
+    fn new(doc: &NifDoc, event: &XmlEvent, txn: &TransactionMut<'_>) -> Self {
         NifXmlEvent {
             path: event.path().into(),
             target: NifYOut::from_xml_out(event.target().clone(), doc.clone()),
@@ -336,7 +336,7 @@ pub struct NifXmlTextEvent {
 }
 
 impl NifEventConstructor<XmlTextEvent> for NifXmlTextEvent {
-    fn new(doc: &ResourceArc<DocResource>, event: &XmlTextEvent, txn: &TransactionMut<'_>) -> Self {
+    fn new(doc: &NifDoc, event: &XmlTextEvent, txn: &TransactionMut<'_>) -> Self {
         NifXmlTextEvent {
             path: event.path().into(),
             target: NifXmlText::new(doc.clone(), event.target().clone()),
@@ -358,11 +358,7 @@ pub enum NifEvent {
 }
 
 impl NifEvent {
-    pub fn new(
-        doc: ResourceArc<DocResource>,
-        event: &yrs::types::Event,
-        txn: &TransactionMut<'_>,
-    ) -> Self {
+    pub fn new(doc: NifDoc, event: &yrs::types::Event, txn: &TransactionMut<'_>) -> Self {
         match event {
             yrs::types::Event::Text(event) => NifEvent::Text(NifTextEvent::new(&doc, &event, txn)),
             yrs::types::Event::Array(event) => {
@@ -448,7 +444,7 @@ where
         doc.readonly(current_transaction, |txn| {
             let ref_value = self.get_ref(txn)?;
 
-            let doc_ref: ResourceArc<crate::wrap::NifWrap<crate::doc::DocInner>> = doc.clone();
+            let doc_ref = doc.clone();
             let sub = ref_value.observe(move |txn, event| {
                 let doc_ref = doc_ref.clone();
                 ENV.with(|env| {

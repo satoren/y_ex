@@ -2,9 +2,9 @@ use crate::{
     any::NifAny,
     doc::NifDoc,
     xml::{NifXmlElement, NifXmlFragment, NifXmlText},
-    DocResource, NifArray, NifMap, NifText, NifUndefinedRef, NifWeakLink,
+    NifArray, NifMap, NifText, NifUndefinedRef, NifWeakLink,
 };
-use rustler::{NifUntaggedEnum, ResourceArc};
+use rustler::NifUntaggedEnum;
 
 #[derive(NifUntaggedEnum)]
 pub enum NifYOut {
@@ -21,7 +21,7 @@ pub enum NifYOut {
 }
 
 impl NifYOut {
-    pub fn from_native(v: yrs::Out, doc: ResourceArc<DocResource>) -> Self {
+    pub fn from_native(v: yrs::Out, doc: NifDoc) -> Self {
         match v {
             yrs::Out::Any(any) => NifYOut::Any(any.into()),
             yrs::Out::YText(text) => NifYOut::YText(NifText::new(doc, text)),
@@ -34,7 +34,7 @@ impl NifYOut {
             yrs::Out::UndefinedRef(_) => NifYOut::UndefinedRef(NifUndefinedRef { doc }),
         }
     }
-    pub fn from_xml_out(v: yrs::XmlOut, doc: ResourceArc<DocResource>) -> Self {
+    pub fn from_xml_out(v: yrs::XmlOut, doc: NifDoc) -> Self {
         match v {
             yrs::XmlOut::Element(xml) => NifYOut::YXmlElement(NifXmlElement::new(doc, xml)),
             yrs::XmlOut::Fragment(xml) => NifYOut::YXmlFragment(NifXmlFragment::new(doc, xml)),

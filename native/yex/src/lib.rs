@@ -22,10 +22,10 @@ mod youtput;
 
 use any::NifAny;
 use array::NifArray;
-use doc::{DocResource, NifDoc};
+use doc::NifDoc;
 use error::Error;
 use map::NifMap;
-use rustler::{Env, NifStruct, ResourceArc};
+use rustler::{Env, NifStruct};
 use scoped_thread_local::scoped_thread_local;
 use text::NifText;
 
@@ -44,14 +44,14 @@ pub trait TryInto<T>: Sized {
 #[module = "Yex.WeakLink"]
 pub struct NifWeakLink {
     // not supported yet
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
 }
 
 #[derive(NifStruct)]
 #[module = "Yex.UndefinedRef"]
 pub struct NifUndefinedRef {
     // not supported yet or...?
-    doc: ResourceArc<DocResource>,
+    doc: NifDoc,
 }
 
 rustler::init!("Elixir.Yex.Nif");
