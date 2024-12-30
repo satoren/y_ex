@@ -11,12 +11,16 @@ defmodule Yex.Array do
           doc: Yex.Doc.t(),
           reference: reference()
         }
+  alias Yex.Doc
+  require Yex.Doc
 
   @doc """
   Insert content at the specified index.
   """
-  def insert(%__MODULE__{} = array, index, content) do
-    Yex.Nif.array_insert(array, cur_txn(array), index, content)
+  def insert(%__MODULE__{doc: doc} = array, index, content) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.array_insert(array, cur_txn(array), index, content)
+    )
   end
 
   @doc """
@@ -30,15 +34,19 @@ defmodule Yex.Array do
       [1, 2, 3, 4, 5]
   """
   @spec insert_list(t, integer(), list()) :: :ok
-  def insert_list(%__MODULE__{} = array, index, contents) do
-    Yex.Nif.array_insert_list(array, cur_txn(array), index, contents)
+  def insert_list(%__MODULE__{doc: doc} = array, index, contents) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.array_insert_list(array, cur_txn(array), index, contents)
+    )
   end
 
   @doc """
   Push content to the end of the array.
   """
-  def push(%__MODULE__{} = array, content) do
-    insert(array, __MODULE__.length(array), content)
+  def push(%__MODULE__{doc: doc} = array, content) do
+    Doc.run_in_worker_process(doc,
+      do: insert(array, __MODULE__.length(array), content)
+    )
   end
 
   @doc """
@@ -60,10 +68,11 @@ defmodule Yex.Array do
   Delete contents in the specified range.
   """
   @spec delete_range(t, integer(), integer()) :: :ok
-  def delete_range(%__MODULE__{} = array, index, length) do
-    index = if index < 0, do: __MODULE__.length(array) + index, else: index
-
-    Yex.Nif.array_delete_range(array, cur_txn(array), index, length)
+  def delete_range(%__MODULE__{doc: doc} = array, index, length) do
+    Doc.run_in_worker_process doc do
+      index = if index < 0, do: __MODULE__.length(array) + index, else: index
+      Yex.Nif.array_delete_range(array, cur_txn(array), index, length)
+    end
   end
 
   @doc """
@@ -78,8 +87,10 @@ defmodule Yex.Array do
       [[3, 4], [1, 2]]
   """
   @spec move_to(t, integer(), integer()) :: :ok
-  def move_to(%__MODULE__{} = array, from, to) do
-    Yex.Nif.array_move_to(array, cur_txn(array), from, to)
+  def move_to(%__MODULE__{doc: doc} = array, from, to) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.array_move_to(array, cur_txn(array), from, to)
+    )
   end
 
   @deprecated "Rename to `fetch/2`"
@@ -98,9 +109,11 @@ defmodule Yex.Array do
       {:ok, "Hello"}
   """
   @spec fetch(t, integer()) :: {:ok, term()} | :error
-  def fetch(%__MODULE__{} = array, index) do
-    index = if index < 0, do: __MODULE__.length(array) + index, else: index
-    Yex.Nif.array_get(array, cur_txn(array), index)
+  def fetch(%__MODULE__{doc: doc} = array, index) do
+    Doc.run_in_worker_process doc do
+      index = if index < 0, do: __MODULE__.length(array) + index, else: index
+      Yex.Nif.array_get(array, cur_txn(array), index)
+    end
   end
 
   @spec fetch!(t, integer()) :: term()
@@ -123,8 +136,10 @@ defmodule Yex.Array do
       iex> ["Hello", "World", %Yex.Array{}] = Yex.Array.to_list(array)
 
   """
-  def to_list(%__MODULE__{} = array) do
-    Yex.Nif.array_to_list(array, cur_txn(array))
+  def to_list(%__MODULE__{doc: doc} = array) do
+    Doc.run_in_worker_process doc do
+      Yex.Nif.array_to_list(array, cur_txn(array))
+    end
   end
 
   @doc """
@@ -138,8 +153,10 @@ defmodule Yex.Array do
       iex> Yex.Array.length(array)
       2
   """
-  def length(%__MODULE__{} = array) do
-    Yex.Nif.array_length(array, cur_txn(array))
+  def length(%__MODULE__{doc: doc} = array) do
+    Doc.run_in_worker_process doc do
+      Yex.Nif.array_length(array, cur_txn(array))
+    end
   end
 
   @doc """
@@ -154,8 +171,10 @@ defmodule Yex.Array do
       ["Hello", "World"]
   """
   @spec to_json(t) :: term()
-  def to_json(%__MODULE__{} = array) do
-    Yex.Nif.array_to_json(array, cur_txn(array))
+  def to_json(%__MODULE__{doc: doc} = array) do
+    Doc.run_in_worker_process doc do
+      Yex.Nif.array_to_json(array, cur_txn(array))
+    end
   end
 
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
