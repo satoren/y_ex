@@ -32,27 +32,42 @@ defmodule Yex.Doc do
   end
 
   defstruct [
-    :reference
+    :reference,
+    worker_pid: nil
   ]
 
   @type t :: %__MODULE__{
-          reference: any()
+          reference: any(),
+          worker_pid: pid() | nil
         }
 
   @doc """
   Create a new document.
+
+  worker_pid:
+     If there is a possibility of passing the created document to another process, please specify the process responsible for operating the document.
+     This process needs to handle the GenServer handle_call messages as follows:
+
+      @impl true
+      def handle_call(
+            {Yex.Doc, :run, fun},
+            _from,
+            state
+          ) do
+        {:reply, fun.(), state}
+      end
   """
-  @spec new() :: Yex.Doc.t()
-  def new() do
-    Yex.Nif.doc_new()
+  @spec new(pid()) :: Yex.Doc.t()
+  def new(worker_pid \\ self()) do
+    Yex.Nif.doc_new() |> Map.put(:worker_pid, worker_pid)
   end
 
   @doc """
   Create a new document with options.
   """
-  @spec with_options(Options.t()) :: Yex.Doc.t()
-  def with_options(%Options{} = option) do
-    Yex.Nif.doc_with_options(option)
+  @spec with_options(Options.t(), pid()) :: Yex.Doc.t()
+  def with_options(%Options{} = option, worker_pid \\ self()) do
+    Yex.Nif.doc_with_options(option) |> Map.put(:worker_pid, worker_pid)
   end
 
   @doc """
@@ -164,6 +179,28 @@ defmodule Yex.Doc do
   def demonitor_update_v2(sub) do
     Process.put(__MODULE__.Subscriptions, Process.get() |> Enum.reject(&(&1 == sub)))
     Yex.Nif.sub_unsubscribe(sub)
+  end
+
+  @doc """
+  Executes the given block in the document's worker process.
+  If the current process is already the worker process, executes directly.
+  Otherwise, delegates execution to the worker process via GenServer.call.
+
+  Raises if worker_pid is not set.
+  """
+  defmacro run_in_worker_process(doc, do: block) do
+    quote do
+      case unquote(doc).worker_pid do
+        pid when pid == self() ->
+          unquote(block)
+
+        nil ->
+          raise "Document has no worker process assigned"
+
+        worker_pid ->
+          GenServer.call(worker_pid, {Yex.Doc, :run, fn -> unquote(block) end})
+      end
+    end
   end
 
   defp cur_txn(%__MODULE__{reference: ref}) do

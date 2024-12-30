@@ -93,16 +93,28 @@ impl From<NifOptions> for Options {
 #[module = "Yex.Doc"]
 pub(crate) struct NifDoc {
     pub(crate) reference: ResourceArc<DocResource>,
+    pub(crate) worker_pid: Option<LocalPid>,
+}
+
+impl Default for NifDoc {
+    fn default() -> Self {
+        NifDoc {
+            reference: ResourceArc::new(Doc::new().into()),
+            worker_pid: None,
+        }
+    }
 }
 impl NifDoc {
     pub fn with_options(option: NifOptions) -> Self {
         NifDoc {
             reference: ResourceArc::new(Doc::with_options(option.into()).into()),
+            worker_pid: None,
         }
     }
     pub fn from_native(doc: Doc) -> Self {
         NifDoc {
             reference: ResourceArc::new(doc.into()),
+            worker_pid: None,
         }
     }
 
@@ -170,14 +182,6 @@ impl NifDoc {
             let txn: &Transaction<'_> =
                 &yrs::Transact::try_transact(&self.reference.0).map_err(Error::from)?;
             f(&ReadTransaction::ReadOnly(txn))
-        }
-    }
-}
-
-impl Default for NifDoc {
-    fn default() -> Self {
-        NifDoc {
-            reference: ResourceArc::new(Doc::new().into()),
         }
     }
 }
