@@ -158,7 +158,6 @@ impl NifDoc {
     where
         F: FnOnce(&ReadTransaction) -> NifResult<T>,
     {
-        // TODO:
         if let Some(txn) = current_transaction {
             if let Some(txn) = txn.0.borrow_mut().as_ref() {
                 f(&ReadTransaction::ReadWrite(txn))
