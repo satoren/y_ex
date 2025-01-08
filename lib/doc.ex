@@ -58,7 +58,25 @@ defmodule Yex.Doc do
           raise "Document has no worker process assigned"
 
         worker_pid ->
-          GenServer.call(worker_pid, {Yex.Doc, :run, fn -> unquote(block) end})
+          wrapped_fun = fn ->
+            try do
+              unquote(block)
+            rescue
+              e ->
+                {Yex.Doc, :reraise, e, __STACKTRACE__}
+            end
+          end
+
+          case GenServer.call(
+                 worker_pid,
+                 {Yex.Doc, :run, wrapped_fun}
+               ) do
+            {Yex.Doc, :reraise, e, stacktrace} ->
+              reraise e, stacktrace
+
+            result ->
+              result
+          end
       end
     end
   end
@@ -138,7 +156,7 @@ defmodule Yex.Doc do
       iex> refute_receive {:update_v1, _, nil, _} # only one update message
 
   """
-  @spec transaction(t, origin :: term(), fun()) :: :ok | {:error, term()}
+  @spec transaction(t, origin :: term(), fun()) :: term()
   def transaction(%__MODULE__{reference: ref} = doc, origin \\ nil, exec) do
     run_in_worker_process doc do
       if cur_txn(doc) do
@@ -146,11 +164,19 @@ defmodule Yex.Doc do
       end
 
       txn = Yex.Nif.doc_begin_transaction(doc, origin)
-      Process.put(ref, txn)
-      exec.()
-      Process.delete(ref)
-      Yex.Nif.commit_transaction(txn)
-      :ok
+
+      try do
+        Process.put(ref, txn)
+        result = exec.()
+        Yex.Nif.commit_transaction(txn)
+        result
+      rescue
+        e ->
+          # Consider rolling back the transaction here if possible
+          reraise e, __STACKTRACE__
+      after
+        Process.delete(ref)
+      end
     end
   end
 

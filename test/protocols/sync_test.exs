@@ -139,11 +139,13 @@ defmodule Yex.SyncTest do
     end
 
     test "read_sync_message with sync_step2", %{doc: doc} do
-      assert :ok = Sync.read_sync_message({:sync_step2, <<0>>}, doc, nil)
+      assert {:error, {:encoding_exception, _}} =
+               Sync.read_sync_message({:sync_step2, <<0>>}, doc, nil)
     end
 
     test "read_sync_message with sync_update", %{doc: doc} do
-      assert :ok = Sync.read_sync_message({:sync_update, <<0>>}, doc, nil)
+      assert {:error, {:encoding_exception, _}} =
+               Sync.read_sync_message({:sync_update, <<0>>}, doc, nil)
     end
   end
 

@@ -42,6 +42,8 @@ defmodule Yex.DocTest do
             nil
           end)
         end
+
+        :ok
       end)
   end
 
