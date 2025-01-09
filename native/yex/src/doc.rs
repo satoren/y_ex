@@ -1,22 +1,26 @@
-use std::cell::RefCell;
+// Standard library imports
 use std::ops::Deref;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 
-use crate::error::Error;
-use crate::subscription::SubscriptionResource;
-use crate::term_box::TermBox;
-use crate::transaction::{ReadTransaction, TransactionResource};
-use crate::utils::{origin_to_term, term_to_origin_binary};
-use crate::wrap::SliceIntoBinary;
-use crate::xml::NifXmlFragment;
-use crate::{atoms, ENV};
-use crate::{wrap::NifWrap, NifArray, NifMap, NifText};
+// External crates
 use rustler::{
     Atom, Binary, Encoder, Env, LocalPid, NifResult, NifStruct, NifUnitEnum, ResourceArc, Term,
 };
-use yrs::updates::decoder::Decode;
-use yrs::updates::encoder::Encode;
+use yrs::updates::{decoder::Decode, encoder::Encode};
 use yrs::*;
+
+// Internal imports
+use crate::{
+    atoms,
+    error::Error,
+    subscription::SubscriptionResource,
+    term_box::TermBox,
+    transaction::{ReadTransaction, TransactionResource},
+    utils::{origin_to_term, term_to_origin_binary},
+    wrap::{NifWrap, SliceIntoBinary},
+    xml::NifXmlFragment,
+    NifArray, NifMap, NifText, ENV,
+};
 
 pub type DocResource = NifWrap<Doc>;
 
@@ -133,20 +137,18 @@ impl NifDoc {
     where
         F: FnOnce(&mut TransactionMut<'_>) -> NifResult<T>,
     {
-        ENV.set(&mut env.clone(), || {
-            if let Some(txn) = current_transaction {
-                if let Some(txn) = txn.0.borrow_mut().as_mut() {
-                    f(txn)
+        ENV.set(&mut env.clone(), || match current_transaction {
+            Some(txn) => {
+                if let Ok(mut txn_guard) = txn.0.write() {
+                    match txn_guard.as_mut() {
+                        Some(txn) => f(txn),
+                        None => self.with_transaction_mut(f),
+                    }
                 } else {
-                    let txn = &mut yrs::Transact::try_transact_mut(&self.reference.0)
-                        .map_err(Error::from)?;
-                    f(txn)
+                    self.with_transaction_mut(f)
                 }
-            } else {
-                let txn =
-                    &mut yrs::Transact::try_transact_mut(&self.reference.0).map_err(Error::from)?;
-                f(txn)
             }
+            None => self.with_transaction_mut(f),
         })
     }
 
@@ -158,19 +160,18 @@ impl NifDoc {
     where
         F: FnOnce(&ReadTransaction) -> NifResult<T>,
     {
-        // TODO:
-        if let Some(txn) = current_transaction {
-            if let Some(txn) = txn.0.borrow_mut().as_ref() {
-                f(&ReadTransaction::ReadWrite(txn))
-            } else {
-                let txn: &Transaction<'_> =
-                    &yrs::Transact::try_transact(&self.reference.0).map_err(Error::from)?;
-                f(&ReadTransaction::ReadOnly(txn))
+        match current_transaction {
+            Some(txn) => {
+                if let Ok(txn_guard) = txn.0.read() {
+                    match txn_guard.as_ref() {
+                        Some(txn) => f(&ReadTransaction::ReadWrite(txn)),
+                        None => self.with_transaction(|txn| f(&ReadTransaction::ReadOnly(txn))),
+                    }
+                } else {
+                    self.with_transaction(|txn| f(&ReadTransaction::ReadOnly(txn)))
+                }
             }
-        } else {
-            let txn: &Transaction<'_> =
-                &yrs::Transact::try_transact(&self.reference.0).map_err(Error::from)?;
-            f(&ReadTransaction::ReadOnly(txn))
+            None => self.with_transaction(|txn| f(&ReadTransaction::ReadOnly(txn))),
         }
     }
 }
@@ -188,6 +189,34 @@ impl Deref for NifDoc {
 
     fn deref(&self) -> &Self::Target {
         &self.reference.0
+    }
+}
+
+pub trait DocOperations {
+    fn with_transaction<F, T>(&self, f: F) -> NifResult<T>
+    where
+        F: FnOnce(&Transaction) -> NifResult<T>;
+
+    fn with_transaction_mut<F, T>(&self, f: F) -> NifResult<T>
+    where
+        F: FnOnce(&mut TransactionMut) -> NifResult<T>;
+}
+
+impl DocOperations for NifDoc {
+    fn with_transaction<F, T>(&self, f: F) -> NifResult<T>
+    where
+        F: FnOnce(&Transaction) -> NifResult<T>,
+    {
+        let txn = yrs::Transact::try_transact(&self.reference.0).map_err(Error::from)?;
+        f(&txn)
+    }
+
+    fn with_transaction_mut<F, T>(&self, f: F) -> NifResult<T>
+    where
+        F: FnOnce(&mut TransactionMut) -> NifResult<T>,
+    {
+        let mut txn = yrs::Transact::try_transact_mut(&self.reference.0).map_err(Error::from)?;
+        f(&mut txn)
     }
 }
 
@@ -232,20 +261,21 @@ fn doc_begin_transaction(
                 .map_err(Error::from)?;
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
 
-        Ok(TransactionResource(RefCell::new(Some(txn))).into())
+        Ok(TransactionResource(RwLock::new(Some(txn))).into())
     } else {
         let txn: TransactionMut =
             yrs::Transact::try_transact_mut(&doc.reference.0).map_err(Error::from)?;
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
-        Ok(TransactionResource(RefCell::new(Some(txn))).into())
+        Ok(TransactionResource(RwLock::new(Some(txn))).into())
     }
 }
 
 #[rustler::nif]
 fn commit_transaction(env: Env<'_>, current_transaction: ResourceArc<TransactionResource>) {
     ENV.set(&mut env.clone(), || {
-        let mut v = current_transaction.0.borrow_mut();
-        *v = None;
+        if let Ok(mut txn) = current_transaction.0.write() {
+            *txn = None;
+        }
     })
 }
 

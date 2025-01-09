@@ -1,10 +1,7 @@
-use std::cell::RefCell;
+use std::sync::RwLock;
 use yrs::{ReadTxn, Store, Transaction, TransactionMut};
 
-pub struct TransactionResource(pub RefCell<Option<TransactionMut<'static>>>);
-
-unsafe impl Send for TransactionResource {}
-unsafe impl Sync for TransactionResource {}
+pub struct TransactionResource(pub RwLock<Option<TransactionMut<'static>>>);
 
 #[rustler::resource_impl]
 impl rustler::Resource for TransactionResource {}
