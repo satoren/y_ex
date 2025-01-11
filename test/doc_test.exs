@@ -42,6 +42,8 @@ defmodule Yex.DocTest do
             nil
           end)
         end
+
+        :ok
       end)
   end
 
@@ -172,8 +174,8 @@ defmodule Yex.DocTest do
     text1 = Doc.get_text(doc, "text")
 
     Doc.transaction(doc, "origin", fn ->
-      Text.insert(text1, 0, "World")
-      Text.insert(text1, 0, "Hello")
+      :ok = Text.insert(text1, 0, "World")
+      :ok = Text.insert(text1, 0, "Hello")
     end)
 
     assert Text.to_string(text1) == "HelloWorld"

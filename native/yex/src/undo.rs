@@ -12,6 +12,7 @@ use yrs::{undo::Options as UndoOptions, UndoManager};
 #[module = "Yex.UndoManager"]
 pub struct NifUndoManager {
     reference: ResourceArc<UndoManagerResource>,
+    doc: NifDoc,
 }
 
 pub struct UndoManagerWrapper {
@@ -86,6 +87,7 @@ fn create_undo_manager_with_options<T: NifSharedType>(
 
     Ok(NifUndoManager {
         reference: ResourceArc::new(NifWrap(RwLock::new(wrapper))),
+        doc: doc,
     })
 }
 

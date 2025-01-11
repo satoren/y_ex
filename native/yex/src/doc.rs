@@ -13,7 +13,7 @@ use yrs::*;
 use crate::{
     atoms,
     error::Error,
-    subscription::SubscriptionResource,
+    subscription::NifSubscription,
     term_box::TermBox,
     transaction::{ReadTransaction, TransactionResource},
     utils::{origin_to_term, term_to_origin_binary},
@@ -97,16 +97,28 @@ impl From<NifOptions> for Options {
 #[module = "Yex.Doc"]
 pub(crate) struct NifDoc {
     pub(crate) reference: ResourceArc<DocResource>,
+    pub(crate) worker_pid: Option<LocalPid>,
+}
+
+impl Default for NifDoc {
+    fn default() -> Self {
+        NifDoc {
+            reference: ResourceArc::new(Doc::new().into()),
+            worker_pid: None,
+        }
+    }
 }
 impl NifDoc {
     pub fn with_options(option: NifOptions) -> Self {
         NifDoc {
             reference: ResourceArc::new(Doc::with_options(option.into()).into()),
+            worker_pid: None,
         }
     }
     pub fn from_native(doc: Doc) -> Self {
         NifDoc {
             reference: ResourceArc::new(doc.into()),
+            worker_pid: None,
         }
     }
 
@@ -172,14 +184,6 @@ impl NifDoc {
                 }
             }
             None => self.with_transaction(|txn| f(&ReadTransaction::ReadOnly(txn))),
-        }
-    }
-}
-
-impl Default for NifDoc {
-    fn default() -> Self {
-        NifDoc {
-            reference: ResourceArc::new(Doc::new().into()),
         }
     }
 }
@@ -284,7 +288,7 @@ fn doc_monitor_update_v1(
     doc: NifDoc,
     pid: LocalPid,
     metadata: Term<'_>,
-) -> NifResult<(Atom, ResourceArc<SubscriptionResource>)> {
+) -> NifResult<(Atom, NifSubscription)> {
     let metadata = TermBox::new(metadata);
     doc.observe_update_v1(move |txn, event| {
         ENV.with(|env| {
@@ -300,7 +304,15 @@ fn doc_monitor_update_v1(
             );
         })
     })
-    .map(|sub| (atoms::ok(), ResourceArc::new(Mutex::new(Some(sub)).into())))
+    .map(|sub| {
+        (
+            atoms::ok(),
+            NifSubscription {
+                reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
+                doc: doc.clone(),
+            },
+        )
+    })
     .map_err(|e| Error::from(e).into())
 }
 #[rustler::nif]
@@ -308,7 +320,7 @@ fn doc_monitor_update_v2(
     doc: NifDoc,
     pid: LocalPid,
     metadata: Term<'_>,
-) -> NifResult<(Atom, ResourceArc<SubscriptionResource>)> {
+) -> NifResult<(Atom, NifSubscription)> {
     let metadata = TermBox::new(metadata);
     doc.observe_update_v2(move |txn, event| {
         ENV.with(|env| {
@@ -324,7 +336,15 @@ fn doc_monitor_update_v2(
             );
         })
     })
-    .map(|sub| (atoms::ok(), ResourceArc::new(Mutex::new(Some(sub)).into())))
+    .map(|sub| {
+        (
+            atoms::ok(),
+            NifSubscription {
+                reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
+                doc: doc.clone(),
+            },
+        )
+    })
     .map_err(|e| Error::from(e).into())
 }
 

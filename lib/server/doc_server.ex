@@ -181,6 +181,8 @@ defmodule Yex.DocServer do
         Yex.DocServer.Worker.process_message_v1(server, message, origin)
       end
 
+      def get_doc(server), do: GenServer.call(server, {:get_doc})
+
       defoverridable child_spec: 1
     end
   end

@@ -16,10 +16,22 @@ use yrs::{
 };
 
 use crate::{
-    any::NifAny, array::NifArray, atoms, doc::NifDoc, map::NifMap, shared_type::NifSharedType,
-    subscription::SubscriptionResource, term_box::TermBox, text::NifText,
-    transaction::TransactionResource, utils::origin_to_term, wrap::NifWrap, xml::NifXmlText,
-    yinput::NifSharedTypeInput, youtput::NifYOut, ENV,
+    any::NifAny,
+    array::NifArray,
+    atoms,
+    doc::NifDoc,
+    map::NifMap,
+    shared_type::NifSharedType,
+    subscription::{NifSubscription, SubscriptionResource},
+    term_box::TermBox,
+    text::NifText,
+    transaction::TransactionResource,
+    utils::origin_to_term,
+    wrap::NifWrap,
+    xml::NifXmlText,
+    yinput::NifSharedTypeInput,
+    youtput::NifYOut,
+    ENV,
 };
 
 #[derive(NifUntaggedEnum)]
@@ -386,7 +398,7 @@ where
         pid: rustler::LocalPid,
         ref_term: Term<'_>,
         metadata: Term<'_>,
-    ) -> NifResult<ResourceArc<SubscriptionResource>> {
+    ) -> NifResult<NifSubscription> {
         let doc = self.doc();
 
         let ref_box = TermBox::new(ref_term);
@@ -416,7 +428,10 @@ where
                 })
             });
 
-            Ok(ResourceArc::new(Mutex::new(Some(sub)).into()))
+            Ok(NifSubscription {
+                reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
+                doc: doc.clone(),
+            })
         })
     }
 }
@@ -435,7 +450,7 @@ where
         pid: rustler::LocalPid,
         ref_term: Term<'_>,
         metadata: Term<'_>,
-    ) -> NifResult<ResourceArc<SubscriptionResource>> {
+    ) -> NifResult<NifSubscription> {
         let doc = self.doc();
 
         let ref_box = TermBox::new(ref_term);
@@ -461,7 +476,10 @@ where
                 })
             });
 
-            Ok(SubscriptionResource::arc(sub))
+            Ok(NifSubscription {
+                reference: SubscriptionResource::arc(sub),
+                doc: doc.clone(),
+            })
         })
     }
 }
@@ -473,7 +491,7 @@ fn shared_type_observe(
     pid: rustler::LocalPid,
     ref_term: Term<'_>,
     metadata: Term<'_>,
-) -> NifResult<ResourceArc<SubscriptionResource>> {
+) -> NifResult<NifSubscription> {
     match shared_type {
         NifSharedTypeInput::Map(map) => map.observe(current_transaction, pid, ref_term, metadata),
         NifSharedTypeInput::Array(array) => {
@@ -501,7 +519,7 @@ fn shared_type_observe_deep(
     pid: rustler::LocalPid,
     ref_term: Term<'_>,
     metadata: Term<'_>,
-) -> NifResult<ResourceArc<SubscriptionResource>> {
+) -> NifResult<NifSubscription> {
     match shared_type {
         NifSharedTypeInput::Map(map) => {
             map.observe_deep(current_transaction, pid, ref_term, metadata)
