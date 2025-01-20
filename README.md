@@ -26,7 +26,7 @@ end
 ## Feature parity
 
 
-|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.18)               |                y_ex<br/>(0.6.5)               | 
+|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.18)               |                y_ex<br/>(0.7.0)               | 
 |-----------------------------------------|:-------------------------------------------------:|:------------------------------------------:|:------------------------------------------:|
 | YText: insert/delete                    |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | YText: formatting attributes and deltas |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
@@ -38,13 +38,13 @@ end
 | YArray: move                            |    &#x2705; <br/> <small>(move branch)</small>    |                  &#x2705;                  |                  &#x2705;                  |
 | XML Element, Fragment and Text          |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Sub-documents                           |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
-| Shared collections: observers           |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
-| Shared collections: recursive nesting   |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
+| Shared collections: observers           |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
+| Shared collections: recursive nesting   |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Document observers                      |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Transaction: origins                    |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Snapshots                               |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
-| Sticky indexes                          |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
-| Undo Manager                            |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
+| Sticky indexes                          |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
+| Undo Manager                            |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Awareness                               |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Network provider: WebSockets            |    &#x2705; <br/> <small>(y-websocket)</small>    |  &#x2705; <br/> <small>(yrs-warp)</small>  |                  &#x274C;                  |
 | Network provider: WebRTC                |     &#x2705; <br/> <small>(y-webrtc)</small>      | &#x2705; <br/> <small>(yrs-webrtc)</small> |                  &#x274C;                  |
