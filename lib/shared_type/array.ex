@@ -177,8 +177,31 @@ defmodule Yex.Array do
     end
   end
 
+  def member?(array, val) do
+    Enum.member?(to_list(array), val)
+  end
+
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
+  end
+
+  defimpl Enumerable do
+    def count(array) do
+      {:ok, Yex.Array.length(array)}
+    end
+
+    def member?(array, val) do
+      {:ok, Yex.Array.member?(array, val)}
+    end
+
+    def slice(array) do
+      size = Yex.Array.length(array)
+      {:ok, size, &Yex.Array.to_list/1}
+    end
+
+    def reduce(array, acc, fun) do
+      Enumerable.List.reduce(Yex.Array.to_list(array), acc, fun)
+    end
   end
 end
 

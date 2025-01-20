@@ -111,6 +111,13 @@ defmodule Yex.XmlText do
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
+
+  defimpl Yex.Xml do
+    defdelegate next_sibling(xml), to: Yex.XmlText
+    defdelegate prev_sibling(xml), to: Yex.XmlText
+    defdelegate parent(xml), to: Yex.XmlText
+    defdelegate to_string(xml), to: Yex.XmlText
+  end
 end
 
 defmodule Yex.XmlTextPrelim do

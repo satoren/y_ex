@@ -80,6 +80,19 @@ fn map_get(
             .ok_or(rustler::Error::Atom("error"))
     })
 }
+
+#[rustler::nif]
+fn map_contains_key(
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    key: &str,
+) -> NifResult<bool> {
+    map.readonly(current_transaction, |txn| {
+        let map = map.get_ref(txn)?;
+        Ok(map.contains_key(txn, key))
+    })
+}
+
 #[rustler::nif]
 fn map_delete(
     env: Env<'_>,

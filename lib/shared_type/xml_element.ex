@@ -178,6 +178,13 @@ defmodule Yex.XmlElement do
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
+
+  defimpl Yex.Xml do
+    defdelegate next_sibling(xml), to: Yex.XmlElement
+    defdelegate prev_sibling(xml), to: Yex.XmlElement
+    defdelegate parent(xml), to: Yex.XmlElement
+    defdelegate to_string(xml), to: Yex.XmlElement
+  end
 end
 
 defmodule Yex.XmlElementPrelim do
