@@ -1,9 +1,9 @@
 use crate::{
-    shared_type::NifSharedType, utils::term_to_origin_binary, wrap::NifWrap,
+    atoms, shared_type::NifSharedType, utils::term_to_origin_binary, wrap::NifWrap,
     yinput::NifSharedTypeInput, Error, NifDoc, ENV,
 };
 
-use rustler::{Env, NifStruct, ResourceArc, Term};
+use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc, Term};
 use std::ops::Deref;
 use std::sync::RwLock;
 use yrs::{undo::Options as UndoOptions, UndoManager};
@@ -41,7 +41,7 @@ pub fn undo_manager_new(
     env: Env<'_>,
     doc: NifDoc,
     scope: NifSharedTypeInput,
-) -> Result<NifUndoManager, Error> {
+) -> NifResult<(Atom, NifUndoManager)> {
     ENV.set(&mut env.clone(), || match scope {
         NifSharedTypeInput::Text(text) => create_undo_manager(env, doc, text),
         NifSharedTypeInput::Array(array) => create_undo_manager(env, doc, array),
@@ -56,7 +56,7 @@ fn create_undo_manager<T: NifSharedType>(
     env: Env<'_>,
     doc: NifDoc,
     scope: T,
-) -> Result<NifUndoManager, Error> {
+) -> NifResult<(Atom, NifUndoManager)> {
     create_undo_manager_with_options(
         env,
         doc,
@@ -72,7 +72,7 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     doc: NifDoc,
     scope: T,
     options: NifUndoOptions,
-) -> Result<NifUndoManager, Error> {
+) -> NifResult<(Atom, NifUndoManager)> {
     let branch = scope
         .readonly(None, |txn| scope.get_ref(txn))
         .map_err(|_| Error::Message("Failed to get branch reference".to_string()))?;
@@ -85,10 +85,13 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     let undo_manager = UndoManager::with_scope_and_options(&doc, &branch, undo_options);
     let wrapper = UndoManagerWrapper::new(undo_manager);
 
-    Ok(NifUndoManager {
-        reference: ResourceArc::new(NifWrap(RwLock::new(wrapper))),
-        doc: doc,
-    })
+    Ok((
+        atoms::ok(),
+        NifUndoManager {
+            reference: ResourceArc::new(NifWrap(RwLock::new(wrapper))),
+            doc: doc,
+        },
+    ))
 }
 
 #[rustler::nif]
@@ -97,7 +100,7 @@ pub fn undo_manager_new_with_options(
     doc: NifDoc,
     scope: NifSharedTypeInput,
     options: NifUndoOptions,
-) -> Result<NifUndoManager, Error> {
+) -> NifResult<(Atom, NifUndoManager)> {
     // Check if the document reference is valid by attempting to access its inner doc
     // will return an error tuple if it is not
     let _doc_ref = doc.reference.deref();
@@ -125,7 +128,7 @@ pub fn undo_manager_include_origin(
     env: Env<'_>,
     undo_manager: NifUndoManager,
     origin_term: Term,
-) -> Result<(), Error> {
+) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = undo_manager
             .reference
@@ -137,7 +140,7 @@ pub fn undo_manager_include_origin(
             .ok_or_else(|| Error::Message("Invalid origin term".to_string()))?;
         wrapper.manager.include_origin(origin.as_slice());
 
-        Ok(())
+        Ok(atoms::ok())
     })
 }
 
@@ -146,7 +149,7 @@ pub fn undo_manager_exclude_origin(
     env: Env<'_>,
     undo_manager: NifUndoManager,
     origin_term: Term,
-) -> Result<(), Error> {
+) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = undo_manager
             .reference
@@ -158,12 +161,12 @@ pub fn undo_manager_exclude_origin(
             .ok_or_else(|| Error::Message("Invalid origin term".to_string()))?;
         wrapper.manager.exclude_origin(origin.as_slice());
 
-        Ok(())
+        Ok(atoms::ok())
     })
 }
 
 #[rustler::nif]
-pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> Result<(), Error> {
+pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = undo_manager
             .reference
@@ -175,12 +178,12 @@ pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> Result<(), E
             wrapper.manager.undo_blocking();
         }
 
-        Ok(())
+        Ok(atoms::ok())
     })
 }
 
 #[rustler::nif]
-pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> Result<(), Error> {
+pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = undo_manager
             .reference
@@ -192,7 +195,7 @@ pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> Result<(), E
             wrapper.manager.redo_blocking();
         }
 
-        Ok(())
+        Ok(atoms::ok())
     })
 }
 
@@ -201,7 +204,7 @@ pub fn undo_manager_expand_scope(
     env: Env<'_>,
     undo_manager: NifUndoManager,
     scope: NifSharedTypeInput,
-) -> Result<(), Error> {
+) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = undo_manager
             .reference
@@ -254,15 +257,12 @@ pub fn undo_manager_expand_scope(
             }
         }
 
-        Ok(())
+        Ok(atoms::ok())
     })
 }
 
 #[rustler::nif]
-pub fn undo_manager_stop_capturing(
-    env: Env<'_>,
-    undo_manager: NifUndoManager,
-) -> Result<(), Error> {
+pub fn undo_manager_stop_capturing(env: Env<'_>, undo_manager: NifUndoManager) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = undo_manager
             .reference
@@ -271,12 +271,12 @@ pub fn undo_manager_stop_capturing(
             .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
 
         wrapper.manager.reset();
-        Ok(())
+        Ok(atoms::ok())
     })
 }
 
 #[rustler::nif]
-pub fn undo_manager_clear(env: Env, undo_manager: NifUndoManager) -> Result<(), Error> {
+pub fn undo_manager_clear(env: Env, undo_manager: NifUndoManager) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = undo_manager
             .reference
@@ -286,6 +286,6 @@ pub fn undo_manager_clear(env: Env, undo_manager: NifUndoManager) -> Result<(), 
 
         wrapper.manager.clear();
 
-        Ok(())
+        Ok(atoms::ok())
     })
 }
