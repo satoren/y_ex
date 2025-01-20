@@ -10,7 +10,7 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-flexbuffers = "24.0.0"
+flexbuffers = "2.0.0"
 rustler = "0.34.0"
 scoped_thread_local = "1.0.0"
 serde = "1.0.210"
