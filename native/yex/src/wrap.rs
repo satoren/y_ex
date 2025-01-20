@@ -10,6 +10,8 @@ impl<T> From<T> for NifWrap<T> {
     }
 }
 
+impl<T> std::panic::RefUnwindSafe for NifWrap<T> {}
+
 impl<T> Deref for NifWrap<T> {
     type Target = T;
 

@@ -12,6 +12,8 @@ use crate::{
 pub struct SharedTypeId<T> {
     hook: Hook<T>,
 }
+
+impl<T> std::panic::RefUnwindSafe for SharedTypeId<T> {}
 impl<T> SharedTypeId<T> {
     pub fn new(v: Hook<T>) -> Self {
         Self { hook: v }
