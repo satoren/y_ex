@@ -195,8 +195,9 @@ defmodule Yex.Array do
     end
 
     def slice(array) do
-      size = Yex.Array.length(array)
-      {:ok, size, &Yex.Array.to_list/1}
+      list = Yex.Array.to_list(array)
+      size = Enum.count(list)
+      {:ok, size, &Enum.slice(list, &1, &2)}
     end
 
     def reduce(array, acc, fun) do

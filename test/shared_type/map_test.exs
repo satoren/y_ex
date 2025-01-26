@@ -274,6 +274,17 @@ defmodule Yex.MapTest do
       assert Map.to_list(map) == Enum.to_list(map)
     end
 
+    test "slice" do
+      doc = Doc.new()
+
+      map = Doc.get_map(doc, "map")
+
+      Map.set(map, "0", "Hello")
+      Map.set(map, "1", " World")
+      assert [{"0", "Hello"}] == Enum.slice(map, 0, 1)
+      assert [{"1", " World"}] == Enum.slice(map, 1, 2)
+    end
+
     test "member?" do
       doc = Doc.new()
 

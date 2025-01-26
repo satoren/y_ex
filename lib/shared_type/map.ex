@@ -162,8 +162,9 @@ defmodule Yex.Map do
     end
 
     def slice(map) do
-      size = Yex.Map.size(map)
-      {:ok, size, &Yex.Map.to_list/1}
+      list = Yex.Map.to_list(map)
+      size = Enum.count(list)
+      {:ok, size, &Enum.slice(list, &1, &2)}
     end
 
     def reduce(map, acc, fun) do

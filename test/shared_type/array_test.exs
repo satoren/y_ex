@@ -431,6 +431,7 @@ defmodule Yex.ArrayTest do
       Array.push(array, 3)
 
       assert Enum.slice(array, 0, 1) |> Enum.to_list() == [1]
+      assert Enum.slice(array, 2, 3) |> Enum.to_list() == [3]
     end
   end
 end
