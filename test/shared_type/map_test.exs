@@ -293,6 +293,8 @@ defmodule Yex.MapTest do
       Map.set(map, "0", "Hello")
       Map.set(map, "1", " World")
       assert Enum.member?(map, {"0", "Hello"})
+      refute Enum.member?(map, {"0", "world"})
+      refute Enum.member?(map, "0")
     end
 
     test "fetch!" do
