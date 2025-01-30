@@ -89,6 +89,13 @@ defmodule Yex.Map do
     end
   end
 
+  @spec has_key?(t, binary()) :: boolean()
+  def has_key?(%__MODULE__{doc: doc} = map, key) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_contains_key(map, cur_txn(map), key)
+    )
+  end
+
   @doc """
   Convert to elixir map.
 
@@ -104,6 +111,10 @@ defmodule Yex.Map do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.map_to_map(map, cur_txn(map))
     )
+  end
+
+  def to_list(map) do
+    to_map(map) |> Enum.to_list()
   end
 
   @spec size(t) :: integer()
@@ -132,6 +143,33 @@ defmodule Yex.Map do
 
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
+  end
+
+  defimpl Enumerable do
+    def count(map) do
+      {:ok, Yex.Map.size(map)}
+    end
+
+    def member?(map, {key, value}) do
+      case Yex.Map.fetch(map, key) do
+        {:ok, ^value} -> {:ok, true}
+        _ -> {:ok, false}
+      end
+    end
+
+    def member?(_, _) do
+      {:ok, false}
+    end
+
+    def slice(map) do
+      list = Yex.Map.to_list(map)
+      size = Enum.count(list)
+      {:ok, size, &Enum.slice(list, &1, &2)}
+    end
+
+    def reduce(map, acc, fun) do
+      Enumerable.List.reduce(Yex.Map.to_list(map), acc, fun)
+    end
   end
 end
 

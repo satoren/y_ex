@@ -349,4 +349,89 @@ defmodule Yex.ArrayTest do
     # noop but return ok
     assert :ok = SharedType.unobserve_deep(make_ref())
   end
+
+  describe "Enum protocol" do
+    test "count" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+
+      Array.push(array, "Hello1")
+      Array.push(array, "Hello2")
+      assert 2 == Enum.count(array)
+    end
+
+    test "to_list" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+
+      Array.push(array, "Hello1")
+      Array.push(array, "Hello2")
+      assert Array.to_list(array) == Enum.to_list(array)
+    end
+
+    test "member?" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+
+      Array.push(array, "Hello1")
+      Array.push(array, "Hello2")
+      assert Enum.member?(array, "Hello1")
+    end
+
+    test "fetch!" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+
+      Array.push(array, "Hello1")
+      Array.push(array, "Hello2")
+      assert "Hello2" == Enum.fetch!(array, 1)
+    end
+
+    test "all?" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+
+      Array.push(array, true)
+      Array.push(array, true)
+      assert Enum.all?(array)
+    end
+
+    test "any?" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+
+      Array.push(array, true)
+      Array.push(array, false)
+      assert Enum.any?(array)
+    end
+
+    test "map" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+
+      Array.push(array, 1)
+      Array.push(array, 2)
+      assert Enum.map(array, fn v -> v * 2 end) |> Enum.to_list() == [2, 4]
+    end
+
+    test "slice" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+
+      Array.push(array, 1)
+      Array.push(array, 2)
+      Array.push(array, 3)
+
+      assert Enum.slice(array, 0, 1) |> Enum.to_list() == [1]
+      assert Enum.slice(array, 2, 3) |> Enum.to_list() == [3]
+    end
+  end
 end

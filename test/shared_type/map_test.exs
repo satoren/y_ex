@@ -51,6 +51,18 @@ defmodule Yex.MapTest do
     end
   end
 
+  test "has_key?" do
+    doc = Doc.new()
+
+    map = Doc.get_map(doc, "map")
+
+    Map.set(map, "key", "Hello1")
+    Map.set(map, "key2", "Hello2")
+    assert Map.has_key?(map, "key")
+    assert Map.has_key?(map, "key2")
+    refute Map.has_key?(map, "key3")
+  end
+
   test "delete" do
     doc = Doc.new()
 
@@ -239,5 +251,60 @@ defmodule Yex.MapTest do
 
     # noop but return ok
     assert :ok = SharedType.unobserve_deep(make_ref())
+  end
+
+  describe "Enum protocol" do
+    test "count" do
+      doc = Doc.new()
+
+      map = Doc.get_map(doc, "map")
+
+      Map.set(map, "0", "Hello")
+      Map.set(map, "1", " World")
+      assert 2 == Enum.count(map)
+    end
+
+    test "to_list" do
+      doc = Doc.new()
+
+      map = Doc.get_map(doc, "map")
+
+      Map.set(map, "0", "Hello")
+      Map.set(map, "1", " World")
+      assert Map.to_list(map) == Enum.to_list(map)
+    end
+
+    test "slice" do
+      doc = Doc.new()
+
+      map = Doc.get_map(doc, "map")
+
+      Map.set(map, "0", "Hello")
+      Map.set(map, "1", " World")
+      assert [{"0", "Hello"}] == Enum.slice(map, 0, 1)
+      assert [{"1", " World"}] == Enum.slice(map, 1, 2)
+    end
+
+    test "member?" do
+      doc = Doc.new()
+
+      map = Doc.get_map(doc, "map")
+
+      Map.set(map, "0", "Hello")
+      Map.set(map, "1", " World")
+      assert Enum.member?(map, {"0", "Hello"})
+      refute Enum.member?(map, {"0", "world"})
+      refute Enum.member?(map, "0")
+    end
+
+    test "fetch!" do
+      doc = Doc.new()
+
+      map = Doc.get_map(doc, "map")
+
+      Map.set(map, "0", "Hello")
+      Map.set(map, "1", " World")
+      assert {"0", "Hello"} == Enum.fetch!(map, 0)
+    end
   end
 end

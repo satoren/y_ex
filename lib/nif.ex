@@ -56,6 +56,7 @@ defmodule Yex.Nif do
   def map_set(_map, _cur_txn, _key, _value), do: :erlang.nif_error(:nif_not_loaded)
   def map_size(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_get(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
+  def map_contains_key(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_delete(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_map(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_json(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
