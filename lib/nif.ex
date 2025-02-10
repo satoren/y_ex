@@ -93,6 +93,7 @@ defmodule Yex.Nif do
   def xml_element_get_attribute(_xml_element, _cur_txn, _key),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def xml_element_get_tag(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_element_get_attributes(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_element_next_sibling(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_element_prev_sibling(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
