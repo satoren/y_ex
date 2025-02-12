@@ -5,10 +5,6 @@
 
 name: Elixir CI
 
-env:
-  MIX_ENV: test
-  RUSTLER_PRECOMPILATION_YEX_BUILD: "true"
-
 on:
   push:
     branches: [ "main" ]
@@ -26,7 +22,7 @@ jobs:
 
     env:
       MIX_ENV: test
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RUSTLER_PRECOMPILATION_YEX_BUILD: "true"
     steps:
     - uses: actions/checkout@v4
     - name: Set up Elixir
@@ -44,9 +40,33 @@ jobs:
       run: mix deps.get
     - name: Run tests
       run: mix coveralls.github
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    env:
+      RUSTLER_PRECOMPILATION_YEX_BUILD: "true"
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Elixir
+      uses: erlef/setup-beam@v1
+      with:
+        elixir-version: '1.15.2' # [Required] Define the Elixir version
+        otp-version: '26.0'      # [Required] Define the Erlang/OTP version
+    - name: Restore dependencies cache
+      uses: actions/cache@v4
+      with:
+        path: deps
+        key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+        restore-keys: ${{ runner.os }}-mix-
+    - name: Install dependencies
+      run: mix deps.get
     - name: format check
       run: mix format --check-formatted
     - name: Run credo
       run: mix credo
     - name: Run dialyzer
       run: mix dialyzer
+    - name: gen docs
+      run: mix docs
