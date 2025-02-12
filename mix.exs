@@ -46,13 +46,15 @@ defmodule Yex.MixProject do
       links: %{"Github" => @repo},
       files: [
         "lib",
-        "priv",
-        "native",
+        "native/yex/src",
+        "native/yex/Cargo.*",
+        "native/yex/Cross.*",
+        "native/yex/README.md",
+        "native/yex/README.md",
         "README.md",
         "checksum-*.exs",
         "mix.exs"
-      ],
-      exclude_files: ["test", "native/target", "native/*.so"]
+      ]
     ]
   end
 
