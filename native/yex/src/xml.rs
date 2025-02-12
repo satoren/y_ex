@@ -297,6 +297,18 @@ fn xml_element_get_attribute(
 }
 
 #[rustler::nif]
+fn xml_element_get_tag(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Option<String>> {
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        let tag = xml.try_tag().map(|tag| tag.to_string());
+        Ok(tag)
+    })
+}
+
+#[rustler::nif]
 fn xml_element_remove_attribute(
     env: Env<'_>,
     xml: NifXmlElement,

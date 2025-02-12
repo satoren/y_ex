@@ -93,6 +93,11 @@ defmodule YexXmlElementTest do
       assert "<div></div>" == XmlElement.to_string(xml)
     end
 
+    test "get_tag", %{xml_element: xml1} do
+      tag = XmlElement.get_tag(xml1)
+      assert "div" == tag
+    end
+
     test "get_attributes", %{xml_element: xml1} do
       XmlElement.insert_attribute(xml1, "height", "10")
       XmlElement.insert_attribute(xml1, "width", "12")

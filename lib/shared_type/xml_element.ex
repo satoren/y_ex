@@ -124,6 +124,16 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Get the tag of the xml element.
+  """
+  @spec get_tag(t) :: binary() | nil
+  def get_tag(%__MODULE__{doc: doc} = xml_element) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_element_get_tag(xml_element, cur_txn(xml_element))
+    )
+  end
+
   @spec get_attribute(t, binary()) :: binary() | nil
   def get_attribute(%__MODULE__{doc: doc} = xml_element, key) do
     Doc.run_in_worker_process(doc,
