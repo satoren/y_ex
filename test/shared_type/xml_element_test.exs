@@ -157,6 +157,163 @@ defmodule YexXmlElementTest do
       assert 6 === XmlElement.children(e) |> Enum.count()
     end
 
+    # Additional tests to improve coverage
+
+    test "length returns correct number of children", %{xml_element: e} do
+      assert 0 == XmlElement.length(e)
+
+      # Add elements and check length increases
+      XmlElement.push(e, XmlTextPrelim.from("test1"))
+      assert 1 == XmlElement.length(e)
+
+      XmlElement.push(e, XmlElementPrelim.empty("div"))
+      assert 2 == XmlElement.length(e)
+
+      # Delete element and check length decreases
+      XmlElement.delete(e, 0, 1)
+      assert 1 == XmlElement.length(e)
+    end
+
+    test "insert at specific index", %{xml_element: e} do
+      # Insert at index 0 in empty element
+      XmlElement.insert(e, 0, XmlTextPrelim.from("first"))
+      assert 1 == XmlElement.length(e)
+
+      # Insert at end
+      XmlElement.insert(e, 1, XmlTextPrelim.from("last"))
+      assert 2 == XmlElement.length(e)
+
+      # Insert in middle
+      XmlElement.insert(e, 1, XmlTextPrelim.from("middle"))
+      assert 3 == XmlElement.length(e)
+
+      # Check order
+      assert "first" == XmlText.to_string(XmlElement.fetch!(e, 0))
+      assert "middle" == XmlText.to_string(XmlElement.fetch!(e, 1))
+      assert "last" == XmlText.to_string(XmlElement.fetch!(e, 2))
+    end
+
+    test "deprecated get function still works", %{xml_element: e} do
+      XmlElement.push(e, XmlTextPrelim.from("content"))
+
+      # Use the deprecated get function
+      assert {:ok, child} = XmlElement.get(e, 0)
+      assert "content" == XmlText.to_string(child)
+    end
+
+    test "no next sibling for last element", %{xml_element: xml_element} do
+      assert nil == XmlElement.next_sibling(xml_element)
+    end
+
+    test "no prev sibling for first element", %{xml_element: xml_element} do
+      assert nil == XmlElement.prev_sibling(xml_element)
+    end
+
+    test "get_attribute returns nil for non-existent attribute", %{xml_element: xml} do
+      assert nil == XmlElement.get_attribute(xml, "nonexistent")
+    end
+
+    test "get_attributes returns empty map for element with no attributes", %{xml_element: xml} do
+      assert %{} == XmlElement.get_attributes(xml)
+    end
+
+    test "remove_attribute on non-existent attribute", %{xml_element: xml} do
+      # Should not error on removing non-existent attribute
+      assert :ok = XmlElement.remove_attribute(xml, "nonexistent")
+    end
+
+    test "insert with multiple children", %{xml_element: e} do
+      # Insert multiple children and test order
+      XmlElement.insert(
+        e,
+        0,
+        XmlElementPrelim.new("span", [
+          XmlTextPrelim.from("text1"),
+          XmlTextPrelim.from("text2")
+        ])
+      )
+
+      assert 1 == XmlElement.length(e)
+      assert "span" == XmlElement.get_tag(XmlElement.fetch!(e, 0))
+
+      child = XmlElement.fetch!(e, 0)
+      assert 2 == XmlElement.length(child)
+    end
+
+    test "children streaming interface", %{xml_element: e} do
+      # Add some children
+      XmlElement.push(e, XmlTextPrelim.from("1"))
+      XmlElement.push(e, XmlTextPrelim.from("2"))
+      XmlElement.push(e, XmlTextPrelim.from("3"))
+
+      # Test Stream functions
+      results =
+        XmlElement.children(e)
+        |> Stream.map(fn child -> XmlText.to_string(child) end)
+        |> Enum.to_list()
+
+      assert ["1", "2", "3"] == results
+
+      # Test other Stream operations
+      count = XmlElement.children(e) |> Enum.count()
+      assert 3 == count
+
+      sum =
+        XmlElement.children(e)
+        |> Stream.map(fn child -> String.to_integer(XmlText.to_string(child)) end)
+        |> Enum.sum()
+
+      assert 6 == sum
+    end
+
+    test "complex nested structure operations", %{xml_element: root} do
+      # Build a complex structure
+      XmlElement.push(
+        root,
+        XmlElementPrelim.new(
+          "div",
+          [
+            XmlElementPrelim.new(
+              "span",
+              [
+                XmlTextPrelim.from("inner text")
+              ],
+              %{"class" => "highlight"}
+            )
+          ],
+          %{"id" => "container"}
+        )
+      )
+
+      # Navigate and manipulate the structure
+      container = XmlElement.fetch!(root, 0)
+      assert "div" == XmlElement.get_tag(container)
+      assert "container" == XmlElement.get_attribute(container, "id")
+
+      span = XmlElement.fetch!(container, 0)
+      assert "span" == XmlElement.get_tag(span)
+      assert "highlight" == XmlElement.get_attribute(span, "class")
+
+      text = XmlElement.fetch!(span, 0)
+      assert "inner text" == XmlText.to_string(text)
+
+      # Modify the structure
+      XmlElement.insert_attribute(span, "data-test", "value")
+      XmlElement.insert(span, 1, XmlElementPrelim.empty("br"))
+
+      # Test parent relationships
+      assert root == XmlElement.parent(container)
+      assert container == XmlElement.parent(span)
+
+      # Test XML output - Skipping exact string comparison since attribute order might differ
+      result = XmlElement.to_string(root)
+      assert String.contains?(result, "<div id=\"container\">")
+      assert String.contains?(result, "<span")
+      assert String.contains?(result, "class=\"highlight\"")
+      assert String.contains?(result, "data-test=\"value\"")
+      assert String.contains?(result, ">inner text<br></br>")
+    end
+
     test "observe", %{doc: doc, xml_element: xml_element} do
       ref = SharedType.observe(xml_element)
 
@@ -286,6 +443,34 @@ defmodule YexXmlElementTest do
 
       assert "<div href=\"http://example.com\">text</div>" ==
                XmlFragment.to_string(xml_fragment)
+    end
+
+    # Additional XmlElementPrelim tests
+    test "XmlElementPrelim.empty with attributes", %{xml_fragment: xml_fragment} do
+      # Create an element with attributes using constructor + empty
+      el = %XmlElementPrelim{
+        tag: "div",
+        attributes: %{"class" => "container", "id" => "main"},
+        children: []
+      }
+
+      XmlFragment.push(xml_fragment, el)
+      result = XmlFragment.to_string(xml_fragment)
+
+      # Check for attributes individually instead of exact string match
+      assert String.contains?(result, "<div ")
+      assert String.contains?(result, "class=\"container\"")
+      assert String.contains?(result, "id=\"main\"")
+      assert String.contains?(result, "></div>")
+    end
+
+    test "XmlElementPrelim with empty children list", %{xml_fragment: xml_fragment} do
+      XmlFragment.push(
+        xml_fragment,
+        XmlElementPrelim.new("div", [])
+      )
+
+      assert "<div></div>" == XmlFragment.to_string(xml_fragment)
     end
   end
 end
