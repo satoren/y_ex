@@ -1,6 +1,17 @@
 defmodule YexXmlFragmentTest do
   use ExUnit.Case
-  alias Yex.{Doc, XmlFragment, XmlElement, XmlElementPrelim, XmlText, XmlTextPrelim, SharedType}
+
+  alias Yex.{
+    Doc,
+    XmlFragment,
+    XmlElement,
+    XmlElementPrelim,
+    XmlText,
+    XmlTextPrelim,
+    XmlFragmentPrelim,
+    SharedType
+  }
+
   doctest XmlFragment
   doctest Yex.XmlFragmentPrelim
 
@@ -220,6 +231,94 @@ defmodule YexXmlFragmentTest do
                           delta: [%{insert: "text"}]
                         }
                       ], "origin_value", _metadata}
+    end
+  end
+
+  describe "as_prelim" do
+    test "converts empty XmlFragment to TextPrelim", %{xml_fragment: f} do
+      prelim = XmlFragment.as_prelim(f)
+      assert %XmlFragmentPrelim{} = prelim
+      assert [] = prelim.children
+    end
+
+    test "converts XmlFragment with single element to TextPrelim", %{xml_fragment: f} do
+      element = XmlElementPrelim.empty("div")
+      XmlFragment.push(f, element)
+      {:ok, div} = XmlFragment.fetch(f, 0)
+      XmlElement.insert_attribute(div, "class", "container")
+
+      prelim = XmlFragment.as_prelim(f)
+      assert %XmlFragmentPrelim{} = prelim
+
+      assert [
+               %XmlElementPrelim{
+                 tag: "div",
+                 attributes: %{"class" => "container"},
+                 children: []
+               }
+             ] = prelim.children
+    end
+
+    test "converts XmlFragment with multiple elements to TextPrelim", %{xml_fragment: f} do
+      element1 = XmlElementPrelim.empty("div")
+      XmlFragment.push(f, element1)
+      {:ok, div1} = XmlFragment.fetch(f, 0)
+      XmlElement.insert_attribute(div1, "class", "item")
+
+      element2 = XmlElementPrelim.empty("span")
+      XmlFragment.push(f, element2)
+      {:ok, span} = XmlFragment.fetch(f, 1)
+      XmlElement.insert_attribute(span, "class", "highlight")
+      XmlElement.push(span, XmlTextPrelim.from("Hello"))
+
+      prelim = XmlFragment.as_prelim(f)
+      assert %XmlFragmentPrelim{} = prelim
+
+      assert [
+               %XmlElementPrelim{
+                 tag: "div",
+                 attributes: %{"class" => "item"},
+                 children: []
+               },
+               %XmlElementPrelim{
+                 tag: "span",
+                 attributes: %{"class" => "highlight"},
+                 children: [%XmlTextPrelim{delta: [%{insert: "Hello"}]}]
+               }
+             ] = prelim.children
+    end
+
+    test "converts complex XmlFragment to TextPrelim", %{xml_fragment: f} do
+      element1 = XmlElementPrelim.empty("div")
+      XmlFragment.push(f, element1)
+      {:ok, div1} = XmlFragment.fetch(f, 0)
+      XmlElement.insert_attribute(div1, "class", "container")
+
+      XmlElement.push(div1, XmlTextPrelim.from("Hello"))
+
+      element2 = XmlElementPrelim.empty("span")
+      XmlElement.push(div1, element2)
+      {:ok, span} = XmlElement.fetch(div1, 1)
+      XmlElement.insert_attribute(span, "class", "highlight")
+      XmlElement.push(span, XmlTextPrelim.from("World"))
+
+      prelim = XmlFragment.as_prelim(f)
+      assert %XmlFragmentPrelim{} = prelim
+
+      assert [
+               %XmlElementPrelim{
+                 tag: "div",
+                 attributes: %{"class" => "container"},
+                 children: [
+                   %XmlTextPrelim{delta: [%{insert: "Hello"}]},
+                   %XmlElementPrelim{
+                     tag: "span",
+                     attributes: %{"class" => "highlight"},
+                     children: [%XmlTextPrelim{delta: [%{insert: "World"}]}]
+                   }
+                 ]
+               }
+             ] = prelim.children
     end
   end
 end

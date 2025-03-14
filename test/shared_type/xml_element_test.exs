@@ -473,4 +473,75 @@ defmodule YexXmlElementTest do
       assert "<div></div>" == XmlFragment.to_string(xml_fragment)
     end
   end
+
+  describe "as_prelim" do
+    setup do
+      d1 = Doc.with_options(%Doc.Options{client_id: 1})
+      f = Doc.get_xml_fragment(d1, "xml")
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      {:ok, xml} = XmlFragment.fetch(f, 0)
+      %{doc: d1, xml_element: xml, xml_fragment: f}
+    end
+
+    test "converts empty XmlElement to TextPrelim", %{xml_element: xml} do
+      prelim = XmlElement.as_prelim(xml)
+      assert %XmlElementPrelim{} = prelim
+      assert "div" = prelim.tag
+      assert %{} = prelim.attributes
+      assert [] = prelim.children
+    end
+
+    test "converts XmlElement with attributes to TextPrelim", %{xml_element: xml} do
+      XmlElement.insert_attribute(xml, "class", "container")
+      XmlElement.insert_attribute(xml, "id", "main")
+
+      prelim = XmlElement.as_prelim(xml)
+      assert %XmlElementPrelim{} = prelim
+      assert "div" = prelim.tag
+      assert %{"class" => "container", "id" => "main"} = prelim.attributes
+      assert [] = prelim.children
+    end
+
+    test "converts XmlElement with children to TextPrelim", %{xml_element: xml} do
+      XmlElement.push(xml, XmlTextPrelim.from("Hello"))
+      XmlElement.push(xml, XmlElementPrelim.empty("span"))
+      XmlElement.push(xml, XmlTextPrelim.from("World"))
+
+      prelim = XmlElement.as_prelim(xml)
+      assert %XmlElementPrelim{} = prelim
+      assert "div" = prelim.tag
+      assert %{} = prelim.attributes
+
+      assert [
+               %XmlTextPrelim{delta: [%{insert: "Hello"}]},
+               %XmlElementPrelim{tag: "span", attributes: %{}, children: []},
+               %XmlTextPrelim{delta: [%{insert: "World"}]}
+             ] = prelim.children
+    end
+
+    test "converts complex XmlElement to TextPrelim", %{xml_element: xml} do
+      XmlElement.insert_attribute(xml, "class", "container")
+      XmlElement.push(xml, XmlTextPrelim.from("Hello"))
+
+      child = XmlElementPrelim.empty("span")
+      XmlElement.push(xml, child)
+      {:ok, span} = XmlElement.fetch(xml, 1)
+      XmlElement.insert_attribute(span, "class", "highlight")
+      XmlElement.push(span, XmlTextPrelim.from("World"))
+
+      prelim = XmlElement.as_prelim(xml)
+      assert %XmlElementPrelim{} = prelim
+      assert "div" = prelim.tag
+      assert %{"class" => "container"} = prelim.attributes
+
+      assert [
+               %XmlTextPrelim{delta: [%{insert: "Hello"}]},
+               %XmlElementPrelim{
+                 tag: "span",
+                 attributes: %{"class" => "highlight"},
+                 children: [%XmlTextPrelim{delta: [%{insert: "World"}]}]
+               }
+             ] = prelim.children
+    end
+  end
 end

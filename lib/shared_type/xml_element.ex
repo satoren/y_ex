@@ -191,15 +191,13 @@ defmodule Yex.XmlElement do
 
   @spec as_prelim(t) :: Yex.XmlElementPrelim.t()
   def as_prelim(%__MODULE__{} = xml_element) do
-    children =
-      Enum.map(0..(__MODULE__.length(xml_element) - 1), fn i ->
-        {:ok, child} = fetch(xml_element, i)
-        Yex.Output.as_prelim(child)
-      end)
+    c =
+      children(xml_element)
+      |> Enum.map(fn child -> Yex.Output.as_prelim(child) end)
 
     Yex.XmlElementPrelim.new(
       get_tag(xml_element),
-      children,
+      c,
       get_attributes(xml_element)
     )
   end
