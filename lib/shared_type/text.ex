@@ -102,6 +102,17 @@ defmodule Yex.Text do
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
+
+  @spec as_prelim(t) :: Yex.TextPrelim.t()
+  def as_prelim(%__MODULE__{} = text) do
+    Yex.Text.to_delta(text) |> Yex.TextPrelim.from()
+  end
+
+  defimpl Yex.Output do
+    def as_prelim(text) do
+      Yex.Text.as_prelim(text)
+    end
+  end
 end
 
 defmodule Yex.TextPrelim do

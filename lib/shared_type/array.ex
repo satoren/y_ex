@@ -185,6 +185,19 @@ defmodule Yex.Array do
     Process.get(doc_ref, nil)
   end
 
+  @spec as_prelim(t) :: Yex.ArrayPrelim.t()
+  def as_prelim(%__MODULE__{} = array) do
+    Yex.Array.to_list(array)
+    |> Enum.map(&Yex.Output.as_prelim/1)
+    |> Yex.ArrayPrelim.from()
+  end
+
+  defimpl Yex.Output do
+    def as_prelim(array) do
+      Yex.Array.as_prelim(array)
+    end
+  end
+
   defimpl Enumerable do
     def count(array) do
       {:ok, Yex.Array.length(array)}

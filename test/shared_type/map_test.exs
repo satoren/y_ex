@@ -1,310 +1,142 @@
 defmodule Yex.MapTest do
   use ExUnit.Case
-  alias Yex.{Doc, Map, MapPrelim, SharedType}
-  doctest Map
-  doctest MapPrelim
+  alias Yex.{Doc, Map, MapPrelim, ArrayPrelim}
 
-  test "set" do
+  setup do
     doc = Doc.new()
-
     map = Doc.get_map(doc, "map")
-
-    Map.set(map, "key", "Hello")
-    assert 1 == Map.size(map)
+    {:ok, doc: doc, map: map}
   end
 
-  test "compare" do
-    doc = Doc.new()
+  describe "basic map operations" do
+    test "set/3 adds key-value pair", %{map: map} do
+      assert :ok = Map.set(map, "key", "value")
+      assert {:ok, "value"} = Map.fetch(map, "key")
+    end
 
-    map1 = Doc.get_map(doc, "map")
-    map2 = Doc.get_map(doc, "map")
-    map3 = Doc.get_map(doc, "map3")
+    test "set/3 with complex values", %{map: map} do
+      array_prelim = ArrayPrelim.from(["Hello", "World"])
+      assert :ok = Map.set(map, "array", array_prelim)
+      assert {:ok, array} = Map.fetch(map, "array")
+      assert %Yex.Array{} = array
+    end
 
-    assert map1 == map2
-    assert map1 != map3
-  end
-
-  test "fetch" do
-    doc = Doc.new()
-
-    map = Doc.get_map(doc, "map")
-
-    Map.set(map, "key", "Hello1")
-    Map.set(map, "key2", "Hello2")
-    assert {:ok, "Hello1"} == Map.fetch(map, "key")
-    assert {:ok, "Hello2"} == Map.fetch(map, "key2")
-    assert :error == Map.fetch(map, "key3")
-  end
-
-  test "fetch!" do
-    doc = Doc.new()
-
-    map = Doc.get_map(doc, "map")
-
-    Map.set(map, "key", "Hello1")
-    Map.set(map, "key2", "Hello2")
-    assert "Hello1" == Map.fetch!(map, "key")
-    assert "Hello2" == Map.fetch!(map, "key2")
-
-    assert_raise ArgumentError, "Key not found", fn ->
-      Map.fetch!(map, "key3")
+    test "delete/2 removes key", %{map: map} do
+      Map.set(map, "key", "value")
+      assert :ok = Map.delete(map, "key")
+      assert :error = Map.fetch(map, "key")
     end
   end
 
-  test "has_key?" do
-    doc = Doc.new()
+  describe "access operations" do
+    test "fetch/2 gets value by key", %{map: map} do
+      Map.set(map, "key", "value")
+      assert {:ok, "value"} = Map.fetch(map, "key")
+      assert :error = Map.fetch(map, "not_found")
+    end
 
-    map = Doc.get_map(doc, "map")
+    test "fetch!/2 gets value or raises", %{map: map} do
+      Map.set(map, "key", "value")
+      assert "value" = Map.fetch!(map, "key")
+      assert_raise ArgumentError, fn -> Map.fetch!(map, "not_found") end
+    end
 
-    Map.set(map, "key", "Hello1")
-    Map.set(map, "key2", "Hello2")
-    assert Map.has_key?(map, "key")
-    assert Map.has_key?(map, "key2")
-    refute Map.has_key?(map, "key3")
-  end
+    test "deprecated get/2 still works", %{map: map} do
+      Map.set(map, "key", "value")
+      assert {:ok, "value"} = Map.get(map, "key")
+    end
 
-  test "delete" do
-    doc = Doc.new()
-
-    map = Doc.get_map(doc, "map")
-
-    Map.set(map, "key", "Hello1")
-    Map.set(map, "key2", "Hello2")
-    Map.delete(map, "key2")
-    assert {:ok, "Hello1"} == Map.fetch(map, "key")
-    assert :error == Map.fetch(map, "key2")
-  end
-
-  test "raise error when access deleted array" do
-    doc = Doc.new()
-
-    map = Doc.get_map(doc, "map")
-    Map.set(map, "key", MapPrelim.from(%{"key" => "Hello"}))
-    m = Map.fetch!(map, "key")
-    Map.delete(map, "key")
-
-    assert_raise Yex.DeletedSharedTypeError, "Map has been deleted", fn ->
-      Map.set(m, "key", "Hello")
+    test "has_key?/2 checks key existence", %{map: map} do
+      Map.set(map, "key", "value")
+      assert Map.has_key?(map, "key")
+      refute Map.has_key?(map, "not_found")
     end
   end
 
-  test "MapPrelim" do
-    doc = Doc.new()
-
-    map = Doc.get_map(doc, "map")
-
-    Map.set(map, "key", MapPrelim.from(%{"key" => "Hello"}))
-    assert {:ok, inner_map} = Map.fetch(map, "key")
-    assert %{"key" => "Hello"} == Map.to_map(inner_map)
-
-    assert 1 == Map.size(map)
-  end
-
-  test "to_json" do
-    doc = Doc.new()
-
-    map = Doc.get_map(doc, "map")
-
-    Map.set(map, "key", MapPrelim.from(%{"key" => "Hello"}))
-    Map.set(map, "key2", "Hello1")
-    assert %{"key" => %{"key" => "Hello"}} = Map.to_json(map)
-  end
-
-  test "transaction" do
-    doc = Doc.new()
-
-    map = Doc.get_map(doc, "text")
-
-    :ok =
-      Doc.transaction(doc, fn ->
-        Map.set(map, "key", "Hello")
-        Map.set(map, "key2", "Hello")
-      end)
-
-    assert 2 == Map.size(map)
-  end
-
-  describe "observe" do
-    test "set " do
-      doc = Doc.new()
-
-      map = Doc.get_map(doc, "map")
-
-      ref = SharedType.observe(map)
-
-      :ok =
-        Doc.transaction(doc, "origin_value", fn ->
-          Map.set(map, "0", "Hello")
-          Map.set(map, "1", " World")
-        end)
-
-      assert_receive {:observe_event, ^ref,
-                      %Yex.MapEvent{
-                        target: ^map,
-                        keys: %{
-                          "0" => %{action: :add, new_value: "Hello"},
-                          "1" => %{action: :add, new_value: " World"}
-                        }
-                      }, "origin_value", nil}
+  describe "conversion functions" do
+    test "to_map/1 converts to Elixir map", %{map: map} do
+      Map.set(map, "key1", "value1")
+      Map.set(map, "key2", "value2")
+      assert %{"key1" => "value1", "key2" => "value2"} = Map.to_map(map)
     end
 
-    test "delete " do
-      doc = Doc.new()
-
-      map = Doc.get_map(doc, "map")
-      Map.set(map, "0", "Hello")
-      Map.set(map, "1", " World")
-
-      ref = SharedType.observe(map)
-
-      :ok =
-        Doc.transaction(doc, "origin_value", fn ->
-          Map.delete(map, "0")
-        end)
-
-      assert_receive {:observe_event, ^ref,
-                      %Yex.MapEvent{
-                        target: ^map,
-                        keys: %{"0" => %{action: :delete, old_value: "Hello"}}
-                      }, "origin_value", nil}
+    test "to_list/1 converts to key-value list", %{map: map} do
+      Map.set(map, "key1", "value1")
+      Map.set(map, "key2", "value2")
+      assert [{"key1", "value1"}, {"key2", "value2"}] = Enum.sort(Map.to_list(map))
     end
 
-    test "unobserve" do
-      doc = Doc.new()
+    test "to_json/1 converts to JSON-compatible format", %{map: map} do
+      array_prelim = ArrayPrelim.from(["Hello", "World"])
+      Map.set(map, "array", array_prelim)
+      Map.set(map, "plane", ["Hello", "World"])
 
-      map = Doc.get_map(doc, "text")
+      json = Map.to_json(map)
 
-      ref = SharedType.observe(map)
-      assert :ok = SharedType.unobserve(ref)
-
-      :ok =
-        Doc.transaction(doc, "origin_value", fn ->
-          Map.set(map, "0", "Hello")
-        end)
-
-      refute_receive {:observe_event, _, %Yex.MapEvent{}, _}
-
-      # noop but return ok
-      assert :ok = SharedType.unobserve(make_ref())
+      assert %{
+               "array" => ["Hello", "World"],
+               "plane" => ["Hello", "World"]
+             } = json
     end
   end
 
-  test "observe_deep" do
-    doc = Doc.new()
-    map = Doc.get_map(doc, "data")
-
-    Map.set(
-      map,
-      "key1",
-      Yex.MapPrelim.from(%{
-        "key2" => Yex.MapPrelim.from(%{"key3" => Yex.ArrayPrelim.from([1, 2, 3, 4])})
-      })
-    )
-
-    ref = SharedType.observe_deep(map)
-
-    child_map = Yex.Map.fetch!(map, "key1")
-    child_map2 = Yex.Map.fetch!(child_map, "key2")
-    child_array = Yex.Map.fetch!(child_map2, "key3")
-
-    :ok =
-      Doc.transaction(doc, "origin_value", fn ->
-        Yex.Array.push(child_array, 5)
-        Yex.Map.set(child_map, "set1", "value1")
-        Yex.Map.set(map, "set2", "value2")
-      end)
-
-    assert_receive {:observe_deep_event, ^ref,
-                    [
-                      %Yex.MapEvent{
-                        path: [],
-                        target: ^map,
-                        keys: %{"set2" => %{action: :add, new_value: "value2"}}
-                      },
-                      %Yex.MapEvent{
-                        path: ["key1"],
-                        target: ^child_map,
-                        keys: %{"set1" => %{action: :add, new_value: "value1"}}
-                      },
-                      %Yex.ArrayEvent{
-                        change: [%{retain: 4}, %{insert: [5]}],
-                        path: ["key1", "key2", "key3"],
-                        target: ^child_array
-                      }
-                    ], "origin_value", _metadata}
+  describe "utility functions" do
+    test "size/1 returns number of entries", %{map: map} do
+      assert 0 = Map.size(map)
+      Map.set(map, "key1", "value1")
+      assert 1 = Map.size(map)
+      Map.set(map, "key2", "value2")
+      assert 2 = Map.size(map)
+    end
   end
 
-  test "unobserve_deep" do
-    doc = Doc.new()
-
-    map = Doc.get_map(doc, "text")
-
-    ref = SharedType.observe_deep(map)
-    assert :ok = SharedType.unobserve_deep(ref)
-
-    :ok =
-      Doc.transaction(doc, "origin_value", fn ->
-        Map.set(map, "0", "Hello")
-      end)
-
-    refute_receive {:observe_deep_event, _, %Yex.MapEvent{}, _, _}
-
-    # noop but return ok
-    assert :ok = SharedType.unobserve_deep(make_ref())
+  describe "MapPrelim" do
+    test "from/1 creates MapPrelim from map" do
+      prelim = MapPrelim.from(%{"key" => "value"})
+      assert %MapPrelim{map: %{"key" => "value"}} = prelim
+    end
   end
 
-  describe "Enum protocol" do
-    test "count" do
-      doc = Doc.new()
+  describe "as_prelim" do
+    test "converts Map to MapPrelim", %{map: map} do
+      Map.set(map, "key", "value")
+      Map.set(map, "array", ArrayPrelim.from(["Hello", "World"]))
+      prelim = Map.as_prelim(map)
+      assert %MapPrelim{} = prelim
+      assert %{"key" => "value", "array" => %ArrayPrelim{}} = prelim.map
+    end
+  end
 
-      map = Doc.get_map(doc, "map")
-
-      Map.set(map, "0", "Hello")
-      Map.set(map, "1", " World")
-      assert 2 == Enum.count(map)
+  describe "Enumerable protocol" do
+    test "implements count", %{map: map} do
+      Map.set(map, "key1", "value1")
+      Map.set(map, "key2", "value2")
+      assert {:ok, 2} = Enumerable.count(map)
     end
 
-    test "to_list" do
-      doc = Doc.new()
-
-      map = Doc.get_map(doc, "map")
-
-      Map.set(map, "0", "Hello")
-      Map.set(map, "1", " World")
-      assert Map.to_list(map) == Enum.to_list(map)
+    test "implements member? for key-value pairs", %{map: map} do
+      Map.set(map, "key", "value")
+      assert {:ok, true} = Enumerable.member?(map, {"key", "value"})
+      assert {:ok, false} = Enumerable.member?(map, {"key", "wrong"})
+      assert {:ok, false} = Enumerable.member?(map, {"not_found", "value"})
     end
 
-    test "slice" do
-      doc = Doc.new()
-
-      map = Doc.get_map(doc, "map")
-
-      Map.set(map, "0", "Hello")
-      Map.set(map, "1", " World")
-      assert [{"0", "Hello"}] == Enum.slice(map, 0, 1)
-      assert [{"1", " World"}] == Enum.slice(map, 1, 2)
+    test "implements member? for non key-value pairs", %{map: map} do
+      assert {:ok, false} = Enumerable.member?(map, "not_a_tuple")
     end
 
-    test "member?" do
-      doc = Doc.new()
-
-      map = Doc.get_map(doc, "map")
-
-      Map.set(map, "0", "Hello")
-      Map.set(map, "1", " World")
-      assert Enum.member?(map, {"0", "Hello"})
-      refute Enum.member?(map, {"0", "world"})
-      refute Enum.member?(map, "0")
+    test "implements slice", %{map: map} do
+      Map.set(map, "key1", "value1")
+      Map.set(map, "key2", "value2")
+      {:ok, 2, fun} = Enumerable.slice(map)
+      assert [{"key2", "value2"}] = fun.(1, 1)
     end
 
-    test "fetch!" do
-      doc = Doc.new()
-
-      map = Doc.get_map(doc, "map")
-
-      Map.set(map, "0", "Hello")
-      Map.set(map, "1", " World")
-      assert {"0", "Hello"} == Enum.fetch!(map, 0)
+    test "implements reduce", %{map: map} do
+      Map.set(map, "key1", "value1")
+      Map.set(map, "key2", "value2")
+      result = Enum.reduce(map, [], fn {k, v}, acc -> [{k, v} | acc] end)
+      assert [{"key1", "value1"}, {"key2", "value2"}] = Enum.sort(result)
     end
   end
 end

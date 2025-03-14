@@ -145,6 +145,20 @@ defmodule Yex.Map do
     Process.get(doc_ref, nil)
   end
 
+  @spec as_prelim(t) :: Yex.MapPrelim.t()
+  def as_prelim(%__MODULE__{} = map) do
+    Yex.Map.to_list(map)
+    |> Enum.map(fn {key, value} -> {key, Yex.Output.as_prelim(value)} end)
+    |> Map.new()
+    |> Yex.MapPrelim.from()
+  end
+
+  defimpl Yex.Output do
+    def as_prelim(map) do
+      Yex.Map.as_prelim(map)
+    end
+  end
+
   defimpl Enumerable do
     def count(map) do
       {:ok, Yex.Map.size(map)}

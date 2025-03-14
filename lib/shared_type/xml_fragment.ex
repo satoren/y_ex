@@ -124,6 +124,23 @@ defmodule Yex.XmlFragment do
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
+
+  @spec as_prelim(t) :: Yex.XmlFragmentPrelim.t()
+  def as_prelim(%__MODULE__{} = xml_fragment) do
+    children =
+      Enum.map(0..(__MODULE__.length(xml_fragment) - 1), fn i ->
+        {:ok, child} = fetch(xml_fragment, i)
+        Yex.Output.as_prelim(child)
+      end)
+
+    Yex.XmlFragmentPrelim.new(children)
+  end
+
+  defimpl Yex.Output do
+    def as_prelim(xml_fragment) do
+      Yex.XmlFragment.as_prelim(xml_fragment)
+    end
+  end
 end
 
 defmodule Yex.XmlFragmentPrelim do
