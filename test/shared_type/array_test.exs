@@ -208,6 +208,16 @@ defmodule Yex.ArrayTest do
     :error = Yex.Array.move_to(array, 3, 0)
   end
 
+  describe "as_prelim" do
+    test "array" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+      Array.push(array, "Hello")
+      Array.push(array, "World")
+      assert %Yex.ArrayPrelim{list: ["Hello", "World"]} = Yex.Array.as_prelim(array)
+    end
+  end
+
   describe "observe" do
     test "insert " do
       doc = Doc.new()

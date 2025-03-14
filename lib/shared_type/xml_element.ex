@@ -189,6 +189,27 @@ defmodule Yex.XmlElement do
     Process.get(doc_ref, nil)
   end
 
+  @spec as_prelim(t) :: Yex.XmlElementPrelim.t()
+  def as_prelim(%__MODULE__{} = xml_element) do
+    children =
+      Enum.map(0..(__MODULE__.length(xml_element) - 1), fn i ->
+        {:ok, child} = fetch(xml_element, i)
+        Yex.Output.as_prelim(child)
+      end)
+
+    Yex.XmlElementPrelim.new(
+      get_tag(xml_element),
+      children,
+      get_attributes(xml_element)
+    )
+  end
+
+  defimpl Yex.Output do
+    def as_prelim(xml_element) do
+      Yex.XmlElement.as_prelim(xml_element)
+    end
+  end
+
   defimpl Yex.Xml do
     defdelegate next_sibling(xml), to: Yex.XmlElement
     defdelegate prev_sibling(xml), to: Yex.XmlElement

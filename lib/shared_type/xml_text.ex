@@ -112,6 +112,17 @@ defmodule Yex.XmlText do
     Process.get(doc_ref, nil)
   end
 
+  @spec as_prelim(t) :: Yex.XmlTextPrelim.t()
+  def as_prelim(%__MODULE__{} = xml_text) do
+    Yex.XmlTextPrelim.from(to_delta(xml_text))
+  end
+
+  defimpl Yex.Output do
+    def as_prelim(xml_text) do
+      Yex.XmlText.as_prelim(xml_text)
+    end
+  end
+
   defimpl Yex.Xml do
     defdelegate next_sibling(xml), to: Yex.XmlText
     defdelegate prev_sibling(xml), to: Yex.XmlText

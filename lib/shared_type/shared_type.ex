@@ -115,3 +115,12 @@ defmodule Yex.SharedType do
     Yex.Subscription.unsubscribe(ref)
   end
 end
+
+defprotocol Yex.Output do
+  @fallback_to_any true
+  def as_prelim(shared_type)
+end
+
+defimpl Yex.Output, for: Any do
+  def as_prelim(shared_type), do: shared_type
+end
