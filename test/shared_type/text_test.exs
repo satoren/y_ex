@@ -313,7 +313,7 @@ defmodule Yex.TextTest do
     # Apply bold to "Hello"
     Text.format(text, 0, 5, %{"bold" => true})
 
-    # Apply italic to "World"  
+    # Apply italic to "World"
     Text.format(text, 6, 5, %{"italic" => true})
 
     # Verify delta shows formatting
@@ -396,5 +396,260 @@ defmodule Yex.TextTest do
 
     Text.delete(text, 5, 6)
     assert Text.length(text) == 5
+  end
+
+  describe "basic text operations" do
+    test "insert/3 adds text at specified position", %{text: text} do
+      assert :ok = Text.insert(text, 0, "hello")
+      assert "hello" = Text.to_string(text)
+
+      assert :ok = Text.insert(text, 5, " world")
+      assert "hello world" = Text.to_string(text)
+
+      assert :ok = Text.insert(text, 5, ",")
+      assert "hello, world" = Text.to_string(text)
+    end
+
+    test "insert/4 adds text with attributes", %{text: text} do
+      assert :ok = Text.insert(text, 0, "hello", %{"bold" => true})
+      assert [%{insert: "hello", attributes: %{"bold" => true}}] = Text.to_delta(text)
+    end
+
+    test "delete/3 removes text", %{text: text} do
+      Text.insert(text, 0, "hello world")
+      assert :ok = Text.delete(text, 5, 6)
+      assert "hello" = Text.to_string(text)
+    end
+
+    test "delete/3 with negative index", %{text: text} do
+      Text.insert(text, 0, "hello world")
+      assert :ok = Text.delete(text, -5, 5)
+      assert "hello " = Text.to_string(text)
+    end
+
+    test "format/4 applies attributes to text range", %{text: text} do
+      Text.insert(text, 0, "hello world")
+      assert :ok = Text.format(text, 0, 5, %{"bold" => true})
+
+      assert [
+               %{insert: "hello", attributes: %{"bold" => true}},
+               %{insert: " world"}
+             ] = Text.to_delta(text)
+    end
+  end
+
+  describe "delta operations" do
+    test "apply_delta/2 with retain and delete", %{text: text} do
+      Text.insert(text, 0, "12345")
+      delta = [%{"retain" => 1}, %{"delete" => 3}]
+      assert :ok = Text.apply_delta(text, delta)
+      assert "15" = Text.to_string(text)
+    end
+
+    test "apply_delta/2 with insert and attributes", %{text: text} do
+      delta = [
+        %{insert: "hello"},
+        %{insert: " world", attributes: %{"bold" => true}}
+      ]
+
+      assert :ok = Text.apply_delta(text, delta)
+
+      assert [
+               %{insert: "hello"},
+               %{insert: " world", attributes: %{"bold" => true}}
+             ] = Text.to_delta(text)
+    end
+  end
+
+  describe "utility functions" do
+    test "length/1 returns text length", %{text: text} do
+      assert 0 = Text.length(text)
+      Text.insert(text, 0, "hello")
+      assert 5 = Text.length(text)
+    end
+
+    test "to_string/1 returns text content", %{text: text} do
+      Text.insert(text, 0, "hello")
+      assert "hello" = Text.to_string(text)
+    end
+
+    test "to_delta/1 returns delta representation", %{text: text} do
+      Text.insert(text, 0, "hello")
+      Text.insert(text, 5, " world", %{"bold" => true})
+
+      assert [
+               %{insert: "hello"},
+               %{insert: " world", attributes: %{"bold" => true}}
+             ] = Text.to_delta(text)
+    end
+  end
+
+  describe "TextPrelim" do
+    test "from/1 with binary creates TextPrelim" do
+      prelim = TextPrelim.from("Hello World")
+      assert %TextPrelim{delta: [%{insert: "Hello World"}]} = prelim
+    end
+
+    test "from/1 with delta creates TextPrelim" do
+      delta = [
+        %{insert: "Hello"},
+        %{insert: " World", attributes: %{"bold" => true}}
+      ]
+
+      prelim = TextPrelim.from(delta)
+      assert %TextPrelim{delta: ^delta} = prelim
+    end
+  end
+
+  describe "as_prelim" do
+    test "converts Text to TextPrelim", %{text: text} do
+      Text.insert(text, 0, "hello")
+      Text.insert(text, 5, " world", %{"bold" => true})
+      prelim = Text.as_prelim(text)
+      assert %TextPrelim{} = prelim
+
+      assert [
+               %{insert: "hello"},
+               %{insert: " world", attributes: %{"bold" => true}}
+             ] = prelim.delta
+    end
+  end
+
+  describe "boundary cases" do
+    test "delete at text boundaries", %{text: text} do
+      Text.insert(text, 0, "Hello")
+      # 先頭の文字を削除
+      assert :ok = Text.delete(text, 0, 1)
+      assert "ello" = Text.to_string(text)
+
+      # 末尾の文字を削除
+      assert :ok = Text.delete(text, 3, 1)
+      assert "ell" = Text.to_string(text)
+    end
+
+    test "format at text boundaries", %{text: text} do
+      Text.insert(text, 0, "Hello")
+      # 先頭の文字をフォーマット
+      assert :ok = Text.format(text, 0, 1, %{"bold" => true})
+
+      assert [
+               %{insert: "H", attributes: %{"bold" => true}},
+               %{insert: "ello"}
+             ] = Text.to_delta(text)
+
+      # 末尾の文字をフォーマット
+      assert :ok = Text.format(text, 4, 1, %{"italic" => true})
+
+      assert [
+               %{insert: "H", attributes: %{"bold" => true}},
+               %{insert: "ell"},
+               %{insert: "o", attributes: %{"italic" => true}}
+             ] = Text.to_delta(text)
+    end
+
+    test "insert at text boundaries", %{text: text} do
+      # 空のテキストの先頭に挿入
+      assert :ok = Text.insert(text, 0, "Hello")
+      assert "Hello" = Text.to_string(text)
+
+      # テキストの末尾に挿入
+      assert :ok = Text.insert(text, 5, " World")
+      assert "Hello World" = Text.to_string(text)
+
+      # テキストの中間に挿入
+      assert :ok = Text.insert(text, 5, ",")
+      assert "Hello, World" = Text.to_string(text)
+    end
+  end
+
+  describe "complex formatting operations" do
+    test "multiple format operations on same range", %{text: text} do
+      Text.insert(text, 0, "Hello World")
+      assert :ok = Text.format(text, 0, 5, %{"bold" => true})
+      assert :ok = Text.format(text, 0, 5, %{"italic" => true})
+
+      delta = Text.to_delta(text)
+
+      assert [
+               %{insert: "Hello", attributes: %{"bold" => true, "italic" => true}},
+               %{insert: " World"}
+             ] = delta
+    end
+
+    test "overlapping format operations", %{text: text} do
+      Text.insert(text, 0, "Hello World")
+      assert :ok = Text.format(text, 0, 7, %{"bold" => true})
+      assert :ok = Text.format(text, 4, 7, %{"italic" => true})
+
+      delta = Text.to_delta(text)
+
+      assert [
+               %{insert: "Hell", attributes: %{"bold" => true}},
+               %{insert: "o W", attributes: %{"bold" => true, "italic" => true}},
+               %{insert: "orld", attributes: %{"italic" => true}}
+             ] = delta
+    end
+  end
+
+  describe "complex delta operations" do
+    test "apply_delta with multiple operations", %{text: text} do
+      Text.insert(text, 0, "Hello World")
+
+      delta = [
+        %{"retain" => 5},
+        %{"delete" => 1},
+        %{"insert" => "-"},
+        %{"retain" => 5}
+      ]
+
+      assert :ok = Text.apply_delta(text, delta)
+      assert "Hello-World" = Text.to_string(text)
+    end
+
+    test "apply_delta with formatting", %{text: text} do
+      Text.insert(text, 0, "Hello World")
+
+      delta = [
+        %{"retain" => 5, "attributes" => %{"bold" => true}},
+        %{"retain" => 6, "attributes" => %{"italic" => true}}
+      ]
+
+      assert :ok = Text.apply_delta(text, delta)
+      delta_result = Text.to_delta(text)
+
+      assert [
+               %{insert: "Hello", attributes: %{"bold" => true}},
+               %{insert: " World", attributes: %{"italic" => true}}
+             ] = delta_result
+    end
+  end
+
+  describe "TextPrelim with complex deltas" do
+    test "from/1 with complex delta", %{doc: doc} do
+      delta = [
+        %{insert: "Hello"},
+        %{insert: " ", attributes: %{"bold" => true}},
+        %{insert: "World", attributes: %{"italic" => true}}
+      ]
+
+      prelim = TextPrelim.from(delta)
+      map = Doc.get_map(doc, "map")
+      Yex.Map.set(map, "text", prelim)
+      {:ok, text} = Yex.Map.fetch(map, "text")
+      assert delta == Text.to_delta(text)
+    end
+
+    test "as_prelim with complex formatting", %{text: text} do
+      Text.insert(text, 0, "Hello")
+      Text.insert(text, 5, " ", %{"bold" => true})
+      Text.insert(text, 6, "World", %{"italic" => true})
+      prelim = Text.as_prelim(text)
+
+      assert [
+               %{insert: "Hello"},
+               %{insert: " ", attributes: %{"bold" => true}},
+               %{insert: "World", attributes: %{"italic" => true}}
+             ] == prelim.delta
+    end
   end
 end

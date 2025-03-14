@@ -4,63 +4,153 @@ defmodule Yex.ArrayTest do
   doctest Array
   doctest ArrayPrelim
 
-  test "insert" do
+  setup do
     doc = Doc.new()
-
     array = Doc.get_array(doc, "array")
-
-    Array.insert(array, 0, "Hello")
-    assert 1 == Array.length(array)
+    {:ok, doc: doc, array: array}
   end
 
-  test "insert_after" do
-    doc = Doc.new()
-
-    array = Doc.get_array(doc, "array")
-
-    Array.insert(array, 0, "Hello")
-    assert 1 == Array.length(array)
-  end
-
-  test "push" do
-    doc = Doc.new()
-
-    array = Doc.get_array(doc, "array")
-
-    Array.push(array, "Hello1")
-    Array.push(array, "Hello2")
-    assert ["Hello1", "Hello2"] == Array.to_list(array)
-    assert 2 == Array.length(array)
-  end
-
-  test "fetch" do
-    doc = Doc.new()
-
-    array = Doc.get_array(doc, "array")
-
-    Array.push(array, "Hello1")
-    Array.push(array, "Hello2")
-    assert {:ok, "Hello1"} == Array.fetch(array, 0)
-    assert {:ok, "Hello2"} == Array.fetch(array, 1)
-    assert :error == Array.fetch(array, 2)
-    assert {:ok, "Hello2"} == Array.fetch(array, -1)
-  end
-
-  test "fetch!" do
-    doc = Doc.new()
-
-    array = Doc.get_array(doc, "array")
-
-    Array.push(array, "Hello1")
-    Array.push(array, "Hello2")
-    assert "Hello1" == Array.fetch!(array, 0)
-    assert "Hello2" == Array.fetch!(array, 1)
-
-    assert_raise ArgumentError, "Index out of bounds", fn ->
-      Array.fetch!(array, 2)
+  describe "basic array operations" do
+    test "insert/3 adds element at specified position", %{array: array} do
+      assert :ok = Array.insert(array, 0, "first")
+      assert :ok = Array.insert(array, 1, "second")
+      assert :ok = Array.insert(array, 1, "middle")
+      assert ["first", "middle", "second"] = Array.to_list(array)
     end
 
-    assert "Hello2" == Array.fetch!(array, -1)
+    test "insert_list/3 adds multiple elements", %{array: array} do
+      assert :ok = Array.insert_list(array, 0, [1, 2, 3, 4, 5])
+      assert [1, 2, 3, 4, 5] = Array.to_json(array)
+    end
+
+    test "push/2 adds element at the end", %{array: array} do
+      Array.push(array, "first")
+      Array.push(array, "second")
+      assert ["first", "second"] = Array.to_list(array)
+    end
+
+    test "unshift/2 adds element at the beginning", %{array: array} do
+      Array.unshift(array, "second")
+      Array.unshift(array, "first")
+      assert ["first", "second"] = Array.to_list(array)
+    end
+
+    test "delete/2 removes element at index", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3])
+      assert :ok = Array.delete(array, 1)
+      assert [1, 3] = Array.to_list(array)
+    end
+
+    test "delete_range/3 removes elements in range", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3, 4, 5])
+      assert :ok = Array.delete_range(array, 1, 3)
+      assert [1, 5] = Array.to_list(array)
+    end
+
+    test "delete_range/3 with negative index", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3, 4, 5])
+      assert :ok = Array.delete_range(array, -3, 2)
+      assert [1, 2, 5] = Array.to_list(array)
+    end
+
+    test "move_to/3 moves element to new position", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3, 4])
+      assert :ok = Array.move_to(array, 0, 2)
+      assert [2, 1, 3, 4] = Array.to_list(array)
+    end
+  end
+
+  describe "access operations" do
+    test "fetch/2 gets element at index", %{array: array} do
+      Array.push(array, "Hello")
+      assert {:ok, "Hello"} = Array.fetch(array, 0)
+      assert :error = Array.fetch(array, 1)
+    end
+
+    test "fetch/2 with negative index", %{array: array} do
+      Array.push(array, "Hello")
+      Array.push(array, "World")
+      assert {:ok, "World"} = Array.fetch(array, -1)
+    end
+
+    test "fetch!/2 gets element or raises", %{array: array} do
+      Array.push(array, "Hello")
+      assert "Hello" = Array.fetch!(array, 0)
+      assert_raise ArgumentError, fn -> Array.fetch!(array, 1) end
+    end
+
+    test "deprecated get/2 still works", %{array: array} do
+      Array.push(array, "Hello")
+      assert {:ok, "Hello"} = Array.get(array, 0)
+    end
+  end
+
+  describe "utility functions" do
+    test "to_list/1 returns list representation", %{array: array} do
+      Array.insert_list(array, 0, ["Hello", "World"])
+      assert ["Hello", "World"] = Array.to_list(array)
+    end
+
+    test "length/1 returns array size", %{array: array} do
+      assert 0 = Array.length(array)
+      Array.push(array, "Hello")
+      assert 1 = Array.length(array)
+    end
+
+    test "to_json/1 returns JSON-compatible format", %{array: array} do
+      Array.insert_list(array, 0, ["Hello", "World"])
+      assert ["Hello", "World"] = Array.to_json(array)
+    end
+
+    test "member?/2 checks if element exists", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3])
+      assert Array.member?(array, 2)
+      refute Array.member?(array, 4)
+    end
+  end
+
+  describe "ArrayPrelim" do
+    test "from/1 creates ArrayPrelim from list" do
+      prelim = ArrayPrelim.from(["Hello", "World"])
+      assert %ArrayPrelim{list: ["Hello", "World"]} = prelim
+    end
+
+    test "from/1 works with any enumerable" do
+      prelim = ArrayPrelim.from(1..3)
+      assert %ArrayPrelim{list: [1, 2, 3]} = prelim
+    end
+  end
+
+  describe "as_prelim" do
+    test "converts Array to ArrayPrelim", %{array: array} do
+      Array.insert_list(array, 0, ["Hello", "World"])
+      prelim = Array.as_prelim(array)
+      assert %ArrayPrelim{list: ["Hello", "World"]} = prelim
+    end
+  end
+
+  describe "Enumerable protocol" do
+    test "implements count", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3])
+      assert {:ok, 3} = Enumerable.count(array)
+    end
+
+    test "implements member?", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3])
+      assert {:ok, true} = Enumerable.member?(array, 2)
+      assert {:ok, false} = Enumerable.member?(array, 4)
+    end
+
+    test "implements slice", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3, 4, 5])
+      {:ok, 5, fun} = Enumerable.slice(array)
+      assert [2, 3] = fun.(1, 2)
+    end
+
+    test "implements reduce", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3])
+      assert 6 = Enum.reduce(array, 0, &(&1 + &2))
+    end
   end
 
   test "compare" do
@@ -70,17 +160,6 @@ defmodule Yex.ArrayTest do
     array2 = Doc.get_array(doc, "array")
 
     assert array1 == array2
-  end
-
-  test "unshift" do
-    doc = Doc.new()
-
-    array = Doc.get_array(doc, "array")
-
-    Array.unshift(array, "Hello1")
-    Array.unshift(array, "Hello2")
-    assert ["Hello2", "Hello1"] == Array.to_list(array)
-    assert 2 == Array.length(array)
   end
 
   test "delete" do
@@ -206,16 +285,6 @@ defmodule Yex.ArrayTest do
     Yex.Array.push(array, Enum.to_list(201..300))
     :error = Yex.Array.move_to(array, 0, 5)
     :error = Yex.Array.move_to(array, 3, 0)
-  end
-
-  describe "as_prelim" do
-    test "array" do
-      doc = Doc.new()
-      array = Doc.get_array(doc, "array")
-      Array.push(array, "Hello")
-      Array.push(array, "World")
-      assert %Yex.ArrayPrelim{list: ["Hello", "World"]} = Yex.Array.as_prelim(array)
-    end
   end
 
   describe "observe" do

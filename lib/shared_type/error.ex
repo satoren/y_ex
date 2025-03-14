@@ -1,3 +1,3 @@
 defmodule Yex.DeletedSharedTypeError do
-  defexception message: ""
+  defexception message: "Shared type has been deleted"
 end
