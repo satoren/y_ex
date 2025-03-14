@@ -513,6 +513,43 @@ defmodule Yex.TextTest do
                %{insert: " world", attributes: %{"bold" => true}}
              ] = prelim.delta
     end
+
+    test "converts empty Text to TextPrelim", %{text: text} do
+      prelim = Text.as_prelim(text)
+      assert %TextPrelim{} = prelim
+      assert [] = prelim.delta
+    end
+
+    test "converts Text with multiple formatting to TextPrelim", %{text: text} do
+      Text.insert(text, 0, "Hello World")
+      Text.format(text, 0, 5, %{"bold" => true, "color" => "red"})
+      Text.format(text, 5, 1, %{"color" => "red"})
+      Text.format(text, 6, 5, %{"italic" => true, "color" => "red"})
+
+      prelim = Text.as_prelim(text)
+      assert %TextPrelim{} = prelim
+
+      assert [
+               %{attributes: %{"bold" => true, "color" => "red"}, insert: "Hello"},
+               %{attributes: %{"color" => "red"}, insert: " "},
+               %{attributes: %{"color" => "red", "italic" => true}, insert: "World"}
+             ] = prelim.delta
+    end
+
+    test "converts Text with complex operations to TextPrelim", %{text: text} do
+      Text.insert(text, 0, "Hello World")
+      Text.delete(text, 5, 1)
+      Text.format(text, 0, 5, %{"bold" => true})
+      Text.format(text, 5, 5, %{"italic" => true})
+
+      prelim = Text.as_prelim(text)
+      assert %TextPrelim{} = prelim
+
+      assert [
+               %{insert: "Hello", attributes: %{"bold" => true}},
+               %{insert: "World", attributes: %{"italic" => true}}
+             ] = prelim.delta
+    end
   end
 
   describe "boundary cases" do

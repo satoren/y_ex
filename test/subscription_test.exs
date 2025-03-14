@@ -29,7 +29,7 @@ defmodule Yex.SubscriptionTest do
       assert :ok = Subscription.unsubscribe(ref)
     end
 
-    test "removes subscription from process dictionary", %{doc: doc} do
+    test "removes subscription from process dictionary", %{doc: _doc} do
       ref = make_ref()
       Process.put(ref, nil)
       assert :ok = Subscription.unsubscribe(ref)

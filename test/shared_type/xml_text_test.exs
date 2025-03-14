@@ -209,4 +209,59 @@ defmodule YexXmlTextTest do
                       ], "origin_value", _metadata}
     end
   end
+
+  describe "as_prelim" do
+    setup do
+      d1 = Doc.with_options(%Doc.Options{client_id: 1})
+      f = Doc.get_xml_fragment(d1, "xml")
+      XmlFragment.push(f, XmlTextPrelim.from(""))
+      {:ok, xml} = XmlFragment.fetch(f, 0)
+      %{doc: d1, xml_text: xml, xml_fragment: f}
+    end
+
+    test "converts empty XmlText to TextPrelim", %{xml_text: text} do
+      prelim = XmlText.as_prelim(text)
+      assert %XmlTextPrelim{} = prelim
+      assert [] = prelim.delta
+    end
+
+    test "converts XmlText with content to TextPrelim", %{xml_text: text} do
+      XmlText.insert(text, 0, "Hello World")
+
+      prelim = XmlText.as_prelim(text)
+      assert %XmlTextPrelim{} = prelim
+      assert [%{insert: "Hello World"}] = prelim.delta
+    end
+
+    test "converts XmlText with formatted content to TextPrelim", %{xml_text: text} do
+      XmlText.insert(text, 0, "Hello World")
+      XmlText.format(text, 0, 5, %{"bold" => true})
+      XmlText.format(text, 6, 5, %{"italic" => true})
+
+      prelim = XmlText.as_prelim(text)
+      assert %XmlTextPrelim{} = prelim
+
+      assert [
+               %{attributes: %{"bold" => true}, insert: "Hello"},
+               %{insert: " "},
+               %{attributes: %{"italic" => true}, insert: "World"}
+             ] = prelim.delta
+    end
+
+    test "converts XmlText with complex formatting to TextPrelim", %{xml_text: text} do
+      XmlText.insert(text, 0, "Hello World")
+      XmlText.format(text, 0, 5, %{"bold" => true})
+      XmlText.format(text, 6, 5, %{"italic" => true})
+      XmlText.format(text, 0, 11, %{"color" => "red"})
+
+      prelim = XmlText.as_prelim(text)
+      assert %XmlTextPrelim{} = prelim
+
+      assert [
+               %{insert: "Hello", attributes: %{"bold" => true, "color" => "red"}},
+               %{insert: " ", attributes: %{"color" => "red"}},
+               %{insert: "World", attributes: %{"italic" => true, "color" => "red"}}
+             ] = prelim.delta
+    end
+  end
 end

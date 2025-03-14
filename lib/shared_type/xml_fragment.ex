@@ -126,14 +126,14 @@ defmodule Yex.XmlFragment do
   end
 
   @spec as_prelim(t) :: Yex.XmlFragmentPrelim.t()
-  def as_prelim(%__MODULE__{} = xml_fragment) do
-    children =
-      Enum.map(0..(__MODULE__.length(xml_fragment) - 1), fn i ->
-        {:ok, child} = fetch(xml_fragment, i)
-        Yex.Output.as_prelim(child)
-      end)
+  def as_prelim(%__MODULE__{doc: doc} = xml_fragment) do
+    Doc.run_in_worker_process(doc, do: do_as_prelim(xml_fragment))
+  end
 
-    Yex.XmlFragmentPrelim.new(children)
+  defp do_as_prelim(%__MODULE__{} = xml_fragment) do
+    children(xml_fragment)
+    |> Enum.map(fn child -> Yex.Output.as_prelim(child) end)
+    |> Yex.XmlFragmentPrelim.new()
   end
 
   defimpl Yex.Output do
