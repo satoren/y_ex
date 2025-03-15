@@ -22,7 +22,6 @@ jobs:
 
     env:
       MIX_ENV: test
-      RUSTLER_PRECOMPILATION_YEX_BUILD: "true"
     steps:
     - uses: actions/checkout@v4
     - name: Set up Elixir
@@ -45,8 +44,6 @@ jobs:
   lint:
     name: lint
     runs-on: ubuntu-latest
-    env:
-      RUSTLER_PRECOMPILATION_YEX_BUILD: "true"
     steps:
     - uses: actions/checkout@v4
     - name: Set up Elixir
