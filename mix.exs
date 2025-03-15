@@ -1,7 +1,7 @@
 defmodule Yex.MixProject do
   use Mix.Project
 
-  @version "0.7.1"
+  @version "0.7.0"
   @repo "https://github.com/satoren/y_ex"
 
   @description """
@@ -46,15 +46,13 @@ defmodule Yex.MixProject do
       links: %{"Github" => @repo},
       files: [
         "lib",
-        "native/yex/src",
-        "native/yex/Cargo.*",
-        "native/yex/Cross.*",
-        "native/yex/README.md",
-        "native/yex/README.md",
+        "priv",
+        "native",
         "README.md",
         "checksum-*.exs",
         "mix.exs"
-      ]
+      ],
+      exclude_files: ["test", "native/target", "native/*.so"]
     ]
   end
 
