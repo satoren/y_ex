@@ -146,11 +146,14 @@ defmodule Yex.Map do
   end
 
   @spec as_prelim(t) :: Yex.MapPrelim.t()
-  def as_prelim(%__MODULE__{} = map) do
-    Yex.Map.to_list(map)
-    |> Enum.map(fn {key, value} -> {key, Yex.Output.as_prelim(value)} end)
-    |> Map.new()
-    |> Yex.MapPrelim.from()
+  def as_prelim(%__MODULE__{doc: doc} = map) do
+    Doc.run_in_worker_process(doc,
+      do:
+        Yex.Map.to_list(map)
+        |> Enum.map(fn {key, value} -> {key, Yex.Output.as_prelim(value)} end)
+        |> Map.new()
+        |> Yex.MapPrelim.from()
+    )
   end
 
   defimpl Yex.Output do

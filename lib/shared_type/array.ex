@@ -186,10 +186,13 @@ defmodule Yex.Array do
   end
 
   @spec as_prelim(t) :: Yex.ArrayPrelim.t()
-  def as_prelim(%__MODULE__{} = array) do
-    Yex.Array.to_list(array)
-    |> Enum.map(&Yex.Output.as_prelim/1)
-    |> Yex.ArrayPrelim.from()
+  def as_prelim(%__MODULE__{doc: doc} = array) do
+    Doc.run_in_worker_process(doc,
+      do:
+        Yex.Array.to_list(array)
+        |> Enum.map(&Yex.Output.as_prelim/1)
+        |> Yex.ArrayPrelim.from()
+    )
   end
 
   defimpl Yex.Output do
