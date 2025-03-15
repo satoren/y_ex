@@ -1,6 +1,7 @@
 defmodule Yex.XmlElement do
   @moduledoc """
-  A shared type that represents an XML node
+  A shared type that represents an XML node.
+  Provides functionality for manipulating XML elements including child nodes, attributes, and navigation.
 
   """
 
@@ -19,6 +20,10 @@ defmodule Yex.XmlElement do
           reference: reference()
         }
 
+  @doc """
+  Returns the first child node of the XML element.
+  Returns nil if the element has no children.
+  """
   @spec first_child(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def first_child(%__MODULE__{} = xml_element) do
     fetch(xml_element, 0)
@@ -28,6 +33,9 @@ defmodule Yex.XmlElement do
     end
   end
 
+  @doc """
+  Returns a stream of all child nodes of the XML element.
+  """
   @spec children(t) :: Enumerable.t(Yex.XmlElement.t() | Yex.XmlText.t())
   def children(%__MODULE__{doc: doc} = xml_element) do
     Doc.run_in_worker_process(doc,
@@ -39,6 +47,9 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Returns the number of child nodes in the XML element.
+  """
   @spec length(t) :: integer()
   def length(%__MODULE__{doc: doc} = xml_element) do
     Doc.run_in_worker_process(doc,
@@ -46,6 +57,10 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Inserts a new child node at the specified index.
+  Returns :ok on success, :error on failure.
+  """
   @spec insert(t, integer(), Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) :: :ok | :error
   def insert(%__MODULE__{doc: doc} = xml_element, index, content) do
     Doc.run_in_worker_process(doc,
@@ -53,6 +68,11 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Inserts a new child node after the specified reference node.
+  If the reference node is not found, inserts at the beginning.
+  Returns :ok on success, :error on failure.
+  """
   @spec insert_after(
           t,
           Yex.XmlElement.t() | Yex.XmlText.t(),
@@ -70,6 +90,10 @@ defmodule Yex.XmlElement do
     end
   end
 
+  @doc """
+  Deletes a range of child nodes starting at the specified index.
+  Returns :ok on success, :error on failure.
+  """
   @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{doc: doc} = xml_element, index, length) do
     Doc.run_in_worker_process(doc,
@@ -77,6 +101,10 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Appends a new child node at the end of the children list.
+  Returns :ok on success, :error on failure.
+  """
   @spec push(t, Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) :: :ok | :error
   def push(%__MODULE__{doc: doc} = xml_element, content) do
     Doc.run_in_worker_process(doc,
@@ -84,6 +112,10 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Inserts a new child node at the beginning of the children list.
+  Returns :ok on success, :error on failure.
+  """
   @spec unshift(t, Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) :: :ok | :error
   def unshift(%__MODULE__{} = xml_element, content) do
     insert(xml_element, 0, content)
@@ -95,6 +127,10 @@ defmodule Yex.XmlElement do
     fetch(xml_element, index)
   end
 
+  @doc """
+  Retrieves the child node at the specified index.
+  Returns {:ok, node} if found, :error if index is out of bounds.
+  """
   @spec fetch(t, integer()) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
   def fetch(%__MODULE__{doc: doc} = xml_element, index) do
     Doc.run_in_worker_process(doc,
@@ -102,7 +138,10 @@ defmodule Yex.XmlElement do
     )
   end
 
-  @spec fetch(t, integer()) :: Yex.XmlElement.t() | Yex.XmlText.t()
+  @doc """
+  Similar to fetch/2 but raises ArgumentError if the index is out of bounds.
+  """
+  @spec fetch!(t, integer()) :: Yex.XmlElement.t() | Yex.XmlText.t()
   def fetch!(%__MODULE__{} = map, index) do
     case fetch(map, index) do
       {:ok, value} -> value
@@ -110,6 +149,10 @@ defmodule Yex.XmlElement do
     end
   end
 
+  @doc """
+  Adds or updates an attribute with the specified key and value.
+  Returns :ok on success, :error on failure.
+  """
   @spec insert_attribute(t, binary(), binary()) :: :ok | :error
   def insert_attribute(%__MODULE__{doc: doc} = xml_element, key, value) do
     Doc.run_in_worker_process(doc,
@@ -117,6 +160,10 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Removes the attribute with the specified key.
+  Returns :ok on success, :error on failure.
+  """
   @spec remove_attribute(t, binary()) :: :ok | :error
   def remove_attribute(%__MODULE__{doc: doc} = xml_element, key) do
     Doc.run_in_worker_process(doc,
@@ -125,7 +172,8 @@ defmodule Yex.XmlElement do
   end
 
   @doc """
-  Get the tag of the xml element.
+  Returns the tag name of the XML element.
+  Returns nil if the element has no tag.
   """
   @spec get_tag(t) :: binary() | nil
   def get_tag(%__MODULE__{doc: doc} = xml_element) do
@@ -134,6 +182,10 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Returns the value of the specified attribute.
+  Returns nil if the attribute does not exist.
+  """
   @spec get_attribute(t, binary()) :: binary() | nil
   def get_attribute(%__MODULE__{doc: doc} = xml_element, key) do
     Doc.run_in_worker_process(doc,
@@ -141,6 +193,9 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Returns a map of all attributes for this XML element.
+  """
   @spec get_attributes(t) :: map()
   def get_attributes(%__MODULE__{doc: doc} = xml_element) do
     Doc.run_in_worker_process(doc,

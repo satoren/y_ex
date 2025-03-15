@@ -1,8 +1,8 @@
 defmodule Yex.XmlText do
   @moduledoc """
-  Extends Y.Text to represent a Y.Xml node.
-
-
+  A shared type that represents an XML text node.
+  Extends Y.Text to provide functionality for manipulating text content within XML nodes,
+  including text formatting and navigation.
   """
 
   defstruct [
@@ -20,6 +20,10 @@ defmodule Yex.XmlText do
 
   @type delta :: Yex.Text.delta()
 
+  @doc """
+  Inserts text content at the specified index.
+  Returns :ok on success, :error on failure.
+  """
   @spec insert(t, integer(), Yex.input_type()) :: :ok | :error
   def insert(%__MODULE__{doc: doc} = xml_text, index, content) do
     Doc.run_in_worker_process(doc,
@@ -27,6 +31,10 @@ defmodule Yex.XmlText do
     )
   end
 
+  @doc """
+  Inserts text content with attributes at the specified index.
+  Returns :ok on success, :error on failure.
+  """
   @spec insert(t, integer(), Yex.input_type(), map()) :: :ok | :error
   def insert(%__MODULE__{doc: doc} = xml_text, index, content, attr) do
     Doc.run_in_worker_process(doc,
@@ -35,6 +43,11 @@ defmodule Yex.XmlText do
     )
   end
 
+  @doc """
+  Deletes text content starting at the specified index.
+  Supports negative indices for deletion from the end.
+  Returns :ok on success, :error on failure.
+  """
   @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{doc: doc} = xml_text, index, length) do
     Doc.run_in_worker_process doc do
@@ -44,6 +57,10 @@ defmodule Yex.XmlText do
     end
   end
 
+  @doc """
+  Applies formatting attributes to a range of text.
+  Returns :ok on success, :error on failure.
+  """
   @spec format(t, integer(), integer(), map()) :: :ok | :error
   def format(%__MODULE__{doc: doc} = xml_text, index, length, attr) do
     Doc.run_in_worker_process(doc,
@@ -51,6 +68,10 @@ defmodule Yex.XmlText do
     )
   end
 
+  @doc """
+  Applies a delta of changes to the text content.
+  Returns :ok on success, :error on failure.
+  """
   @spec apply_delta(t, delta) :: :ok | :error
   def apply_delta(%__MODULE__{doc: doc} = xml_text, delta) do
     Doc.run_in_worker_process(doc,
@@ -58,12 +79,18 @@ defmodule Yex.XmlText do
     )
   end
 
+  @doc """
+  Returns the text content as a delta format, including any formatting attributes.
+  """
   def to_delta(%__MODULE__{doc: doc} = xml_text) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_text_to_delta(xml_text, cur_txn(xml_text))
     )
   end
 
+  @doc """
+  Returns the text content as a string, including any formatting tags.
+  """
   @spec to_string(t) :: binary()
   def to_string(%__MODULE__{doc: doc} = xml_text) do
     Doc.run_in_worker_process(doc,
@@ -71,6 +98,9 @@ defmodule Yex.XmlText do
     )
   end
 
+  @doc """
+  Returns the length of the text content.
+  """
   @spec length(t) :: integer()
   def length(%__MODULE__{doc: doc} = xml_text) do
     Doc.run_in_worker_process(doc,
@@ -79,7 +109,8 @@ defmodule Yex.XmlText do
   end
 
   @doc """
-  The next sibling of this type. Is null if this is the last child of its parent.
+  Returns the next sibling node of this text node.
+  Returns nil if this is the last child of its parent.
   """
   @spec next_sibling(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def next_sibling(%__MODULE__{doc: doc} = xml_text) do
@@ -89,7 +120,8 @@ defmodule Yex.XmlText do
   end
 
   @doc """
-  The previous sibling of this type. Is null if this is the first child of its parent.
+  Returns the previous sibling node of this text node.
+  Returns nil if this is the first child of its parent.
   """
   @spec prev_sibling(t) :: Yex.XmlElement.t() | Yex.XmlText.t() | nil
   def prev_sibling(%__MODULE__{doc: doc} = xml_text) do
@@ -99,7 +131,8 @@ defmodule Yex.XmlText do
   end
 
   @doc """
-  The parent that holds this type. Is null if this xml is a top-level XML type.
+  Returns the parent node of this text node.
+  Returns nil if this is a top-level XML node.
   """
   @spec parent(t) :: Yex.XmlElement.t() | Yex.XmlFragment.t() | nil
   def parent(%__MODULE__{doc: doc} = xml_text) do
@@ -108,22 +141,36 @@ defmodule Yex.XmlText do
     )
   end
 
+  @doc false
+  # Gets the current transaction reference from the process dictionary for the given document
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
 
+  @doc """
+  Converts the XML text node to a preliminary representation.
+  This is useful when you need to serialize or transfer the text node's content and formatting.
+  """
   @spec as_prelim(t) :: Yex.XmlTextPrelim.t()
   def as_prelim(%__MODULE__{} = xml_text) do
     Yex.XmlTextPrelim.from(to_delta(xml_text))
   end
 
   defimpl Yex.Output do
+    @doc """
+    Implementation of the Yex.Output protocol for XmlText.
+    Converts the XML text node to its preliminary representation.
+    """
     def as_prelim(xml_text) do
       Yex.XmlText.as_prelim(xml_text)
     end
   end
 
   defimpl Yex.Xml do
+    @doc """
+    Implementation of the Yex.Xml protocol for XmlText.
+    Delegates XML node operations to the XmlText module functions.
+    """
     defdelegate next_sibling(xml), to: Yex.XmlText
     defdelegate prev_sibling(xml), to: Yex.XmlText
     defdelegate parent(xml), to: Yex.XmlText

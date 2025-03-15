@@ -1,6 +1,13 @@
 defmodule Yex.Text do
   @moduledoc """
   A shareable type that is optimized for shared editing on text.
+  This module provides functionality for collaborative text editing with support for rich text formatting.
+
+  ## Features
+  - Insert and delete text at any position
+  - Apply formatting attributes (bold, italic, etc.)
+  - Support for Quill Delta format for change tracking
+  - Collaborative editing with conflict resolution
   """
   defstruct [
     :doc,
@@ -19,6 +26,15 @@ defmodule Yex.Text do
           reference: reference()
         }
 
+  @doc """
+  Inserts text content at the specified index.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `text` - The text object to modify
+    * `index` - The position to insert at (0-based)
+    * `content` - The text content to insert
+  """
   @spec insert(t, integer(), Yex.input_type()) :: :ok | :error
   def insert(%__MODULE__{doc: doc} = text, index, content) do
     Doc.run_in_worker_process(doc,
@@ -26,6 +42,16 @@ defmodule Yex.Text do
     )
   end
 
+  @doc """
+  Inserts text content with formatting attributes at the specified index.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `text` - The text object to modify
+    * `index` - The position to insert at (0-based)
+    * `content` - The text content to insert
+    * `attr` - A map of formatting attributes to apply (e.g. %{"bold" => true})
+  """
   @spec insert(t, integer(), Yex.input_type(), map()) :: :ok | :error
   def insert(%__MODULE__{doc: doc} = text, index, content, attr) do
     Doc.run_in_worker_process(doc,
@@ -33,6 +59,16 @@ defmodule Yex.Text do
     )
   end
 
+  @doc """
+  Deletes text content starting at the specified index.
+  Supports negative indices for deletion from the end.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `text` - The text object to modify
+    * `index` - The starting position to delete from (0-based, negative indices count from end)
+    * `length` - The number of characters to delete
+  """
   @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{doc: doc} = text, index, length) do
     Doc.run_in_worker_process doc do
@@ -41,11 +77,65 @@ defmodule Yex.Text do
     end
   end
 
+  @doc """
+  Applies formatting attributes to a range of text.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `text` - The text object to modify
+    * `index` - The starting position to format from (0-based)
+    * `length` - The number of characters to format
+    * `attr` - A map of formatting attributes to apply (e.g. %{"bold" => true})
+  """
   @spec format(t, integer(), integer(), map()) :: :ok | :error
   def format(%__MODULE__{doc: doc} = text, index, length, attr) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.text_format(text, cur_txn(text), index, length, attr)
     )
+  end
+
+  @doc """
+  Returns the text content as a string.
+
+  ## Parameters
+    * `text` - The text object to convert to string
+  """
+  @spec to_string(t) :: binary()
+  def to_string(%__MODULE__{doc: doc} = text) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_to_string(text, cur_txn(text))
+    )
+  end
+
+  @doc """
+  Returns the length of the text content in characters.
+
+  ## Parameters
+    * `text` - The text object to get the length of
+  """
+  @spec length(t) :: integer()
+  def length(%__MODULE__{doc: doc} = text) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_length(text, cur_txn(text))
+    )
+  end
+
+  @doc """
+  Converts the text object to its preliminary representation.
+  This is useful when you need to serialize or transfer the text content and formatting.
+
+  ## Parameters
+    * `text` - The text object to convert
+  """
+  @spec as_prelim(t) :: Yex.TextPrelim.t()
+  def as_prelim(%__MODULE__{} = text) do
+    Yex.Text.to_delta(text) |> Yex.TextPrelim.from()
+  end
+
+  defimpl Yex.Output do
+    def as_prelim(text) do
+      Yex.Text.as_prelim(text)
+    end
   end
 
   @doc """
@@ -64,20 +154,6 @@ defmodule Yex.Text do
   def apply_delta(%__MODULE__{doc: doc} = text, delta) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.text_apply_delta(text, cur_txn(text), delta)
-    )
-  end
-
-  @spec to_string(t) :: binary()
-  def to_string(%__MODULE__{doc: doc} = text) do
-    Doc.run_in_worker_process(doc,
-      do: Yex.Nif.text_to_string(text, cur_txn(text))
-    )
-  end
-
-  @spec length(t) :: integer()
-  def length(%__MODULE__{doc: doc} = text) do
-    Doc.run_in_worker_process(doc,
-      do: Yex.Nif.text_length(text, cur_txn(text))
     )
   end
 
@@ -102,22 +178,18 @@ defmodule Yex.Text do
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
-
-  @spec as_prelim(t) :: Yex.TextPrelim.t()
-  def as_prelim(%__MODULE__{} = text) do
-    Yex.Text.to_delta(text) |> Yex.TextPrelim.from()
-  end
-
-  defimpl Yex.Output do
-    def as_prelim(text) do
-      Yex.Text.as_prelim(text)
-    end
-  end
 end
 
 defmodule Yex.TextPrelim do
   @moduledoc """
-  A preliminary text. It can be used to early initialize the contents of a Text.
+  A preliminary text representation used for initializing text content.
+  This module provides functionality for creating text content with formatting
+  before it is inserted into a shared document.
+
+  ## Use Cases
+  - Creating formatted text content before inserting into a document
+  - Serializing text content for transfer between documents
+  - Initializing text content with specific formatting attributes
 
   ## Examples
       iex> doc = Yex.Doc.new()
@@ -126,7 +198,6 @@ defmodule Yex.TextPrelim do
       iex> {:ok, %Yex.Text{} = text} = Yex.Map.fetch(map, "key")
       iex> Yex.Text.to_delta(text)
       [%{insert: "Hello World"}]
-
   """
   defstruct [
     :delta
@@ -137,8 +208,9 @@ defmodule Yex.TextPrelim do
         }
 
   @doc """
-  Transforms a Text to a TextPrelim
-  ## Examples with a binary
+  Creates a new TextPrelim from either a binary string or a delta format.
+
+  ## Examples with a binary string
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "key", Yex.TextPrelim.from("Hello World"))
@@ -146,14 +218,16 @@ defmodule Yex.TextPrelim do
       iex> Yex.Text.to_delta(text)
       [%{insert: "Hello World"}]
 
-
-  ## Examples with delta
+  ## Examples with formatted delta
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "key", Yex.TextPrelim.from([%{insert: "Hello"},%{insert: " World", attributes: %{ "bold" => true }},]))
       iex> {:ok, %Yex.Text{} = text} = Yex.Map.fetch(map, "key")
       iex> Yex.Text.to_delta(text)
       [%{insert: "Hello"}, %{attributes: %{"bold" => true}, insert: " World"}]
+
+  ## Parameters
+    * `text` - Either a binary string or a delta format array
   """
   @spec from(binary()) :: t
   def from(text) when is_binary(text) do
