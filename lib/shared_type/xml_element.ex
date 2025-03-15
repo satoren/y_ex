@@ -190,16 +190,18 @@ defmodule Yex.XmlElement do
   end
 
   @spec as_prelim(t) :: Yex.XmlElementPrelim.t()
-  def as_prelim(%__MODULE__{} = xml_element) do
-    c =
-      children(xml_element)
-      |> Enum.map(fn child -> Yex.Output.as_prelim(child) end)
+  def as_prelim(%__MODULE__{doc: doc} = xml_element) do
+    Doc.run_in_worker_process doc do
+      c =
+        children(xml_element)
+        |> Enum.map(fn child -> Yex.Output.as_prelim(child) end)
 
-    Yex.XmlElementPrelim.new(
-      get_tag(xml_element),
-      c,
-      get_attributes(xml_element)
-    )
+      Yex.XmlElementPrelim.new(
+        get_tag(xml_element),
+        c,
+        get_attributes(xml_element)
+      )
+    end
   end
 
   defimpl Yex.Output do
