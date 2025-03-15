@@ -1,32 +1,40 @@
 defmodule Yex.StickyIndex do
   @moduledoc """
-  A sticky index is based on the Yjs model and is not affected by document changes. E.g. If you place a sticky index before a certain character, it will always point to this character. If you place a sticky index at the end of a type, it will always point to the end of the type.
-  A numeric position is often unsuited for user selections, because it does not change when content is inserted before or after.
+  A sticky index provides position references that are unaffected by document changes, based on the Yjs model.
+  It maintains its relative position when placed before or after specific characters or elements.
 
-    `Insert(0, 'x')('a.bc') = 'xa.bc' Where . is the relative position.`
+  ## Features
+  - Stable position references unaffected by document changes
+  - Compatible with shared types like Text, Array, and XML
+  - Maintains relative positions after insert/delete operations
+  - Ideal for tracking cursor positions and text selections
 
-  ## Examples
-    iex> alias Yex.{StickyIndex, Doc, Text}
-    iex> doc = Doc.new()
-    iex> txt = Doc.get_text(doc, "text")
-    iex> Doc.transaction(doc, fn ->
-    ...>  Text.insert(txt, 0, "abc")
-    ...>  #  => 'abc'
-    ...>  # create position tracker (marked as . in the comments)
-    ...>  pos = StickyIndex.new(txt, 2, :after)
-    ...>  # => 'ab.c'
-    ...>
-    ...>  # modify text
-    ...>  Text.insert(txt, 1, "def")
-    ...>  # => 'adefb.c'
-    ...>  Text.delete(txt, 4, 1)
-    ...>  # => 'adef.c'
-    ...>
-    ...>  # get current offset index within the containing collection
-    ...>  {:ok, a} = StickyIndex.get_offset(pos)
-    ...>  # => 4
-    ...>  assert a.index == 4
-    ...> end)
+  ## Usage
+  Numeric indices are unsuitable for tracking user selections because their positions
+  change when content is inserted or deleted. Sticky indices provide stable references
+  that maintain their relative positions through such changes:
+
+      iex> alias Yex.{StickyIndex, Doc, Text}
+      iex> doc = Doc.new()
+      iex> txt = Doc.get_text(doc, "text")
+      iex> Doc.transaction(doc, fn ->
+      ...>  Text.insert(txt, 0, "abc")
+      ...>  # => 'abc'
+      ...>  # Create position tracker (marked as . in comments)
+      ...>  pos = StickyIndex.new(txt, 2, :after)
+      ...>  # => 'ab.c'
+      ...>
+      ...>  # Modify text
+      ...>  Text.insert(txt, 1, "def")
+      ...>  # => 'adefb.c'
+      ...>  Text.delete(txt, 4, 1)
+      ...>  # => 'adef.c'
+      ...>
+      ...>  # Get current offset index
+      ...>  {:ok, a} = StickyIndex.get_offset(pos)
+      ...>  # => 4
+      ...>  assert a.index == 4
+      ...> end)
   """
   defstruct [
     :doc,

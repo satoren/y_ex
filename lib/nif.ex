@@ -76,7 +76,6 @@ defmodule Yex.Nif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_get(_xml_fragment, _cur_txn, _index), do: :erlang.nif_error(:nif_not_loaded)
-  #  def xml_fragment_to_json(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_fragment_to_string(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_fragment_length(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
@@ -89,7 +88,6 @@ defmodule Yex.Nif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_element_get(_xml_element, _cur_txn, _index), do: :erlang.nif_error(:nif_not_loaded)
-  #  def xml_element_to_json(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_element_length(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_element_insert_attribute(_xml_element, _cur_txn, _key, _value),

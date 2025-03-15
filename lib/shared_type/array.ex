@@ -1,6 +1,15 @@
 defmodule Yex.Array do
   @moduledoc """
   A shareable Array-like type that supports efficient insert/delete of elements at any position.
+  This module provides functionality for collaborative array manipulation with support for
+  concurrent modifications and automatic conflict resolution.
+
+  ## Features
+  - Insert and delete elements at any position
+  - Push and unshift operations for adding elements
+  - Move elements between positions
+  - Support for nested shared types
+  - Automatic conflict resolution for concurrent modifications
   """
   defstruct [
     :doc,
@@ -15,7 +24,13 @@ defmodule Yex.Array do
   require Yex.Doc
 
   @doc """
-  Insert content at the specified index.
+  Inserts content at the specified index.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `array` - The array to modify
+    * `index` - The position to insert at (0-based)
+    * `content` - The content to insert
   """
   def insert(%__MODULE__{doc: doc} = array, index, content) do
     Doc.run_in_worker_process(doc,
@@ -41,7 +56,12 @@ defmodule Yex.Array do
   end
 
   @doc """
-  Push content to the end of the array.
+  Pushes content to the end of the array.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `array` - The array to modify
+    * `content` - The content to append
   """
   def push(%__MODULE__{doc: doc} = array, content) do
     Doc.run_in_worker_process(doc,
@@ -50,14 +70,24 @@ defmodule Yex.Array do
   end
 
   @doc """
-  Unshift content to the beginning of the array.
+  Unshifts content to the beginning of the array.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `array` - The array to modify
+    * `content` - The content to prepend
   """
   def unshift(%__MODULE__{} = array, content) do
     insert(array, 0, content)
   end
 
   @doc """
-  Delete content at the specified index.
+  Deletes content at the specified index.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `array` - The array to modify
+    * `index` - The position to delete from (0-based)
   """
   @spec delete(t, integer()) :: :ok
   def delete(%__MODULE__{} = array, index) do
@@ -65,7 +95,13 @@ defmodule Yex.Array do
   end
 
   @doc """
-  Delete contents in the specified range.
+  Deletes a range of contents starting at the specified index.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `array` - The array to modify
+    * `index` - The starting position to delete from (0-based)
+    * `length` - The number of elements to delete
   """
   @spec delete_range(t, integer(), integer()) :: :ok
   def delete_range(%__MODULE__{doc: doc} = array, index, length) do
@@ -185,6 +221,13 @@ defmodule Yex.Array do
     Process.get(doc_ref, nil)
   end
 
+  @doc """
+  Converts the array to its preliminary representation.
+  This is useful when you need to serialize or transfer the array's contents.
+
+  ## Parameters
+    * `array` - The array to convert
+  """
   @spec as_prelim(t) :: Yex.ArrayPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = array) do
     Doc.run_in_worker_process(doc,
