@@ -6,7 +6,7 @@ on:
       - main
       - nif_build_check
     tags:
-      - '*'
+      - "*"
 
 permissions:
   contents: write
@@ -20,56 +20,76 @@ jobs:
       matrix:
         nif: ["2.16", "2.15"]
         job:
-          - { target: arm-unknown-linux-gnueabihf , os: ubuntu-20.04 , use-cross: true }
-          - { target: aarch64-unknown-linux-gnu   , os: ubuntu-20.04 , use-cross: true }
-          - { target: aarch64-unknown-linux-musl  , os: ubuntu-20.04 , use-cross: true }
-          - { target: aarch64-apple-darwin        , os: macos-13      }
-          - { target: riscv64gc-unknown-linux-gnu , os: ubuntu-20.04 , use-cross: true }
-          - { target: x86_64-apple-darwin         , os: macos-13      }
-          - { target: x86_64-unknown-linux-gnu    , os: ubuntu-20.04  }
-          - { target: x86_64-unknown-linux-musl   , os: ubuntu-20.04 , use-cross: true }
-          - { target: x86_64-pc-windows-gnu       , os: windows-2019  }
-          - { target: x86_64-pc-windows-msvc      , os: windows-2019  }
+          - {
+              target: arm-unknown-linux-gnueabihf,
+              os: ubuntu-20.04,
+              use-cross: true,
+            }
+          - {
+              target: aarch64-unknown-linux-gnu,
+              os: ubuntu-20.04,
+              use-cross: true,
+            }
+          - {
+              target: aarch64-unknown-linux-musl,
+              os: ubuntu-20.04,
+              use-cross: true,
+            }
+          - { target: aarch64-apple-darwin, os: macos-13 }
+          - {
+              target: riscv64gc-unknown-linux-gnu,
+              os: ubuntu-20.04,
+              use-cross: true,
+            }
+          - { target: x86_64-apple-darwin, os: macos-13 }
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-20.04 }
+          - {
+              target: x86_64-unknown-linux-musl,
+              os: ubuntu-20.04,
+              use-cross: true,
+            }
+          - { target: x86_64-pc-windows-gnu, os: windows-2019 }
+          - { target: x86_64-pc-windows-msvc, os: windows-2019 }
 
     steps:
-    - name: Checkout source code
-      uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@v4
 
-    - name: Extract project version
-      shell: bash
-      run: |
-        # Get the project version from mix.exs
-        echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> $GITHUB_ENV
+      - name: Extract project version
+        shell: bash
+        run: |
+          # Get the project version from mix.exs
+          echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> $GITHUB_ENV
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-        target: ${{ matrix.job.target }}
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          target: ${{ matrix.job.target }}
 
-    - name: Build the project
-      id: build-crate
-      uses: philss/rustler-precompiled-action@v1.1.4
-      with:
-        project-name: yex
-        project-version: ${{ env.PROJECT_VERSION }}
-        target: ${{ matrix.job.target }}
-        nif-version: ${{ matrix.nif }}
-        use-cross: ${{ matrix.job.use-cross }}
-        project-dir: "native/yex"
+      - name: Build the project
+        id: build-crate
+        uses: philss/rustler-precompiled-action@v1.1.4
+        with:
+          project-name: yex
+          project-version: ${{ env.PROJECT_VERSION }}
+          target: ${{ matrix.job.target }}
+          nif-version: ${{ matrix.nif }}
+          use-cross: ${{ matrix.job.use-cross }}
+          project-dir: "native/yex"
 
-    - name: Artifact upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ steps.build-crate.outputs.file-name }}
-        path: ${{ steps.build-crate.outputs.file-path }}
+      - name: Artifact upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build-crate.outputs.file-name }}
+          path: ${{ steps.build-crate.outputs.file-path }}
 
-    - name: Publish archives and packages
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          ${{ steps.build-crate.outputs.file-path }}
-      if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish archives and packages
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.build-crate.outputs.file-path }}
+        if: startsWith(github.ref, 'refs/tags/')
 
   publish:
     runs-on: ubuntu-latest
@@ -81,8 +101,8 @@ jobs:
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: '1.13.4' # Define the elixir version [required]
-          otp-version: '25.3' # Define the OTP version [required]
+          elixir-version: "1.15.2"
+          otp-version: "26.0"
       - name: Install dependencies
         run: |
           mix deps.get
