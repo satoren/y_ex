@@ -39,6 +39,7 @@ defmodule Yex.SharedType do
   @spec observe(t, keyword()) :: reference()
   def observe(%{doc: doc} = shared_type, opt \\ []) do
     ref = make_ref()
+    notify_pid = self()
 
     sub =
       Doc.run_in_worker_process(doc,
@@ -46,7 +47,7 @@ defmodule Yex.SharedType do
           Yex.Nif.shared_type_observe(
             shared_type,
             cur_txn(shared_type),
-            self(),
+            notify_pid,
             ref,
             Keyword.get(opt, :metadata)
           )
@@ -86,6 +87,7 @@ defmodule Yex.SharedType do
   @spec observe_deep(t, keyword()) :: reference()
   def observe_deep(%{doc: doc} = shared_type, opt \\ []) do
     ref = make_ref()
+    notify_pid = self()
 
     sub =
       Doc.run_in_worker_process(doc,
@@ -93,7 +95,7 @@ defmodule Yex.SharedType do
           Yex.Nif.shared_type_observe_deep(
             shared_type,
             cur_txn(shared_type),
-            self(),
+            notify_pid,
             ref,
             Keyword.get(opt, :metadata)
           )

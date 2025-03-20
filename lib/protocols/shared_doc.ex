@@ -77,6 +77,33 @@ defmodule Yex.Sync.SharedDoc do
     GenServer.call(server, {:unobserve, self()})
   end
 
+  @doc """
+  Get the current state of the document.
+
+  Returns the Doc struct that represents the current state of the shared document.
+  Note: If you manipulate the structure obtained with this function from a different Node (Erlang VM node), some features may not work (e.g., observe). Please be careful.
+  """
+  def get_doc(server), do: GenServer.call(server, :get_doc)
+
+  @doc """
+  Update the document with the given function.
+
+  The function should take a Doc struct as its argument and modify it as needed.
+  The timeout parameter specifies how long to wait for the update to complete (defaults to 5000ms).
+
+  Returns :ok on success or {:error, reason} on failure.
+
+  ## Examples
+      iex> {:ok, shared_doc} = SharedDoc.start_link(doc_name: "document_name")
+      iex> SharedDoc.update_doc(shared_doc, fn doc -> Yex.Doc.get_array(doc, "array") |> Array.insert(0, "updated_data") end) # update the document
+      :ok
+      iex> SharedDoc.get_doc(shared_doc) |> Yex.Doc.get_array("array") |> Yex.Array.to_json() # check the update
+      ["updated_data"]
+  """
+  def update_doc(server, fun, timeout \\ 5000) do
+    GenServer.call(server, {:update_doc, fun}, timeout)
+  end
+
   @impl true
   def init(option, %{doc: doc, awareness: awareness} = state) do
     doc_name = Keyword.fetch!(option, :doc_name)
@@ -126,6 +153,17 @@ defmodule Yex.Sync.SharedDoc do
     state = do_remove_observer_process(client, state)
 
     {:reply, :ok, state, 0}
+  end
+
+  @impl true
+  def handle_call(:get_doc, _from, %{doc: doc} = state) do
+    {:reply, doc, state}
+  end
+
+  @impl true
+  def handle_call({:update_doc, fun}, _from, state) do
+    fun.(state.doc)
+    {:reply, :ok, state}
   end
 
   defp do_remove_observer_process(client, state) do

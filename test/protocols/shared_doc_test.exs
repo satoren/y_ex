@@ -2,6 +2,7 @@ defmodule Yex.Sync.SharedDocTest do
   use ExUnit.Case
   alias Yex.{Doc, Array, Sync, Awareness}
   alias Yex.Sync.SharedDoc
+  doctest SharedDoc
 
   setup_all do
     :ok
@@ -320,6 +321,63 @@ defmodule Yex.Sync.SharedDocTest do
       assert :ok = Yex.apply_update(doc, data)
       localdata = Doc.get_array(doc, "array") |> Array.to_json()
       assert Enum.member?(localdata, "initial_data")
+    end
+  end
+
+  describe "Document operations" do
+    test "get_doc returns the current document state" do
+      docname = random_docname()
+      {:ok, pid} = SharedDoc.start_link(doc_name: docname)
+
+      doc = Doc.new()
+
+      Doc.get_array(doc, "array")
+      |> Array.insert(0, "test_data")
+
+      {:ok, update} = Yex.encode_state_as_update(doc)
+
+      SharedDoc.process_message_v1(
+        pid,
+        Sync.message_encode!({:sync, {:sync_step2, update}}),
+        self()
+      )
+
+      current_doc = SharedDoc.get_doc(pid)
+      assert Doc.get_array(current_doc, "array") |> Array.to_json() == ["test_data"]
+    end
+
+    test "update_doc applies updates to the document" do
+      docname = random_docname()
+      {:ok, pid} = SharedDoc.start_link(doc_name: docname)
+
+      doc = Doc.new()
+
+      Doc.get_array(doc, "array")
+      |> Array.insert(0, "initial_data")
+
+      {:ok, update} = Yex.encode_state_as_update(doc)
+
+      SharedDoc.process_message_v1(
+        pid,
+        Sync.message_encode!({:sync, {:sync_step2, update}}),
+        self()
+      )
+
+      # Create a new update
+      new_doc = Doc.new()
+
+      Doc.get_array(new_doc, "array")
+      |> Array.insert(0, "updated_data")
+
+      {:ok, new_update} = Yex.encode_state_as_update(new_doc)
+      :ok = SharedDoc.update_doc(pid, fn doc -> Yex.apply_update(doc, new_update) end)
+
+      # Verify that the update was applied
+      current_doc = SharedDoc.get_doc(pid)
+
+      result = Doc.get_array(current_doc, "array") |> Array.to_json()
+      assert Enum.member?(result, "initial_data")
+      assert Enum.member?(result, "updated_data")
     end
   end
 end
