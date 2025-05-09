@@ -62,7 +62,7 @@ defmodule Yex.MixProject do
     [
       {:rustler, ">= 0.0.0", optional: true},
       {:rustler_precompiled, ">= 0.6.0"},
-      {:ex_doc, "~> 0.37", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.38", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
