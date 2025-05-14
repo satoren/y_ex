@@ -108,5 +108,7 @@ impl<'de, 'a: 'de> rustler::Encoder for NifAttr {
 
 #[rustler::nif]
 fn normalize_number(any: NifAny) -> NifAny {
+    // The data passes through Any, and gets converted.
+    // For example, even numbers within the SAFE_INTEGER range are converted to float type.
     any
 }
