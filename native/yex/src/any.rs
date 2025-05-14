@@ -47,6 +47,8 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
     } else if let Ok(v) = term.decode::<i32>() {
         return Ok(Any::Number(v.into()));
     } else if let Ok(v) = term.decode::<i64>() {
+        // Check if the number is within the safe integer range for f64
+        // If it is not, we return it as a BigInt
         if v > F64_MAX_SAFE_INTEGER as i64 || v < F64_MIN_SAFE_INTEGER as i64 {
             return Ok(Any::BigInt(v.into()));
         }
