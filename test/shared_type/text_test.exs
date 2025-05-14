@@ -689,4 +689,69 @@ defmodule Yex.TextTest do
              ] == prelim.delta
     end
   end
+
+  describe "edge and error cases for coverage" do
+    test "delete/3 with out of bounds and negative index" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+
+      try do
+        Text.delete(text, 0, 1)
+        flunk("Expected error for out of bounds delete")
+      rescue
+        ErlangError -> :ok
+        ArgumentError -> :ok
+      end
+
+      Text.insert(text, 0, "abc")
+      assert :ok = Text.delete(text, 1, 2)
+      assert "a" = Text.to_string(text)
+
+      try do
+        Text.delete(text, 10, 1)
+        flunk("Expected error for out of bounds delete")
+      rescue
+        ErlangError -> :ok
+        ArgumentError -> :ok
+      end
+
+      try do
+        Text.delete(text, -10, 1)
+        flunk("Expected error for negative index delete")
+      rescue
+        ErlangError -> :ok
+        ArgumentError -> :ok
+      end
+    end
+
+    test "to_string/1 and length/1 with empty and after ops" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      assert "" = Text.to_string(text)
+      assert 0 = Text.length(text)
+      Text.insert(text, 0, "abc")
+      assert "abc" = Text.to_string(text)
+      assert 3 = Text.length(text)
+    end
+
+    test "as_prelim/1 and to_delta/1 with empty and after ops" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      prelim = Text.as_prelim(text)
+      assert %TextPrelim{delta: []} = prelim
+      assert [] = Text.to_delta(text)
+      Text.insert(text, 0, "abc")
+      prelim2 = Text.as_prelim(text)
+      assert %TextPrelim{delta: [%{insert: "abc"}]} = prelim2
+      assert [%{insert: "abc"}] = Text.to_delta(text)
+    end
+
+    test "TextPrelim.from/1 with binary and delta" do
+      p1 = TextPrelim.from("abc")
+      assert %TextPrelim{delta: [%{insert: "abc"}]} = p1
+      d = [%{insert: "a"}, %{insert: "b"}]
+      p2 = TextPrelim.from(d)
+      assert %TextPrelim{delta: ^d} = p2
+    end
+  end
 end
