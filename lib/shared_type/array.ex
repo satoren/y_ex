@@ -46,7 +46,7 @@ defmodule Yex.Array do
       iex> array = Yex.Doc.get_array(doc, "array")
       iex> Yex.Array.insert_list(array, 0, [1,2,3,4,5])
       iex> Yex.Array.to_json(array)
-      [1, 2, 3, 4, 5]
+      [1.0, 2.0, 3.0, 4.0, 5.0]
   """
   @spec insert_list(t, integer(), list()) :: :ok
   def insert_list(%__MODULE__{doc: doc} = array, index, contents) do
@@ -120,7 +120,7 @@ defmodule Yex.Array do
       iex> Yex.Array.push(array, Yex.ArrayPrelim.from([3, 4]))
       iex> :ok = Yex.Array.move_to(array, 0, 2)
       iex> Yex.Array.to_json(array)
-      [[3, 4], [1, 2]]
+      [[3.0, 4.0], [1.0, 2.0]]
   """
   @spec move_to(t, integer(), integer()) :: :ok
   def move_to(%__MODULE__{doc: doc} = array, from, to) do
@@ -214,6 +214,7 @@ defmodule Yex.Array do
   end
 
   def member?(array, val) do
+    val = Yex.normalize(val)
     Enum.member?(to_list(array), val)
   end
 

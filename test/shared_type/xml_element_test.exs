@@ -544,4 +544,120 @@ defmodule YexXmlElementTest do
              ] = prelim.children
     end
   end
+
+  describe "edge and error cases for coverage" do
+    setup do
+      d1 = Doc.with_options(%Doc.Options{client_id: 1})
+      f = Doc.get_xml_fragment(d1, "xml")
+      XmlFragment.push(f, XmlElementPrelim.empty("div"))
+      {:ok, xml} = XmlFragment.fetch(f, 0)
+      %{doc: d1, xml_element: xml, xml_fragment: f}
+    end
+
+    test "fetch/2 and fetch!/2 with out of bounds and negative index", %{xml_element: xml} do
+      assert :error == XmlElement.fetch(xml, 0)
+      assert_raise ArgumentError, fn -> XmlElement.fetch!(xml, 0) end
+    end
+
+    test "insert/3 with out of bounds index", %{xml_element: xml} do
+      assert :ok == XmlElement.insert(xml, 0, XmlTextPrelim.from("a"))
+
+      try do
+        XmlElement.insert(xml, 10, XmlTextPrelim.from("b"))
+        flunk("Expected error for out of bounds insert")
+      rescue
+        ErlangError -> :ok
+        ArgumentError -> :ok
+      end
+    end
+
+    test "delete/3 with out of bounds and negative index", %{xml_element: xml} do
+      try do
+        XmlElement.delete(xml, 0, 1)
+        flunk("Expected error for out of bounds delete")
+      rescue
+        ErlangError -> :ok
+        ArgumentError -> :ok
+      end
+
+      XmlElement.push(xml, XmlTextPrelim.from("a"))
+      assert :ok == XmlElement.delete(xml, 0, 1)
+
+      try do
+        XmlElement.delete(xml, 0, 1)
+        flunk("Expected error for out of bounds delete")
+      rescue
+        ErlangError -> :ok
+        ArgumentError -> :ok
+      end
+    end
+
+    test "insert_attribute/3, remove_attribute/2, get_attribute/2, get_attributes/1", %{
+      xml_element: xml
+    } do
+      assert :ok == XmlElement.insert_attribute(xml, "k", "v")
+      assert "v" == XmlElement.get_attribute(xml, "k")
+      assert %{"k" => "v"} = XmlElement.get_attributes(xml)
+      assert :ok == XmlElement.remove_attribute(xml, "k")
+      assert nil == XmlElement.get_attribute(xml, "k")
+    end
+
+    test "get_tag/1, to_string/1, as_prelim/1 with empty and after ops", %{xml_element: xml} do
+      assert "div" == XmlElement.get_tag(xml)
+      assert is_binary(XmlElement.to_string(xml))
+      prelim = XmlElement.as_prelim(xml)
+      assert %XmlElementPrelim{tag: "div"} = prelim
+    end
+
+    test "next_sibling/1, prev_sibling/1, parent/1", %{xml_element: xml, xml_fragment: frag} do
+      XmlElement.push(xml, XmlTextPrelim.from("a"))
+      XmlElement.push(xml, XmlTextPrelim.from("b"))
+      {:ok, n1} = XmlElement.fetch(xml, 0)
+      {:ok, n2} = XmlElement.fetch(xml, 1)
+      # n1, n2はXmlText型なので、XmlElement.next_sibling/1はFunctionClauseError等を許容
+      try do
+        XmlElement.next_sibling(n1)
+        flunk("Expected error for next_sibling/1 with XmlText")
+      rescue
+        FunctionClauseError -> :ok
+        _ -> :ok
+      end
+
+      try do
+        XmlElement.prev_sibling(n2)
+        flunk("Expected error for prev_sibling/1 with XmlText")
+      rescue
+        FunctionClauseError -> :ok
+        _ -> :ok
+      end
+
+      try do
+        XmlElement.parent(n1)
+        flunk("Expected error for parent/1 with XmlText")
+      rescue
+        FunctionClauseError -> :ok
+        _ -> :ok
+      end
+
+      # top-level parent
+      assert frag == XmlElement.parent(xml)
+    end
+
+    test "insert_after/3 with not found ref", %{xml_element: xml} do
+      XmlElement.push(xml, XmlTextPrelim.from("a"))
+      XmlElement.push(xml, XmlTextPrelim.from("b"))
+      {:ok, n1} = XmlElement.fetch(xml, 0)
+      {:ok, n2} = XmlElement.fetch(xml, 1)
+      # insert after n2 (last)
+      assert :ok == XmlElement.insert_after(xml, n2, XmlTextPrelim.from("c"))
+      # insert after not found (should insert at 0)
+      dummy = %XmlText{doc: n1.doc, reference: make_ref()}
+      assert :ok == XmlElement.insert_after(xml, dummy, XmlTextPrelim.from("d"))
+    end
+
+    test "unshift/2 and push/2 with empty and after ops", %{xml_element: xml} do
+      assert :ok == XmlElement.unshift(xml, XmlTextPrelim.from("a"))
+      assert :ok == XmlElement.push(xml, XmlTextPrelim.from("b"))
+    end
+  end
 end

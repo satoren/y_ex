@@ -20,7 +20,7 @@ defmodule Yex.ArrayTest do
 
     test "insert_list/3 adds multiple elements", %{array: array} do
       assert :ok = Array.insert_list(array, 0, [1, 2, 3, 4, 5])
-      assert [1, 2, 3, 4, 5] = Array.to_json(array)
+      assert [1, 2, 3, 4, 5] == Array.to_json(array)
     end
 
     test "push/2 adds element at the end", %{array: array} do
@@ -32,31 +32,31 @@ defmodule Yex.ArrayTest do
     test "unshift/2 adds element at the beginning", %{array: array} do
       Array.unshift(array, "second")
       Array.unshift(array, "first")
-      assert ["first", "second"] = Array.to_list(array)
+      assert ["first", "second"] == Array.to_list(array)
     end
 
     test "delete/2 removes element at index", %{array: array} do
       Array.insert_list(array, 0, [1, 2, 3])
       assert :ok = Array.delete(array, 1)
-      assert [1, 3] = Array.to_list(array)
+      assert [1, 3] == Array.to_list(array)
     end
 
     test "delete_range/3 removes elements in range", %{array: array} do
       Array.insert_list(array, 0, [1, 2, 3, 4, 5])
       assert :ok = Array.delete_range(array, 1, 3)
-      assert [1, 5] = Array.to_list(array)
+      assert [1, 5] == Array.to_list(array)
     end
 
     test "delete_range/3 with negative index", %{array: array} do
       Array.insert_list(array, 0, [1, 2, 3, 4, 5])
       assert :ok = Array.delete_range(array, -3, 2)
-      assert [1, 2, 5] = Array.to_list(array)
+      assert [1, 2, 5] == Array.to_list(array)
     end
 
     test "move_to/3 moves element to new position", %{array: array} do
       Array.insert_list(array, 0, [1, 2, 3, 4])
       assert :ok = Array.move_to(array, 0, 2)
-      assert [2, 1, 3, 4] = Array.to_list(array)
+      assert [2, 1, 3, 4] == Array.to_list(array)
     end
   end
 
@@ -136,20 +136,21 @@ defmodule Yex.ArrayTest do
     end
 
     test "implements member?", %{array: array} do
-      Array.insert_list(array, 0, [1, 2, 3])
+      Array.insert_list(array, 0, [1, 2, 3.0])
       assert {:ok, true} = Enumerable.member?(array, 2)
+      assert {:ok, true} = Enumerable.member?(array, 3.0)
       assert {:ok, false} = Enumerable.member?(array, 4)
     end
 
     test "implements slice", %{array: array} do
       Array.insert_list(array, 0, [1, 2, 3, 4, 5])
       {:ok, 5, fun} = Enumerable.slice(array)
-      assert [2, 3] = fun.(1, 2)
+      assert [2, 3] == fun.(1, 2)
     end
 
     test "implements reduce", %{array: array} do
       Array.insert_list(array, 0, [1, 2, 3])
-      assert 6 = Enum.reduce(array, 0, &(&1 + &2))
+      assert 6 == Enum.reduce(array, 0, &(&1 + &2))
     end
   end
 
@@ -511,6 +512,68 @@ defmodule Yex.ArrayTest do
 
       assert Enum.slice(array, 0, 1) |> Enum.to_list() == [1]
       assert Enum.slice(array, 2, 3) |> Enum.to_list() == [3]
+    end
+  end
+
+  describe "edge and error cases for coverage" do
+    test "as_prelim/1 with empty array" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+      prelim = Array.as_prelim(array)
+      assert %ArrayPrelim{list: []} = prelim
+    end
+
+    test "as_prelim/1 with nested arrays" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+      Array.push(array, ArrayPrelim.from([1, 2]))
+      Array.push(array, ArrayPrelim.from([3, 4]))
+      prelim = Array.as_prelim(array)
+      assert %ArrayPrelim{list: [a1, a2]} = prelim
+      assert %ArrayPrelim{list: [1, 2]} == a1
+      assert %ArrayPrelim{list: [3, 4]} == a2
+    end
+
+    test "member?/2 with empty array and missing value" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+      refute Array.member?(array, :not_found)
+    end
+
+    test "fetch/2 with out of bounds and negative index" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+      assert :error = Array.fetch(array, 0)
+      Array.push(array, "a")
+      assert {:ok, "a"} = Array.fetch(array, 0)
+      assert {:ok, "a"} = Array.fetch(array, -1)
+      assert :error = Array.fetch(array, 2)
+      assert_raise ArgumentError, fn -> Array.fetch(array, -2) end
+    end
+
+    test "delete/2 with empty array and out of bounds" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+      assert :error = Array.delete(array, 0)
+      Array.push(array, "a")
+      assert :ok = Array.delete(array, 0)
+      assert :error = Array.delete(array, 0)
+    end
+
+    test "insert/3 with out of bounds index" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+      assert_raise ErlangError, fn -> Array.insert(array, 10, "x") end
+    end
+
+    test "to_list/1 and to_json/1 with empty and nested" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+      assert [] = Array.to_list(array)
+      assert [] = Array.to_json(array)
+      Array.push(array, %{"k" => 1})
+      assert [%{} = _m] = Array.to_list(array)
+      assert [%{"k" => 1}] == Array.to_json(array)
     end
   end
 end

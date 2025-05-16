@@ -4,6 +4,7 @@ use std::sync::Arc;
 use crate::wrap::NifWrap;
 use rustler::types;
 use rustler::{Decoder, Encoder, Env, Error, ListIterator, MapIterator, NifResult, Term};
+use yrs::any::{F64_MAX_SAFE_INTEGER, F64_MIN_SAFE_INTEGER};
 use yrs::*;
 
 fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
@@ -11,7 +12,7 @@ fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
         Any::Null => types::atom::nil().to_term(env),
         Any::Undefined => types::atom::undefined().to_term(env),
         Any::Bool(b) => b.encode(env),
-        Any::Number(n) => n.encode(env),
+        Any::Number(num) => num.encode(env),
         Any::BigInt(n) => n.encode(env),
         Any::String(s) => s.encode(env),
         Any::Buffer(b) => b.encode(env),
@@ -43,8 +44,15 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
             return Ok(Any::Undefined);
         }
         return Err(rustler::Error::BadArg);
+    } else if let Ok(v) = term.decode::<i32>() {
+        return Ok(Any::Number(v.into()));
     } else if let Ok(v) = term.decode::<i64>() {
-        return Ok(Any::BigInt(v));
+        // Check if the number is within the safe integer range for f64
+        // If it is not, we return it as a BigInt
+        if v > F64_MAX_SAFE_INTEGER as i64 || v < F64_MIN_SAFE_INTEGER as i64 {
+            return Ok(Any::BigInt(v.into()));
+        }
+        return Ok(Any::Number(v as f64));
     } else if let Ok(v) = term.decode::<f64>() {
         return Ok(Any::Number(v));
     } else if let Ok(v) = term.decode::<&str>() {
@@ -96,4 +104,11 @@ impl<'de, 'a: 'de> rustler::Encoder for NifAttr {
             .collect();
         map.encode(env)
     }
+}
+
+#[rustler::nif]
+fn normalize_number(any: NifAny) -> NifAny {
+    // The data passes through Any, and gets converted.
+    // For example, even numbers within the SAFE_INTEGER range are converted to float type.
+    any
 }

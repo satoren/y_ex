@@ -233,6 +233,8 @@ defmodule Yex.Map do
     end
 
     def member?(map, {key, value}) do
+      value = Yex.normalize(value)
+
       case Yex.Map.fetch(map, key) do
         {:ok, ^value} -> {:ok, true}
         _ -> {:ok, false}

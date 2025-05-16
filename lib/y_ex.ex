@@ -109,6 +109,17 @@ defmodule Yex do
     Yex.Nif.apply_update_v2(doc, cur_txn(doc), update)
   end
 
+  @doc """
+  Normalize a number to a format that can be used in Yjs.
+  """
+  def normalize(number) when is_number(number) do
+    Yex.Nif.normalize_number(number)
+  end
+
+  def normalize(number) do
+    number
+  end
+
   defp cur_txn(%Yex.Doc{reference: doc_ref}) do
     Process.get(doc_ref, nil)
   end
