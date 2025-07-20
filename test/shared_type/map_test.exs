@@ -19,6 +19,23 @@ defmodule Yex.MapTest do
       assert {:ok, 9_223_372_036_854_775_807} = Map.fetch(map, "key")
     end
 
+    test "set/3 with map values", %{map: map} do
+      assert :ok =
+               Map.set(map, "array", %{
+                 "key1" => "value1",
+                 "key2" => "value2"
+               })
+
+      assert {:ok, array} = Map.fetch(map, "array")
+      assert %{"key1" => "value1", "key2" => "value2"} = array
+    end
+
+    test "set/3 with array", %{map: map} do
+      assert :ok = Map.set(map, "array", ["Hello", "World"])
+      assert {:ok, array} = Map.fetch(map, "array")
+      assert ["Hello", "World"] = array
+    end
+
     test "set/3 with complex values", %{map: map} do
       array_prelim = ArrayPrelim.from(["Hello", "World"])
       assert :ok = Map.set(map, "array", array_prelim)

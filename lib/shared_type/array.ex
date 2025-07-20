@@ -284,10 +284,10 @@ defmodule Yex.ArrayPrelim do
   ]
 
   @type t :: %__MODULE__{
-          list: list()
+          list: list(Yex.input_type())
         }
 
-  @spec from(Enumerable.t()) :: t
+  @spec from(Enumerable.t(Yex.input_type())) :: t
   def from(enumerable) do
     %__MODULE__{list: Enum.to_list(enumerable)}
   end

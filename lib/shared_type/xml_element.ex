@@ -153,7 +153,7 @@ defmodule Yex.XmlElement do
   Adds or updates an attribute with the specified key and value.
   Returns :ok on success, :error on failure.
   """
-  @spec insert_attribute(t, binary(), binary()) :: :ok | :error
+  @spec insert_attribute(t, binary(), binary() | Yex.PrelimType.t()) :: :ok | :error
   def insert_attribute(%__MODULE__{doc: doc} = xml_element, key, value) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_element_insert_attribute(xml_element, cur_txn(xml_element), key, value)
@@ -186,7 +186,7 @@ defmodule Yex.XmlElement do
   Returns the value of the specified attribute.
   Returns nil if the attribute does not exist.
   """
-  @spec get_attribute(t, binary()) :: binary() | nil
+  @spec get_attribute(t, binary()) :: binary() | Yex.SharedType.t() | nil
   def get_attribute(%__MODULE__{doc: doc} = xml_element, key) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_element_get_attribute(xml_element, cur_txn(xml_element), key)

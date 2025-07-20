@@ -14,7 +14,7 @@ use crate::{
     shared_type::{NifSharedType, SharedTypeId},
     text::encode_diffs,
     transaction::TransactionResource,
-    yinput::{NifXmlIn, NifYInputDelta},
+    yinput::{NifXmlIn, NifYInput, NifYInputDelta},
     youtput::NifYOut,
     ENV,
 };
@@ -275,7 +275,7 @@ fn xml_element_insert_attribute(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     key: &str,
-    value: &str,
+    value: NifYInput,
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
@@ -288,11 +288,12 @@ fn xml_element_get_attribute(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     key: &str,
-) -> NifResult<Option<String>> {
+) -> NifResult<Option<NifYOut>> {
     xml.readonly(current_transaction, |txn| {
+        let doc = xml.doc();
         let xml = xml.get_ref(txn)?;
         let attr = xml.get_attribute(txn, key);
-        Ok(attr)
+        Ok(attr.map(|b| NifYOut::from_native(b, doc.clone())))
     })
 }
 
@@ -326,13 +327,14 @@ fn xml_element_remove_attribute(
 fn xml_element_get_attributes(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<HashMap<String, String>> {
+) -> NifResult<HashMap<String, NifYOut>> {
     xml.readonly(current_transaction, |txn| {
+        let doc = xml.doc();
         let xml = xml.get_ref(txn)?;
 
         let attr = xml
             .attributes(txn)
-            .map(|(key, value)| (key.into(), value))
+            .map(|(key, value)| (key.into(), NifYOut::from_native(value, doc.clone())))
             .collect();
 
         Ok(attr)
