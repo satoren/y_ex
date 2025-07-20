@@ -12,9 +12,7 @@ defmodule Yex do
           | :float
           | :boolean
           | nil
-          | Yex.MapPrelim.t()
-          | Yex.TextPrelim.t()
-          | Yex.ArrayPrelim.t()
+          | Yex.PrelimType.t()
 
   @doc """
   Computes the state vector and encodes it into an Binary.

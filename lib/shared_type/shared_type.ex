@@ -148,3 +148,17 @@ defimpl Yex.Output, for: Any do
   """
   def as_prelim(shared_type), do: shared_type
 end
+
+defmodule Yex.PrelimType do
+  @moduledoc """
+  A type that represents preliminary data structures used in Yex.
+  This is used to represent data that can be serialized or transferred without the full shared type overhead.
+  """
+  @type t ::
+          Yex.MapPrelim.t()
+          | Yex.TextPrelim.t()
+          | Yex.ArrayPrelim.t()
+          | Yex.XmlElementPrelim.t()
+          | Yex.XmlFragmentPrelim.t()
+          | Yex.XmlTextPrelim.t()
+end

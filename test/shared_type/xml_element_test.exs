@@ -401,6 +401,12 @@ defmodule YexXmlElementTest do
                         }
                       ], "origin_value", _metadata}
     end
+
+    test "insert_attribute with map values", %{xml_element: xml} do
+      XmlElement.insert_attribute(xml, "height", %{"value" => "10"})
+
+      assert %{"value" => "10"} == XmlElement.get_attribute(xml, "height")
+    end
   end
 
   describe "XmlElementPrelim" do

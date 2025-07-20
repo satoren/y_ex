@@ -282,7 +282,7 @@ defmodule Yex.MapPrelim do
   ]
 
   @type t :: %__MODULE__{
-          map: map()
+          map: %{binary() => Yex.input_type()}
         }
 
   @doc """
@@ -298,6 +298,7 @@ defmodule Yex.MapPrelim do
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "content", prelim)
   """
+  @spec from(%{binary() => Yex.input_type()}) :: t()
   def from(%{} = map) do
     %__MODULE__{map: map}
   end
