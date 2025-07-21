@@ -9,6 +9,7 @@ use rustler::{
 use yrs::updates::{decoder::Decode, encoder::Encode};
 use yrs::*;
 
+use crate::event::NifSubdocsEvent;
 // Internal imports
 use crate::{
     atoms,
@@ -31,6 +32,15 @@ impl rustler::Resource for DocResource {}
 pub enum NifOffsetKind {
     Bytes,
     Utf16,
+}
+
+impl From<OffsetKind> for NifOffsetKind {
+    fn from(offset_kind: OffsetKind) -> Self {
+        match offset_kind {
+            OffsetKind::Bytes => NifOffsetKind::Bytes,
+            OffsetKind::Utf16 => NifOffsetKind::Utf16,
+        }
+    }
 }
 
 #[derive(NifStruct)]
@@ -115,10 +125,10 @@ impl NifDoc {
             worker_pid: None,
         }
     }
-    pub fn from_native(doc: Doc) -> Self {
+    pub fn with_worker_pid(doc: Doc, worker_pid: Option<LocalPid>) -> Self {
         NifDoc {
             reference: ResourceArc::new(doc.into()),
-            worker_pid: None,
+            worker_pid,
         }
     }
 
@@ -290,6 +300,7 @@ fn doc_monitor_update_v1(
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let metadata = TermBox::new(metadata);
+
     doc.observe_update_v1(move |txn, event| {
         ENV.with(|env| {
             let metadata = metadata.get(*env);
@@ -438,4 +449,76 @@ fn encode_state_as_update_v2<'a>(
     let vec = doc.readonly(current_transaction, |txn| Ok(txn.encode_diff_v2(&sv)))?;
 
     Ok((atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
+}
+
+#[rustler::nif]
+fn doc_monitor_subdocs(
+    doc: NifDoc,
+    pid: LocalPid,
+    metadata: Term<'_>,
+) -> NifResult<(Atom, NifSubscription)> {
+    let metadata = TermBox::new(metadata);
+    let worker_pid = doc.worker_pid.clone();
+    doc.observe_subdocs(move |txn, event: &SubdocsEvent| {
+        ENV.with(|env| {
+            let event = NifSubdocsEvent::new(event, worker_pid);
+            let metadata = metadata.get(*env);
+            let _ = env.send(
+                &pid,
+                (
+                    atoms::subdocs(),
+                    event,
+                    origin_to_term(env, txn.origin()),
+                    metadata,
+                ),
+            );
+        })
+    })
+    .map(|sub| {
+        (
+            atoms::ok(),
+            NifSubscription {
+                reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
+                doc: doc.clone(),
+            },
+        )
+    })
+    .map_err(|e| Error::from(e).into())
+}
+
+#[rustler::nif]
+fn doc_client_id(doc: NifDoc) -> u64 {
+    doc.client_id()
+}
+
+#[rustler::nif]
+fn doc_guid(doc: NifDoc) -> String {
+    doc.guid().to_string()
+}
+
+#[rustler::nif]
+fn doc_collection_id(doc: NifDoc) -> String {
+    doc.collection_id()
+        .map(|id| id.to_string())
+        .unwrap_or_default()
+}
+
+#[rustler::nif]
+fn doc_skip_gc(doc: NifDoc) -> bool {
+    doc.skip_gc()
+}
+
+#[rustler::nif]
+fn doc_auto_load(doc: NifDoc) -> bool {
+    doc.auto_load()
+}
+
+#[rustler::nif]
+fn doc_should_load(doc: NifDoc) -> bool {
+    doc.should_load()
+}
+
+#[rustler::nif]
+fn doc_offset_kind(doc: NifDoc) -> NifOffsetKind {
+    doc.offset_kind().into()
 }

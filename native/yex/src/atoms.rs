@@ -7,6 +7,7 @@ rustler::atoms! {
     encoding_exception,
     update_v1,
     update_v2,
+    subdocs,
 
     observe_event,
     observe_deep_event,
