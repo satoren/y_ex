@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use rustler::{Encoder, Env, NifResult, NifStruct, NifUntaggedEnum, ResourceArc, Term};
+use rustler::{Encoder, Env, LocalPid, NifResult, NifStruct, NifUntaggedEnum, ResourceArc, Term};
 use yrs::{
     types::{
         array::ArrayEvent,
@@ -538,6 +538,40 @@ fn shared_type_observe_deep(
         }
         NifSharedTypeInput::XmlElement(xml_element) => {
             xml_element.observe_deep(current_transaction, pid, ref_term, metadata)
+        }
+    }
+}
+
+#[derive(NifStruct)]
+#[module = "Yex.SubdocsEvent"]
+pub struct NifSubdocsEvent {
+    pub added: Vec<NifDoc>,
+    pub removed: Vec<NifDoc>,
+    pub loaded: Vec<NifDoc>,
+}
+
+impl NifSubdocsEvent {
+    pub fn new(event: &yrs::SubdocsEvent, worker_pid: Option<LocalPid>) -> Self {
+        let added = event
+            .added()
+            .into_iter()
+            .map(|doc| NifDoc::with_worker_pid(doc.clone(), worker_pid))
+            .collect();
+        let removed = event
+            .removed()
+            .into_iter()
+            .map(|doc| NifDoc::with_worker_pid(doc.clone(), worker_pid))
+            .collect();
+        let loaded = event
+            .loaded()
+            .into_iter()
+            .map(|doc| NifDoc::with_worker_pid(doc.clone(), worker_pid))
+            .collect();
+
+        NifSubdocsEvent {
+            added,
+            removed,
+            loaded,
         }
     }
 }

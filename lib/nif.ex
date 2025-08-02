@@ -28,6 +28,30 @@ defmodule Yex.Nif do
   def doc_monitor_update_v1(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
   def doc_monitor_update_v2(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
 
+  def doc_monitor_subdocs(_doc, _pid, _metadata),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def doc_client_id(_doc),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def doc_guid(_doc),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def doc_collection_id(_doc),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def doc_skip_gc(_doc),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def doc_auto_load(_doc),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def doc_should_load(_doc),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def doc_offset_kind(_doc),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def sub_unsubscribe(_sub), do: :erlang.nif_error(:nif_not_loaded)
 
   def doc_begin_transaction(_doc, _origin), do: :erlang.nif_error(:nif_not_loaded)

@@ -4,6 +4,7 @@ use crate::{
     any::{NifAny, NifAttr},
     array::NifArray,
     atoms,
+    doc::NifDoc,
     map::NifMap,
     text::NifText,
     wrap::NifWrap,
@@ -14,7 +15,7 @@ use yrs::{
     block::{ItemContent, Prelim, Unused},
     branch::{Branch, BranchPtr},
     types::{xml::XmlPrelim, Delta, TypeRef},
-    Any, Array, ArrayRef, Map, MapRef, Text, TextRef, TransactionMut, Xml, XmlElementRef,
+    Any, Array, ArrayRef, Map, MapRef, ReadTxn, Text, TextRef, TransactionMut, Xml, XmlElementRef,
     XmlFragment, XmlFragmentRef, XmlTextRef,
 };
 
@@ -120,9 +121,9 @@ pub enum NifYInput {
     XmlTextPrelim(NifXmlTextPrelim),
     XmlElementPrelim(NifXmlElementPrelim),
     XmlFragmentPrelim(NifXmlFragmentPrelim),
+    Doc(NifDoc),
 }
 
-//Text(DeltaPrelim),
 //Array(ArrayPrelim),
 //Map(MapPrelim),
 //XmlElement(XmlElementPrelim),
@@ -135,7 +136,7 @@ pub enum NifYInput {
 impl Prelim for NifYInput {
     type Return = Unused;
 
-    fn into_content(self, _txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
+    fn into_content(self, txn: &mut TransactionMut) -> (ItemContent, Option<Self>) {
         match self {
             NifYInput::Any(any) => {
                 let value: Any = any.0;
@@ -165,6 +166,12 @@ impl Prelim for NifYInput {
                 let inner = Branch::new(TypeRef::XmlFragment);
                 (ItemContent::Type(inner), Some(self))
             }
+            NifYInput::Doc(doc) => {
+                if txn.parent_doc().is_some() {
+                    panic!("Cannot integrate the document, because it's already being used as a sub-document elsewhere");
+                }
+                (ItemContent::Doc(None, doc.reference.0.clone()), None)
+            }
         }
     }
 
@@ -193,6 +200,10 @@ impl Prelim for NifYInput {
             NifYInput::XmlTextPrelim(v) => v.integrate(txn, inner_ref),
             NifYInput::XmlElementPrelim(v) => v.integrate(txn, inner_ref),
             NifYInput::XmlFragmentPrelim(v) => v.integrate(txn, inner_ref),
+            NifYInput::Doc(doc) => {
+                let doc = doc.reference.0.clone();
+                doc.integrate(txn, inner_ref);
+            }
         }
     }
 }
