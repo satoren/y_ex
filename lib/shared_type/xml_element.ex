@@ -196,7 +196,7 @@ defmodule Yex.XmlElement do
   @doc """
   Returns a map of all attributes for this XML element.
   """
-  @spec get_attributes(t) :: map()
+  @spec get_attributes(t) :: %{binary() => binary() | Yex.SharedType.t()}
   def get_attributes(%__MODULE__{doc: doc} = xml_element) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_element_get_attributes(xml_element, cur_txn(xml_element))
@@ -289,7 +289,7 @@ defmodule Yex.XmlElementPrelim do
 
   @type t :: %__MODULE__{
           tag: String.t(),
-          attributes: %{String.t() => String.t()},
+          attributes: %{String.t() => String.t() | Yex.PrelimType.t()},
           children: [Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()]
         }
 

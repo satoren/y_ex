@@ -110,6 +110,34 @@ defmodule Yex.Doc do
     Yex.Nif.doc_with_options(option) |> Map.put(:worker_pid, worker_pid)
   end
 
+  def client_id(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_client_id(doc))
+  end
+
+  def guid(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_guid(doc))
+  end
+
+  def collection_id(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_collection_id(doc))
+  end
+
+  def skip_gc(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_skip_gc(doc))
+  end
+
+  def auto_load(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_auto_load(doc))
+  end
+
+  def should_load(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_should_load(doc))
+  end
+
+  def offset_kind(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_offset_kind(doc))
+  end
+
   @doc """
   Get or insert the text type.
   """
@@ -231,6 +259,20 @@ defmodule Yex.Doc do
 
   def demonitor_update_v2(sub) do
     Yex.Subscription.unsubscribe(sub)
+  end
+
+  def monitor_subdocs(%__MODULE__{} = doc, opt \\ []) do
+    notify_pid = self()
+
+    case run_in_worker_process(doc,
+           do: Yex.Nif.doc_monitor_subdocs(doc, notify_pid, Keyword.get(opt, :metadata, doc))
+         ) do
+      {:ok, sub} ->
+        {:ok, Yex.Subscription.register(sub)}
+
+      error ->
+        error
+    end
   end
 
   defp cur_txn(%__MODULE__{reference: ref}) do
