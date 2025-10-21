@@ -59,7 +59,7 @@ defmodule Yex.DocServer do
   @callback process_message_v1(
               server :: GenServer.server(),
               message :: binary(),
-              origin :: binary()
+              origin :: term()
             ) :: :ok | {:ok, replies :: list(binary())} | {:error, term()}
 
   @doc """
@@ -79,7 +79,7 @@ defmodule Yex.DocServer do
   @callback handle_update_v1(
               doc :: Yex.Doc.t(),
               update :: binary(),
-              origin :: binary(),
+              origin :: term(),
               state :: State.t()
             ) ::
               {:noreply, State.t()}
