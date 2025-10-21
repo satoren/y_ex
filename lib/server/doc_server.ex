@@ -92,7 +92,7 @@ defmodule Yex.DocServer do
   @callback handle_awareness_change(
               awareness :: Yex.Awareness.t(),
               update :: %{removed: list(), added: list(), updated: list()},
-              origin :: binary(),
+              origin :: term(),
               state :: State.t()
             ) ::
               {:noreply, State.t()}
@@ -105,7 +105,7 @@ defmodule Yex.DocServer do
   @callback handle_awareness_update(
               awareness :: Yex.Awareness.t(),
               update :: %{removed: list(), added: list(), updated: list()},
-              origin :: binary(),
+              origin :: term(),
               state :: State.t()
             ) ::
               {:noreply, State.t()}

@@ -220,7 +220,7 @@ defmodule Yex.Sync.SharedDoc do
        |> update_origin_client_map(origin, %{removed: removed, added: added, updated: updated})}
     else
       error ->
-        Logger.warning(error)
+        Logger.log(:warning, error)
         {:noreply, state}
     end
   end

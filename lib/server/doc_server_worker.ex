@@ -160,7 +160,7 @@ defmodule Yex.DocServer.Worker do
           :ok
 
         {:error, reason} ->
-          Logger.warning(inspect(reason))
+          Logger.log(:warning, inspect(reason))
           :ok
       end
     end)
@@ -237,7 +237,7 @@ defmodule Yex.DocServer.Worker do
         [{:awareness, awareness_update}]
 
       {:error, reason} ->
-        Logger.warning(inspect(reason))
+        Logger.log(:warning, inspect(reason))
         []
     end
   end
