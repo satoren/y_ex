@@ -203,15 +203,15 @@ defmodule Yex.Sync.SharedDoc do
   end
 
   @impl true
-  def handle_awareness_change(
+  def handle_awareness_update(
         awareness,
         %{removed: removed, added: added, updated: updated},
         origin,
         state
       ) do
-    changed_clients = added ++ updated ++ removed
+    updated_clients = added ++ updated ++ removed
 
-    with {:ok, update} <- Awareness.encode_update(awareness, changed_clients),
+    with {:ok, update} <- Awareness.encode_update(awareness, updated_clients),
          {:ok, message} <- Sync.message_encode({:awareness, update}) do
       broadcast_to_users(message, origin, state)
 

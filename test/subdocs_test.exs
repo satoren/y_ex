@@ -4,13 +4,7 @@ defmodule Yex.SubdocsTest do
   alias Yex.{
     Doc,
     Text,
-    Array,
-    Map,
-    XmlElement,
-    XmlText,
-    XmlFragment,
-    XmlElementPrelim,
-    XmlTextPrelim
+    Map
   }
 
   test "new" do

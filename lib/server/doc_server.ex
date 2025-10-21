@@ -20,8 +20,8 @@ defmodule Yex.DocServer do
           {:noreply, state}
         end
 
-        def handle_awareness_change(awareness, %{removed: removed, added: added, updated: updated}, origin, state) do
-          # Handle presence/awareness changes
+        def handle_awareness_update(awareness, %{removed: removed, added: added, updated: updated}, origin, state) do
+          # Handle presence/awareness update
           # - awareness: Current awareness state
           # - removed/added/updated: Lists of changed client IDs
           {:noreply, state}
@@ -99,6 +99,18 @@ defmodule Yex.DocServer do
               | {:stop, reason :: term, State.t()}
 
   @doc """
+  Handle awareness update
+
+  """
+  @callback handle_awareness_update(
+              awareness :: Yex.Awareness.t(),
+              update :: %{removed: list(), added: list(), updated: list()},
+              origin :: binary(),
+              state :: State.t()
+            ) ::
+              {:noreply, State.t()}
+              | {:stop, reason :: term, State.t()}
+  @doc """
   Initialize the doc process.
 
   """
@@ -151,7 +163,8 @@ defmodule Yex.DocServer do
                       handle_cast: 2,
                       terminate: 2,
                       handle_update_v1: 4,
-                      handle_awareness_change: 4
+                      handle_awareness_change: 4,
+                      handle_awareness_update: 4
 
   defmacro __using__(opts \\ []) do
     quote do
