@@ -73,14 +73,7 @@ defmodule Yex.DocServer.Worker do
       Doc.monitor_update_v1(doc, metadata: __MODULE__)
     end
 
-    awareness =
-      if function_exported?(module, :handle_awareness_change, 4) do
-        case Awareness.new(doc) do
-          {:ok, awareness} ->
-            Awareness.monitor_change(awareness, metadata: __MODULE__)
-            awareness
-        end
-      end
+    awareness = setup_awareness(doc, module)
 
     module.init(arg, %State{
       assigns: assigns,
@@ -88,6 +81,28 @@ defmodule Yex.DocServer.Worker do
       awareness: awareness,
       module: module
     })
+  end
+
+  defp setup_awareness(doc, module) do
+    if function_exported?(module, :handle_awareness_change, 4) or
+         function_exported?(module, :handle_awareness_update, 4) do
+      case Awareness.new(doc) do
+        {:ok, awareness} ->
+          monitor_awareness_events(awareness, module)
+
+          awareness
+      end
+    end
+  end
+
+  defp monitor_awareness_events(awareness, module) do
+    if function_exported?(module, :handle_awareness_change, 4) do
+      Awareness.monitor_change(awareness, metadata: __MODULE__)
+    end
+
+    if function_exported?(module, :handle_awareness_update, 4) do
+      Awareness.monitor_update(awareness, metadata: __MODULE__)
+    end
   end
 
   @impl true
@@ -145,7 +160,7 @@ defmodule Yex.DocServer.Worker do
           :ok
 
         {:error, reason} ->
-          Logger.warning(inspect(reason))
+          Logger.log(:warning, inspect(reason))
           :ok
       end
     end)
@@ -171,7 +186,7 @@ defmodule Yex.DocServer.Worker do
     Awareness.apply_update(awareness, message, origin)
 
     # Process update messages immediately
-    handle_awareness_change_immediately(state)
+    handle_awareness_event_immediately(state)
   end
 
   @impl true
@@ -190,6 +205,14 @@ defmodule Yex.DocServer.Worker do
         %{module: module, awareness: awareness} = state
       ) do
     module.handle_awareness_change(awareness, change, origin, state)
+  end
+
+  @impl true
+  def handle_info(
+        {:awareness_update, change, origin, __MODULE__},
+        %{module: module, awareness: awareness} = state
+      ) do
+    module.handle_awareness_update(awareness, change, origin, state)
   end
 
   @impl true
@@ -214,7 +237,7 @@ defmodule Yex.DocServer.Worker do
         [{:awareness, awareness_update}]
 
       {:error, reason} ->
-        Logger.warning(inspect(reason))
+        Logger.log(:warning, inspect(reason))
         []
     end
   end
@@ -235,12 +258,21 @@ defmodule Yex.DocServer.Worker do
     end
   end
 
-  defp handle_awareness_change_immediately(%{awareness: awareness, module: module} = state) do
+  defp handle_awareness_event_immediately(%{awareness: awareness, module: module} = state) do
     receive do
       {:awareness_change, change, origin, __MODULE__} ->
         case module.handle_awareness_change(awareness, change, origin, state) do
           {:noreply, state} ->
-            handle_awareness_change_immediately(state)
+            handle_awareness_event_immediately(state)
+
+          result ->
+            result
+        end
+
+      {:awareness_update, change, origin, __MODULE__} ->
+        case module.handle_awareness_update(awareness, change, origin, state) do
+          {:noreply, state} ->
+            handle_awareness_event_immediately(state)
 
           result ->
             result

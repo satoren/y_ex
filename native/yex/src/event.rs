@@ -34,26 +34,6 @@ use crate::{
     ENV,
 };
 
-#[derive(NifUntaggedEnum)]
-pub enum PathSegment {
-    /// Key segments are used to inform how to access child shared collections within a [Map] types.
-    Key(String),
-
-    /// Index segments are used to inform how to access child shared collections within an [Array]
-    /// or [XmlElement] types.
-    Index(u32),
-}
-
-impl From<yrs::types::PathSegment> for PathSegment {
-    #[inline]
-    fn from(value: yrs::types::PathSegment) -> Self {
-        match value {
-            yrs::types::PathSegment::Key(key) => PathSegment::Key(key.to_string()),
-            yrs::types::PathSegment::Index(index) => PathSegment::Index(index),
-        }
-    }
-}
-
 type NifPath = NifWrap<yrs::types::Path>;
 
 impl rustler::Encoder for NifPath {
