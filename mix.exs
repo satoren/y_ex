@@ -12,7 +12,7 @@ defmodule Yex.MixProject do
     [
       app: :y_ex,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       package: package(),
       name: "y_ex",
