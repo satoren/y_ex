@@ -179,6 +179,27 @@ defmodule Yex.Array do
   end
 
   @doc """
+   slices the array from start_index for amount of elements, then gets them back as Elixir List.
+  """
+  def slice(array, start_index, amount) do
+    slice_take_every(array, start_index, amount, 1)
+  end
+
+  @doc """
+    slices the array from start_index for amount of elements, then gets them back as Elixir List and takes every `step` element.
+  """
+  def slice_take_every(_array, _start_index, _amount, 0) do
+    []
+  end
+
+  def slice_take_every(%__MODULE__{doc: doc} = array, start_index, amount, step)
+      when is_integer(step) and step > 0 do
+    Doc.run_in_worker_process doc do
+      Yex.Nif.array_slice(array, cur_txn(array), start_index, amount, step)
+    end
+  end
+
+  @doc """
   Returns the length of the array
 
   ## Examples adds a few items to an array and returns its length
@@ -255,9 +276,20 @@ defmodule Yex.Array do
     end
 
     def slice(array) do
-      list = Yex.Array.to_list(array)
-      size = Enum.count(list)
-      {:ok, size, &Enum.slice(list, &1, &2)}
+      size = Yex.Array.length(array)
+      {:ok, size, &slice_impl(array, &1, &2, &3)}
+    end
+
+    defp slice_impl(array, start, length, step) do
+      # Optimize for single element access (Enum.at)
+      if length == 1 and step == 1 do
+        case Yex.Array.fetch(array, start) do
+          {:ok, value} -> [value]
+          :error -> []
+        end
+      else
+        Yex.Array.slice_take_every(array, start, length, step)
+      end
     end
 
     def reduce(array, acc, fun) do

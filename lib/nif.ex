@@ -76,6 +76,10 @@ defmodule Yex.Nif do
   def array_insert_list(_array, _cur_txn, _index, _values), do: :erlang.nif_error(:nif_not_loaded)
   def array_length(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def array_to_list(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def array_slice(_array, _cur_txn, _start_index, _amount, _step),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def array_get(_array, _cur_txn, _index), do: :erlang.nif_error(:nif_not_loaded)
 
   def array_delete_range(_array, _cur_txn, _index, _length),

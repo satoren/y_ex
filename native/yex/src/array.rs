@@ -149,6 +149,27 @@ fn array_to_list(
     })
 }
 #[rustler::nif]
+fn array_slice(
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    start_index: usize,
+    amount: usize,
+    step: usize,
+) -> NifResult<Vec<NifYOut>> {
+    let doc = array.doc();
+    array.readonly(current_transaction, |txn| {
+        let array = array.get_ref(txn)?;
+        Ok(array
+            .iter(txn)
+            .skip(start_index)
+            .take(amount)
+            .step_by(step)
+            .map(|b| NifYOut::from_native(b, doc.clone()))
+            .collect())
+    })
+}
+
+#[rustler::nif]
 fn array_to_json(
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,

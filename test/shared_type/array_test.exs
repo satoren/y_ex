@@ -107,6 +107,43 @@ defmodule Yex.ArrayTest do
       assert Array.member?(array, 2)
       refute Array.member?(array, 4)
     end
+
+    test "slice/3 returns sliced array", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3, 4, 5])
+      assert [2.0, 3.0] = Array.slice(array, 1, 2)
+      assert [1.0, 2.0, 3.0] = Array.slice(array, 0, 3)
+      assert [5.0] = Array.slice(array, 4, 1)
+    end
+
+    test "slice_take_every/4 returns elements with step", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+      # Take every 1st element (all elements)
+      assert [2.0, 3.0, 4.0] = Array.slice_take_every(array, 1, 3, 1)
+      # Take every 2nd element
+      assert [1.0, 3.0, 5.0] = Array.slice_take_every(array, 0, 5, 2)
+      # Take every 3rd element
+      assert [1.0, 4.0, 7.0, 10.0] = Array.slice_take_every(array, 0, 10, 3)
+      # Take single element
+      assert [5.0] = Array.slice_take_every(array, 4, 1, 1)
+
+      assert [] = Array.slice_take_every(array, 0, 3, 0)
+    end
+
+    test "slice_take_every/4 with invalid step raises error", %{array: array} do
+      Array.insert_list(array, 0, [1, 2, 3, 4, 5])
+
+      assert_raise FunctionClauseError, fn ->
+        Array.slice_take_every(array, 0, 3, -1)
+      end
+
+      assert_raise FunctionClauseError, fn ->
+        Array.slice_take_every(array, 0, 3, 1.5)
+      end
+    end
+
+    test "slice_take_every/4 with empty array", %{array: array} do
+      assert [] = Array.slice_take_every(array, 0, 0, 1)
+    end
   end
 
   describe "ArrayPrelim" do
@@ -145,7 +182,7 @@ defmodule Yex.ArrayTest do
     test "implements slice", %{array: array} do
       Array.insert_list(array, 0, [1, 2, 3, 4, 5])
       {:ok, 5, fun} = Enumerable.slice(array)
-      assert [2, 3] == fun.(1, 2)
+      assert [2, 3] == fun.(1, 2, 1)
     end
 
     test "implements reduce", %{array: array} do
@@ -512,6 +549,25 @@ defmodule Yex.ArrayTest do
 
       assert Enum.slice(array, 0, 1) |> Enum.to_list() == [1]
       assert Enum.slice(array, 2, 3) |> Enum.to_list() == [3]
+    end
+
+    test "at" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+
+      Array.push(array, "Hello1")
+      Array.push(array, "Hello2")
+      Array.push(array, "Hello3")
+
+      assert "Hello1" == Enum.at(array, 0)
+      assert "Hello2" == Enum.at(array, 1)
+      assert "Hello3" == Enum.at(array, 2)
+      assert "Hello3" == Enum.at(array, -1)
+      assert "Hello2" == Enum.at(array, -2)
+      assert nil == Enum.at(array, 3)
+      assert :default == Enum.at(array, 10, :default)
+      assert :not_found == Enum.at(array, -10, :not_found)
     end
   end
 

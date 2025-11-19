@@ -205,6 +205,12 @@ defmodule Yex.DocTest do
     update_and_check_origin.(:an_atom)
     update_and_check_origin.(%{key: "value"})
     update_and_check_origin.({:ok, "value"})
+    update_and_check_origin.(nil)
+    update_and_check_origin.(3.14)
+    update_and_check_origin.(make_ref())
+    update_and_check_origin.(fn -> :test end)
+    update_and_check_origin.({:error, "reason", 123})
+    update_and_check_origin.(%{nested: %{data: [1, 2]}})
     Doc.demonitor_update(monitor_ref)
   end
 
