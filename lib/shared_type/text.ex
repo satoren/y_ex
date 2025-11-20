@@ -18,7 +18,7 @@ defmodule Yex.Text do
   require Yex.Doc
 
   @type delta ::
-          [%{:insert => Yex.input_type(), optional(:attributes) => map()}]
+          [%{:insert => binary(), optional(:attributes) => map()}]
           | [%{delete: integer()}]
           | [%{:retain => integer(), optional(:attributes) => map()}]
   @type t :: %__MODULE__{
@@ -35,7 +35,7 @@ defmodule Yex.Text do
     * `index` - The position to insert at (0-based)
     * `content` - The text content to insert
   """
-  @spec insert(t, integer(), Yex.input_type()) :: :ok | :error
+  @spec insert(t, integer(), binary()) :: :ok | :error
   def insert(%__MODULE__{doc: doc} = text, index, content) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.text_insert(text, cur_txn(text), index, content)
@@ -52,7 +52,7 @@ defmodule Yex.Text do
     * `content` - The text content to insert
     * `attr` - A map of formatting attributes to apply (e.g. %{"bold" => true})
   """
-  @spec insert(t, integer(), Yex.input_type(), map()) :: :ok | :error
+  @spec insert(t, integer(), binary(), map()) :: :ok | :error
   def insert(%__MODULE__{doc: doc} = text, index, content, attr) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.text_insert_with_attributes(text, cur_txn(text), index, content, attr)

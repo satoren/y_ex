@@ -4,13 +4,12 @@ defmodule Yex do
   """
 
   @type input_type ::
-          :binary
-          | :string
-          | :map
-          | :list
-          | :integer
-          | :float
-          | :boolean
+          binary
+          | map
+          | list
+          | integer
+          | float
+          | boolean
           | nil
           | Yex.PrelimType.t()
 
