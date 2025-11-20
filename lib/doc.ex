@@ -2,10 +2,14 @@ defmodule Yex.Doc do
   @moduledoc """
   Document module.
 
-  ### Important
-    It is not recommended to perform operations on a single document from multiple processes simultaneously.
-    If blocked by a transaction, the Beam scheduler threads may potentially deadlock.
-    This limitation is due to the underlying yrs and beam specifications and may be resolved in the future.
+
+  ### Cross-Process Operations
+    When a Doc or SharedType operation is performed from a process different from the process that created the Doc,
+    a message like `{Yex.Doc, :run, fun}` is sent to the creator process via `GenServer.call` and the processing
+    is delegated to that process. If you encounter a `GenServer.call` timeout, this delegation mechanism may be the cause.
+    Make sure the worker process can handle the GenServer call messages properly.
+
+    It is recommended to start a GenServer process such as `Yex.DocServer` when executing operations from other processes.
   """
 
   defmodule Options do
@@ -67,6 +71,10 @@ defmodule Yex.Doc do
             end
           end
 
+          # When a Doc or SharedType operation is performed from a process different from the
+          # process that created the Doc, a message like {Yex.Doc, :run, fun} is sent to the
+          # creator process via GenServer.call and the processing is delegated to that process.
+          # If you encounter a GenServer.call timeout, this delegation mechanism may be the cause.
           case GenServer.call(
                  worker_pid,
                  {Yex.Doc, :run, wrapped_fun}

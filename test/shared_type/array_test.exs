@@ -18,6 +18,34 @@ defmodule Yex.ArrayTest do
       assert ["first", "middle", "second"] = Array.to_list(array)
     end
 
+    test "insert_and_get/3 inserts and returns the element", %{array: array} do
+      assert {:ok, "first"} = Array.insert_and_get(array, 0, "first")
+      assert {:ok, "second"} = Array.insert_and_get(array, 1, "second")
+      assert {:ok, "middle"} = Array.insert_and_get(array, 1, "middle")
+      assert ["first", "middle", "second"] = Array.to_list(array)
+    end
+
+    test "insert_and_get/3 with ArrayPrelim returns nested Array", %{array: array} do
+      assert {:ok, %Array{}} = Array.insert_and_get(array, 0, ArrayPrelim.from([1.0, 2.0, 3.0]))
+      assert {:ok, nested_array} = Array.fetch(array, 0)
+      assert [1.0, 2.0, 3.0] = Array.to_json(nested_array)
+    end
+
+    test "insert_and_get/3 with MapPrelim returns nested Map", %{array: array} do
+      assert {:ok, %Yex.Map{}} =
+               Array.insert_and_get(array, 0, Yex.MapPrelim.from(%{"key" => "value"}))
+
+      assert {:ok, nested_map} = Array.fetch(array, 0)
+      assert {:ok, "value"} = Yex.Map.fetch(nested_map, "key")
+    end
+
+    test "insert_and_get/3 with negative index", %{array: array} do
+      Array.push(array, "first")
+      Array.push(array, "second")
+      assert {:ok, "inserted"} = Array.insert_and_get(array, -1, "inserted")
+      assert ["first", "inserted", "second"] = Array.to_list(array)
+    end
+
     test "insert_list/3 adds multiple elements", %{array: array} do
       assert :ok = Array.insert_list(array, 0, [1, 2, 3, 4, 5])
       assert [1, 2, 3, 4, 5] == Array.to_json(array)
@@ -27,6 +55,26 @@ defmodule Yex.ArrayTest do
       Array.push(array, "first")
       Array.push(array, "second")
       assert ["first", "second"] = Array.to_list(array)
+    end
+
+    test "push_and_get/2 pushes and returns the element", %{array: array} do
+      assert {:ok, "first"} = Array.push_and_get(array, "first")
+      assert {:ok, "second"} = Array.push_and_get(array, "second")
+      assert ["first", "second"] = Array.to_list(array)
+    end
+
+    test "push_and_get/2 with ArrayPrelim", %{array: array} do
+      assert {:ok, %Array{}} = Array.push_and_get(array, ArrayPrelim.from([1.0, 2.0, 3.0]))
+      assert {:ok, nested_array} = Array.fetch(array, 0)
+      assert [1.0, 2.0, 3.0] = Array.to_json(nested_array)
+    end
+
+    test "push_and_get/2 with MapPrelim", %{array: array} do
+      assert {:ok, %Yex.Map{}} =
+               Array.push_and_get(array, Yex.MapPrelim.from(%{"nested" => "data"}))
+
+      assert {:ok, nested_map} = Array.fetch(array, 0)
+      assert {:ok, "data"} = Yex.Map.fetch(nested_map, "nested")
     end
 
     test "unshift/2 adds element at the beginning", %{array: array} do

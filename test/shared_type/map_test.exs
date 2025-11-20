@@ -14,6 +14,29 @@ defmodule Yex.MapTest do
       assert {:ok, "value"} = Map.fetch(map, "key")
     end
 
+    test "set_and_get/3 sets and returns the value", %{map: map} do
+      assert {:ok, "value"} = Map.set_and_get(map, "key", "value")
+      assert {:ok, "value"} = Map.fetch(map, "key")
+      assert {:ok, "new_value"} = Map.set_and_get(map, "key", "new_value")
+      assert {:ok, "new_value"} = Map.fetch(map, "key")
+    end
+
+    test "set_and_get/3 with nested types", %{map: map} do
+      # Test with ArrayPrelim
+      assert {:ok, %Yex.Array{}} =
+               Map.set_and_get(map, "array", Yex.ArrayPrelim.from([1, 2, 3]))
+
+      {:ok, array} = Map.fetch(map, "array")
+      assert [1.0, 2.0, 3.0] = Yex.Array.to_json(array)
+
+      # Test with MapPrelim
+      assert {:ok, %Yex.Map{}} =
+               Map.set_and_get(map, "nested_map", Yex.MapPrelim.from(%{"inner" => "value"}))
+
+      {:ok, nested_map} = Map.fetch(map, "nested_map")
+      assert {:ok, "value"} = Yex.Map.fetch(nested_map, "inner")
+    end
+
     test "set/3 with big integer", %{map: map} do
       assert :ok = Map.set(map, "key", 9_223_372_036_854_775_807)
       assert {:ok, 9_223_372_036_854_775_807} = Map.fetch(map, "key")
@@ -151,7 +174,7 @@ defmodule Yex.MapTest do
       Map.set(map, "key1", "value1")
       Map.set(map, "key2", "value2")
       {:ok, 2, fun} = Enumerable.slice(map)
-      assert [{"key2", "value2"}] = fun.(1, 1)
+      assert [{"key2", "value2"}] = fun.(1, 1, 1)
     end
 
     test "implements reduce", %{map: map} do

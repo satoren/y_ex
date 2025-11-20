@@ -3,7 +3,7 @@ defmodule Yex do
   Yex is wrapper library for the Yjs CRDT library.
   """
 
-  @type input_type ::
+  @type any_type ::
           binary
           | map
           | list
@@ -11,6 +11,8 @@ defmodule Yex do
           | float
           | boolean
           | nil
+  @type input_type ::
+          any_type
           | Yex.PrelimType.t()
 
   @doc """

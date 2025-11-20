@@ -77,6 +77,22 @@ defmodule Yex.XmlFragment do
   end
 
   @doc """
+  Inserts a new child node at the specified index and returns the inserted node.
+  Returns {:ok, node} on success, :error on failure.
+  """
+  @spec insert_and_get(
+          t,
+          integer(),
+          Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()
+        ) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
+  def insert_and_get(%__MODULE__{doc: doc} = xml_fragment, index, content) do
+    Doc.run_in_worker_process doc do
+      :ok = Yex.Nif.xml_fragment_insert(xml_fragment, cur_txn(xml_fragment), index, content)
+      Yex.Nif.xml_fragment_get(xml_fragment, cur_txn(xml_fragment), index)
+    end
+  end
+
+  @doc """
   Inserts a new child node after the specified reference node.
   If the reference node is not found, inserts at the beginning.
   Returns :ok on success, :error on failure.
@@ -99,6 +115,32 @@ defmodule Yex.XmlFragment do
   end
 
   @doc """
+  Inserts a new child node after the specified reference node and returns the inserted node.
+  If the reference node is not found, inserts at the beginning.
+  Returns {:ok, node} on success, :error on failure.
+  """
+  @spec insert_after_and_get(
+          t,
+          Yex.XmlElement.t() | Yex.XmlText.t(),
+          Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()
+        ) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
+  def insert_after_and_get(%__MODULE__{doc: doc} = xml_fragment, ref, content) do
+    Doc.run_in_worker_process doc do
+      index = children(xml_fragment) |> Enum.find_index(&(&1 == ref))
+
+      target_index =
+        if index == nil do
+          0
+        else
+          index + 1
+        end
+
+      :ok = insert(xml_fragment, target_index, content)
+      fetch(xml_fragment, target_index)
+    end
+  end
+
+  @doc """
   Deletes a range of child nodes starting at the specified index.
   Returns :ok on success, :error on failure.
   """
@@ -116,6 +158,22 @@ defmodule Yex.XmlFragment do
     Doc.run_in_worker_process(doc,
       do: insert(xml_fragment, __MODULE__.length(xml_fragment), content)
     )
+  end
+
+  @doc """
+  Appends a new child node at the end of the children list and returns the inserted node.
+  Returns {:ok, node} on success, :error on failure.
+  """
+  @spec push_and_get(
+          t,
+          Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()
+        ) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
+  def push_and_get(%__MODULE__{doc: doc} = xml_fragment, content) do
+    Doc.run_in_worker_process doc do
+      index = __MODULE__.length(xml_fragment)
+      :ok = insert(xml_fragment, index, content)
+      fetch(xml_fragment, index)
+    end
   end
 
   @doc """
