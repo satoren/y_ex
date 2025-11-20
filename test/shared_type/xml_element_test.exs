@@ -50,6 +50,52 @@ defmodule YexXmlElementTest do
       end
     end
 
+    test "insert_and_get/3 inserts and returns the element", %{xml_element: xml} do
+      assert {:ok, %XmlElement{}} =
+               XmlElement.insert_and_get(xml, 0, XmlElementPrelim.empty("p"))
+
+      assert {:ok, %XmlText{}} = XmlElement.insert_and_get(xml, 1, XmlTextPrelim.from("text"))
+      assert 2 = XmlElement.length(xml)
+    end
+
+    test "push_and_get/2 pushes and returns the element", %{xml_element: xml} do
+      assert {:ok, %XmlElement{}} = XmlElement.push_and_get(xml, XmlElementPrelim.empty("span"))
+      assert {:ok, %XmlText{}} = XmlElement.push_and_get(xml, XmlTextPrelim.from("content"))
+      assert 2 = XmlElement.length(xml)
+    end
+
+    test "insert_after_and_get/3 inserts after ref and returns the element", %{xml_element: xml} do
+      {:ok, first} = XmlElement.insert_and_get(xml, 0, XmlElementPrelim.empty("first"))
+
+      assert {:ok, %XmlElement{}} =
+               XmlElement.insert_after_and_get(xml, first, XmlElementPrelim.empty("second"))
+
+      assert 2 = XmlElement.length(xml)
+    end
+
+    test "insert_after_and_get/3 with non-existing ref inserts at beginning", %{xml_element: xml} do
+      # Insert initial element
+      {:ok, _first} = XmlElement.insert_and_get(xml, 0, XmlElementPrelim.empty("first"))
+
+      # Create a separate xml fragment with element that doesn't exist in our xml
+      doc2 = Yex.Doc.new()
+      other_frag = Yex.Doc.get_xml_fragment(doc2, "other")
+
+      {:ok, other_elem} =
+        XmlFragment.insert_and_get(other_frag, 0, XmlElementPrelim.empty("other"))
+
+      # insert_after_and_get with non-existing ref should insert at beginning
+      assert {:ok, %XmlElement{}} =
+               XmlElement.insert_after_and_get(
+                 xml,
+                 other_elem,
+                 XmlElementPrelim.empty("inserted")
+               )
+
+      # Should have 2 elements now (first + inserted at beginning)
+      assert 2 = XmlElement.length(xml)
+    end
+
     test "insert_attribute", %{doc: d1, xml_element: xml1} do
       XmlElement.insert_attribute(xml1, "height", "10")
 

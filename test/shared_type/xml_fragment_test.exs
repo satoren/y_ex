@@ -29,6 +29,48 @@ defmodule YexXmlFragmentTest do
       {:ok, %XmlElement{}} = XmlFragment.fetch(f, 1)
     end
 
+    test "push_and_get/2 pushes and returns the element", %{xml_fragment: f} do
+      assert {:ok, %XmlText{}} = XmlFragment.push_and_get(f, XmlTextPrelim.from("text"))
+      assert {:ok, %XmlElement{}} = XmlFragment.push_and_get(f, XmlElementPrelim.empty("div"))
+      assert 2 = XmlFragment.length(f)
+    end
+
+    test "insert_and_get/3 inserts and returns the element", %{xml_fragment: f} do
+      assert {:ok, %XmlElement{}} =
+               XmlFragment.insert_and_get(f, 0, XmlElementPrelim.empty("p"))
+
+      assert {:ok, %XmlText{}} = XmlFragment.insert_and_get(f, 1, XmlTextPrelim.from("text"))
+      assert 2 = XmlFragment.length(f)
+    end
+
+    test "insert_after_and_get/3 inserts after ref and returns the element", %{xml_fragment: f} do
+      {:ok, first} = XmlFragment.insert_and_get(f, 0, XmlElementPrelim.empty("first"))
+
+      assert {:ok, %XmlElement{}} =
+               XmlFragment.insert_after_and_get(f, first, XmlElementPrelim.empty("second"))
+
+      assert 2 = XmlFragment.length(f)
+    end
+
+    test "insert_after_and_get/3 with non-existing ref inserts at beginning", %{xml_fragment: f} do
+      # Insert initial element
+      {:ok, _first} = XmlFragment.insert_and_get(f, 0, XmlElementPrelim.empty("first"))
+
+      # Create a separate xml fragment with element that doesn't exist in our fragment
+      doc2 = Yex.Doc.new()
+      other_frag = Yex.Doc.get_xml_fragment(doc2, "other")
+
+      {:ok, other_elem} =
+        XmlFragment.insert_and_get(other_frag, 0, XmlElementPrelim.empty("other"))
+
+      # insert_after_and_get with non-existing ref should insert at beginning
+      assert {:ok, %XmlElement{}} =
+               XmlFragment.insert_after_and_get(f, other_elem, XmlElementPrelim.empty("inserted"))
+
+      # Should have 2 elements now (first + inserted at beginning)
+      assert 2 = XmlFragment.length(f)
+    end
+
     test "unshift", %{xml_fragment: f} do
       XmlFragment.push(f, XmlTextPrelim.from(""))
       {:ok, %XmlText{}} = XmlFragment.fetch(f, 0)

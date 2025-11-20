@@ -48,6 +48,30 @@ defmodule Yex.Map do
   end
 
   @doc """
+  Sets a key-value pair in the map and returns the set value.
+  Returns {:ok, value} on success, :error on failure.
+
+  ## Parameters
+    * `map` - The map to modify
+    * `key` - The key to set
+    * `content` - The value to associate with the key
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> {:ok, value} = Yex.Map.set_and_get(map, "plane", ["Hello", "World"])
+      iex> value
+      ["Hello", "World"]
+  """
+  @spec set_and_get(t, binary(), Yex.input_type()) :: {:ok, term()} | :error
+  def set_and_get(%__MODULE__{doc: doc} = map, key, content) when is_binary(key) do
+    Doc.run_in_worker_process doc do
+      :ok = Yex.Nif.map_set(map, cur_txn(map), key, content)
+      Yex.Nif.map_get(map, cur_txn(map), key)
+    end
+  end
+
+  @doc """
   Deletes a key from the map.
   Returns :ok on success, :error on failure.
 
@@ -254,7 +278,13 @@ defmodule Yex.Map do
     def slice(map) do
       list = Yex.Map.to_list(map)
       size = Enum.count(list)
-      {:ok, size, &Enum.slice(list, &1, &2)}
+      {:ok, size, &slice_impl(list, &1, &2, &3)}
+    end
+
+    defp slice_impl(list, start, length, step) do
+      list
+      |> Enum.slice(start, length)
+      |> Enum.take_every(step)
     end
 
     def reduce(map, acc, fun) do

@@ -40,6 +40,23 @@ defmodule Yex.Array do
   end
 
   @doc """
+  Inserts content at the specified index and returns the inserted content.
+  Returns {:ok, content} on success, :error on failure.
+  ## Parameters
+    * `array` - The array to modify
+    * `index` - The position to insert at (0-based)
+    * `content` - The content to insert
+  """
+  @spec insert_and_get(t, integer(), Yex.input_type()) :: {:ok, term()} | :error
+  def insert_and_get(%__MODULE__{doc: doc} = array, index, content) when is_integer(index) do
+    Doc.run_in_worker_process doc do
+      index = if index < 0, do: __MODULE__.length(array) + index, else: index
+      :ok = Yex.Nif.array_insert(array, cur_txn(array), index, content)
+      Yex.Nif.array_get(array, cur_txn(array), index)
+    end
+  end
+
+  @doc """
   Insert contents at the specified index.
 
   ## Examples
@@ -49,7 +66,7 @@ defmodule Yex.Array do
       iex> Yex.Array.to_json(array)
       [1.0, 2.0, 3.0, 4.0, 5.0]
   """
-  @spec insert_list(t, integer(), list(Yex.input_type())) :: :ok
+  @spec insert_list(t, integer(), list(Yex.any_type())) :: :ok
   def insert_list(%__MODULE__{doc: doc} = array, index, contents) when is_integer(index) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.array_insert_list(array, cur_txn(array), index, contents)
@@ -69,6 +86,30 @@ defmodule Yex.Array do
     Doc.run_in_worker_process(doc,
       do: insert(array, __MODULE__.length(array), content)
     )
+  end
+
+  @doc """
+  Pushes content to the end of the array and returns the pushed content.
+  Returns {:ok, content} on success, :error on failure.
+
+  ## Parameters
+    * `array` - The array to modify
+    * `content` - The content to append
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> {:ok, value} = Yex.Array.push_and_get(array, "Hello")
+      iex> value
+      "Hello"
+  """
+  @spec push_and_get(t, Yex.input_type()) :: {:ok, term()} | :error
+  def push_and_get(%__MODULE__{doc: doc} = array, content) do
+    Doc.run_in_worker_process doc do
+      index = __MODULE__.length(array)
+      :ok = Yex.Nif.array_insert(array, cur_txn(array), index, content)
+      Yex.Nif.array_get(array, cur_txn(array), index)
+    end
   end
 
   @doc """
