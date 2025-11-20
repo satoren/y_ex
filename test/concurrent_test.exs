@@ -51,7 +51,7 @@ defmodule Yex.DocConcurrentTest do
   describe "propagate errors to caller" do
     test "miss match key type", %{doc: doc} do
       map = Doc.get_map(doc, "map")
-      assert_raise ArgumentError, fn -> Map.set(map, 0, "Hello") end
+      assert_raise FunctionClauseError, fn -> Map.set(map, 0, "Hello") end
     end
 
     test "Key not found", %{doc: doc} do

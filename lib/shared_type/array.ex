@@ -25,14 +25,15 @@ defmodule Yex.Array do
 
   @doc """
   Inserts content at the specified index.
-  Returns :ok on success, :error on failure.
+  Returns :ok on success.
 
   ## Parameters
     * `array` - The array to modify
     * `index` - The position to insert at (0-based)
     * `content` - The content to insert
   """
-  def insert(%__MODULE__{doc: doc} = array, index, content) do
+  @spec insert(t, integer(), Yex.input_type()) :: :ok
+  def insert(%__MODULE__{doc: doc} = array, index, content) when is_integer(index) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.array_insert(array, cur_txn(array), index, content)
     )
@@ -48,8 +49,8 @@ defmodule Yex.Array do
       iex> Yex.Array.to_json(array)
       [1.0, 2.0, 3.0, 4.0, 5.0]
   """
-  @spec insert_list(t, integer(), list()) :: :ok
-  def insert_list(%__MODULE__{doc: doc} = array, index, contents) do
+  @spec insert_list(t, integer(), list(Yex.input_type())) :: :ok
+  def insert_list(%__MODULE__{doc: doc} = array, index, contents) when is_integer(index) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.array_insert_list(array, cur_txn(array), index, contents)
     )
@@ -63,6 +64,7 @@ defmodule Yex.Array do
     * `array` - The array to modify
     * `content` - The content to append
   """
+  @spec push(t, Yex.input_type()) :: :ok
   def push(%__MODULE__{doc: doc} = array, content) do
     Doc.run_in_worker_process(doc,
       do: insert(array, __MODULE__.length(array), content)
@@ -104,7 +106,8 @@ defmodule Yex.Array do
     * `length` - The number of elements to delete
   """
   @spec delete_range(t, integer(), integer()) :: :ok
-  def delete_range(%__MODULE__{doc: doc} = array, index, length) do
+  def delete_range(%__MODULE__{doc: doc} = array, index, length)
+      when is_integer(index) and is_integer(length) do
     Doc.run_in_worker_process doc do
       index = if index < 0, do: __MODULE__.length(array) + index, else: index
       Yex.Nif.array_delete_range(array, cur_txn(array), index, length)
@@ -123,7 +126,7 @@ defmodule Yex.Array do
       [[3.0, 4.0], [1.0, 2.0]]
   """
   @spec move_to(t, integer(), integer()) :: :ok
-  def move_to(%__MODULE__{doc: doc} = array, from, to) do
+  def move_to(%__MODULE__{doc: doc} = array, from, to) when is_integer(from) and is_integer(to) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.array_move_to(array, cur_txn(array), from, to)
     )
@@ -145,7 +148,7 @@ defmodule Yex.Array do
       {:ok, "Hello"}
   """
   @spec fetch(t, integer()) :: {:ok, term()} | :error
-  def fetch(%__MODULE__{doc: doc} = array, index) do
+  def fetch(%__MODULE__{doc: doc} = array, index) when is_integer(index) do
     Doc.run_in_worker_process doc do
       index = if index < 0, do: __MODULE__.length(array) + index, else: index
       Yex.Nif.array_get(array, cur_txn(array), index)
@@ -153,7 +156,7 @@ defmodule Yex.Array do
   end
 
   @spec fetch!(t, integer()) :: term()
-  def fetch!(%__MODULE__{} = array, index) do
+  def fetch!(%__MODULE__{} = array, index) when is_integer(index) do
     case fetch(array, index) do
       {:ok, value} -> value
       :error -> raise ArgumentError, "Index out of bounds"

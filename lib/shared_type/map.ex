@@ -40,8 +40,8 @@ defmodule Yex.Map do
       iex> Yex.Map.set(map, "plane", ["Hello", "World"])
       :ok
   """
-  @spec set(t, term(), term()) :: term()
-  def set(%__MODULE__{doc: doc} = map, key, content) do
+  @spec set(t, binary(), Yex.input_type()) :: :ok
+  def set(%__MODULE__{doc: doc} = map, key, content) when is_binary(key) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.map_set(map, cur_txn(map), key, content)
     )
@@ -62,8 +62,8 @@ defmodule Yex.Map do
       iex> Yex.Map.delete(map, "plane")
       :ok
   """
-  @spec delete(t, term()) :: :ok
-  def delete(%__MODULE__{doc: doc} = map, key) do
+  @spec delete(t, binary()) :: :ok
+  def delete(%__MODULE__{doc: doc} = map, key) when is_binary(key) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.map_delete(map, cur_txn(map), key)
     )
@@ -104,7 +104,7 @@ defmodule Yex.Map do
       :error
   """
   @spec fetch(t, binary()) :: {:ok, term()} | :error
-  def fetch(%__MODULE__{doc: doc} = map, key) do
+  def fetch(%__MODULE__{doc: doc} = map, key) when is_binary(key) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.map_get(map, cur_txn(map), key)
     )
@@ -121,7 +121,7 @@ defmodule Yex.Map do
     * ArgumentError - If the key is not found
   """
   @spec fetch!(t, binary()) :: term()
-  def fetch!(%__MODULE__{} = map, key) do
+  def fetch!(%__MODULE__{} = map, key) when is_binary(key) do
     case fetch(map, key) do
       {:ok, value} -> value
       :error -> raise ArgumentError, "Key not found"
@@ -137,7 +137,7 @@ defmodule Yex.Map do
     * `key` - The key to look for
   """
   @spec has_key?(t, binary()) :: boolean()
-  def has_key?(%__MODULE__{doc: doc} = map, key) do
+  def has_key?(%__MODULE__{doc: doc} = map, key) when is_binary(key) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.map_contains_key(map, cur_txn(map), key)
     )
@@ -163,8 +163,14 @@ defmodule Yex.Map do
 
   @doc """
   Converts the map to a list of key-value tuples.
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "plane", ["Hello", "World"])
+      iex> Yex.Map.to_list(map)
+      [{"plane", ["Hello", "World"]}]
   """
-  @spec to_list(t) :: list()
+  @spec to_list(t) :: list({binary(), term()})
   def to_list(map) do
     to_map(map) |> Enum.to_list()
   end
