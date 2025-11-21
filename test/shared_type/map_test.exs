@@ -15,22 +15,22 @@ defmodule Yex.MapTest do
     end
 
     test "set_and_get/3 sets and returns the value", %{map: map} do
-      assert {:ok, "value"} = Map.set_and_get(map, "key", "value")
+      assert "value" = Map.set_and_get(map, "key", "value")
       assert {:ok, "value"} = Map.fetch(map, "key")
-      assert {:ok, "new_value"} = Map.set_and_get(map, "key", "new_value")
+      assert "new_value" = Map.set_and_get(map, "key", "new_value")
       assert {:ok, "new_value"} = Map.fetch(map, "key")
     end
 
     test "set_and_get/3 with nested types", %{map: map} do
       # Test with ArrayPrelim
-      assert {:ok, %Yex.Array{}} =
+      assert %Yex.Array{} =
                Map.set_and_get(map, "array", Yex.ArrayPrelim.from([1, 2, 3]))
 
       {:ok, array} = Map.fetch(map, "array")
       assert [1.0, 2.0, 3.0] = Yex.Array.to_json(array)
 
       # Test with MapPrelim
-      assert {:ok, %Yex.Map{}} =
+      assert %Yex.Map{} =
                Map.set_and_get(map, "nested_map", Yex.MapPrelim.from(%{"inner" => "value"}))
 
       {:ok, nested_map} = Map.fetch(map, "nested_map")
@@ -86,9 +86,24 @@ defmodule Yex.MapTest do
       assert_raise ArgumentError, fn -> Map.fetch!(map, "not_found") end
     end
 
-    test "deprecated get/2 still works", %{map: map} do
+    test "get/2 returns value by key", %{map: map} do
       Map.set(map, "key", "value")
-      assert {:ok, "value"} = Map.get(map, "key")
+      assert "value" = Map.get(map, "key")
+    end
+
+    test "get/3 returns default value when key not found", %{map: map} do
+      assert is_nil(Map.get(map, "not_found"))
+      assert "default" = Map.get(map, "not_found", "default")
+    end
+
+    test "get_lazy/3 evaluates function only when key not found", %{map: map} do
+      Map.set(map, "key", "value")
+
+      # When key exists, function should not be called
+      assert "value" = Map.get_lazy(map, "key", fn -> flunk("Function should not be called") end)
+
+      # When key doesn't exist, function should be called
+      assert "computed" = Map.get_lazy(map, "not_found", fn -> "computed" end)
     end
 
     test "has_key?/2 checks key existence", %{map: map} do

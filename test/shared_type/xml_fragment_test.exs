@@ -30,23 +30,23 @@ defmodule YexXmlFragmentTest do
     end
 
     test "push_and_get/2 pushes and returns the element", %{xml_fragment: f} do
-      assert {:ok, %XmlText{}} = XmlFragment.push_and_get(f, XmlTextPrelim.from("text"))
-      assert {:ok, %XmlElement{}} = XmlFragment.push_and_get(f, XmlElementPrelim.empty("div"))
+      assert %XmlText{} = XmlFragment.push_and_get(f, XmlTextPrelim.from("text"))
+      assert %XmlElement{} = XmlFragment.push_and_get(f, XmlElementPrelim.empty("div"))
       assert 2 = XmlFragment.length(f)
     end
 
     test "insert_and_get/3 inserts and returns the element", %{xml_fragment: f} do
-      assert {:ok, %XmlElement{}} =
+      assert %XmlElement{} =
                XmlFragment.insert_and_get(f, 0, XmlElementPrelim.empty("p"))
 
-      assert {:ok, %XmlText{}} = XmlFragment.insert_and_get(f, 1, XmlTextPrelim.from("text"))
+      assert %XmlText{} = XmlFragment.insert_and_get(f, 1, XmlTextPrelim.from("text"))
       assert 2 = XmlFragment.length(f)
     end
 
     test "insert_after_and_get/3 inserts after ref and returns the element", %{xml_fragment: f} do
-      {:ok, first} = XmlFragment.insert_and_get(f, 0, XmlElementPrelim.empty("first"))
+      first = XmlFragment.insert_and_get(f, 0, XmlElementPrelim.empty("first"))
 
-      assert {:ok, %XmlElement{}} =
+      assert %XmlElement{} =
                XmlFragment.insert_after_and_get(f, first, XmlElementPrelim.empty("second"))
 
       assert 2 = XmlFragment.length(f)
@@ -54,17 +54,17 @@ defmodule YexXmlFragmentTest do
 
     test "insert_after_and_get/3 with non-existing ref inserts at beginning", %{xml_fragment: f} do
       # Insert initial element
-      {:ok, _first} = XmlFragment.insert_and_get(f, 0, XmlElementPrelim.empty("first"))
+      _first = XmlFragment.insert_and_get(f, 0, XmlElementPrelim.empty("first"))
 
       # Create a separate xml fragment with element that doesn't exist in our fragment
       doc2 = Yex.Doc.new()
       other_frag = Yex.Doc.get_xml_fragment(doc2, "other")
 
-      {:ok, other_elem} =
+      other_elem =
         XmlFragment.insert_and_get(other_frag, 0, XmlElementPrelim.empty("other"))
 
       # insert_after_and_get with non-existing ref should insert at beginning
-      assert {:ok, %XmlElement{}} =
+      assert %XmlElement{} =
                XmlFragment.insert_after_and_get(f, other_elem, XmlElementPrelim.empty("inserted"))
 
       # Should have 2 elements now (first + inserted at beginning)
@@ -115,6 +115,72 @@ defmodule YexXmlFragmentTest do
       assert_raise ArgumentError, "Index out of bounds", fn ->
         XmlFragment.fetch!(xml, 1)
       end
+    end
+
+    test "get/3 returns element or default", %{xml_fragment: xml} do
+      XmlFragment.push(xml, XmlElementPrelim.empty("div"))
+
+      assert %XmlElement{} = XmlFragment.get(xml, 0)
+      assert nil == XmlFragment.get(xml, 1)
+      assert :default == XmlFragment.get(xml, 1, :default)
+    end
+
+    test "get_lazy/3 returns element or evaluates function", %{xml_fragment: xml} do
+      XmlFragment.push(xml, XmlElementPrelim.empty("div"))
+
+      # Existing element
+      assert %XmlElement{} = XmlFragment.get_lazy(xml, 0, fn -> :not_called end)
+
+      # Non-existing element - function is called
+      assert :default ==
+               XmlFragment.get_lazy(xml, 1, fn -> :default end)
+
+      # Function should only be called when needed
+      called = make_ref()
+
+      XmlFragment.get_lazy(xml, 0, fn ->
+        send(self(), called)
+        :not_called
+      end)
+
+      refute_received ^called
+
+      XmlFragment.get_lazy(xml, 1, fn ->
+        send(self(), called)
+        :called
+      end)
+
+      assert_received ^called
+    end
+
+    test "get_lazy/3 with *_and_get for get-or-create pattern", %{xml_fragment: xml} do
+      # Get or create pattern
+      elem1 =
+        XmlFragment.get_lazy(xml, 0, fn ->
+          XmlFragment.push_and_get(xml, XmlElementPrelim.empty("div"))
+        end)
+
+      assert %XmlElement{} = elem1
+      assert 1 = XmlFragment.length(xml)
+
+      # Second call should return existing element, not create new one
+      elem2 =
+        XmlFragment.get_lazy(xml, 0, fn ->
+          XmlFragment.push_and_get(xml, XmlElementPrelim.empty("span"))
+        end)
+
+      assert elem1 == elem2
+      assert 1 = XmlFragment.length(xml)
+
+      # Different index creates new element
+      elem3 =
+        XmlFragment.get_lazy(xml, 1, fn ->
+          XmlFragment.push_and_get(xml, XmlElementPrelim.empty("p"))
+        end)
+
+      assert %XmlElement{} = elem3
+      assert elem1 != elem3
+      assert 2 = XmlFragment.length(xml)
     end
 
     test "delete", %{xml_fragment: f} do
