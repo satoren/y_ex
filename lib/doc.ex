@@ -180,6 +180,8 @@ defmodule Yex.Doc do
   @doc """
   Start a transaction.
 
+  Raises RuntimeError if a transaction is already in progress.
+
   ## Examples
       iex> doc = Doc.new()
       iex> text = Doc.get_text(doc, "text")
