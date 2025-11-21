@@ -305,7 +305,7 @@ defmodule YexXmlElementTest do
       assert "last" == XmlText.to_string(XmlElement.fetch!(e, 2))
     end
 
-    test "get/2 returns child at index", %{xml_element: e} do
+    test "get/3 returns child at index (using default)", %{xml_element: e} do
       XmlElement.push(e, XmlTextPrelim.from("content"))
 
       child = XmlElement.get(e, 0)

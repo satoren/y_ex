@@ -196,6 +196,26 @@ defmodule Yex.XmlFragment do
     insert(xml_fragment, 0, content)
   end
 
+  @doc """
+  Gets a child node by index from the XML fragment, or returns the default value if the index is out of bounds.
+
+  ## Parameters
+    * `xml_fragment` - The XML fragment to query
+    * `index` - The index to look up
+    * `default` - The default value to return if index is out of bounds (defaults to nil)
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
+      iex> Yex.XmlFragment.push(xml, Yex.XmlElementPrelim.empty("div"))
+      iex> elem = Yex.XmlFragment.get(xml, 0)
+      iex> match?(%Yex.XmlElement{}, elem)
+      true
+      iex> Yex.XmlFragment.get(xml, 10)
+      nil
+      iex> Yex.XmlFragment.get(xml, 10, :not_found)
+      :not_found
+  """
   @spec get(t, integer(), default :: term()) :: Yex.XmlElement.t() | Yex.XmlText.t() | term()
   def get(%__MODULE__{} = xml_fragment, index, default \\ nil) do
     case fetch(xml_fragment, index) do
