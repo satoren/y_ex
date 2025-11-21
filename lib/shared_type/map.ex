@@ -234,6 +234,44 @@ defmodule Yex.Map do
   end
 
   @doc """
+  Returns a list of all keys in the map.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "foo", "bar")
+      iex> Yex.Map.set(map, "baz", "qux")
+      iex> keys = Yex.Map.keys(map)
+      iex> Enum.sort(keys)
+      ["baz", "foo"]
+  """
+  @spec keys(t) :: list(binary())
+  def keys(%__MODULE__{doc: doc} = map) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_keys(map, cur_txn(map))
+    )
+  end
+
+  @doc """
+  Returns a list of all values in the map.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "foo", "bar")
+      iex> Yex.Map.set(map, "baz", 123)
+      iex> values = Yex.Map.values(map)
+      iex> Enum.sort(values)
+      [123, "bar"]
+  """
+  @spec values(t) :: list(value())
+  def values(%__MODULE__{doc: doc} = map) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_values(map, cur_txn(map))
+    )
+  end
+
+  @doc """
   Converts the map to a list of key-value tuples.
   ## Examples
       iex> doc = Yex.Doc.new()
