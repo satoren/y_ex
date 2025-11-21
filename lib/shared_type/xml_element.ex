@@ -70,14 +70,19 @@ defmodule Yex.XmlElement do
 
   @doc """
   Inserts a new child node at the specified index and returns the inserted node.
-  Returns {:ok, node} on success, :error on failure.
+  Returns the inserted node on success, raises on failure.
+
   """
   @spec insert_and_get(t, integer(), Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) ::
-          {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
+          Yex.XmlElement.t() | Yex.XmlText.t()
   def insert_and_get(%__MODULE__{doc: doc} = xml_element, index, content) do
     Doc.run_in_worker_process doc do
       :ok = Yex.Nif.xml_element_insert(xml_element, cur_txn(xml_element), index, content)
-      Yex.Nif.xml_element_get(xml_element, cur_txn(xml_element), index)
+
+      case Yex.Nif.xml_element_get(xml_element, cur_txn(xml_element), index) do
+        {:ok, value} -> value
+        :error -> raise RuntimeError, "Failed to get inserted XML element"
+      end
     end
   end
 
@@ -106,13 +111,14 @@ defmodule Yex.XmlElement do
   @doc """
   Inserts a new child node after the specified reference node and returns the inserted node.
   If the reference node is not found, inserts at the beginning.
-  Returns {:ok, node} on success, :error on failure.
+  Returns the inserted node on success, raises on failure.
+
   """
   @spec insert_after_and_get(
           t,
           Yex.XmlElement.t() | Yex.XmlText.t(),
           Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()
-        ) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
+        ) :: Yex.XmlElement.t() | Yex.XmlText.t()
   def insert_after_and_get(%__MODULE__{doc: doc} = xml_element, ref, content) do
     Doc.run_in_worker_process doc do
       index = children(xml_element) |> Enum.find_index(&(&1 == ref))
@@ -125,7 +131,11 @@ defmodule Yex.XmlElement do
         end
 
       :ok = insert(xml_element, target_index, content)
-      fetch(xml_element, target_index)
+
+      case fetch(xml_element, target_index) do
+        {:ok, value} -> value
+        :error -> raise RuntimeError, "Failed to get inserted XML element"
+      end
     end
   end
 
@@ -153,15 +163,19 @@ defmodule Yex.XmlElement do
 
   @doc """
   Appends a new child node at the end of the children list and returns the inserted node.
-  Returns {:ok, node} on success, :error on failure.
+  Returns the inserted node on success, raises on failure.
   """
   @spec push_and_get(t, Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) ::
-          {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
+          Yex.XmlElement.t() | Yex.XmlText.t()
   def push_and_get(%__MODULE__{doc: doc} = xml_element, content) do
     Doc.run_in_worker_process doc do
       index = __MODULE__.length(xml_element)
       :ok = insert(xml_element, index, content)
-      fetch(xml_element, index)
+
+      case fetch(xml_element, index) do
+        {:ok, value} -> value
+        :error -> raise RuntimeError, "Failed to get pushed XML element"
+      end
     end
   end
 
@@ -174,10 +188,72 @@ defmodule Yex.XmlElement do
     insert(xml_element, 0, content)
   end
 
-  @deprecated "Rename to `fetch/2`"
-  @spec get(t, integer()) :: {:ok, Yex.XmlElement.t() | Yex.XmlText.t()} | :error
-  def get(%__MODULE__{} = xml_element, index) do
-    fetch(xml_element, index)
+  @doc """
+  Gets a child node by index from the XML element, or returns the default value if the index is out of bounds.
+
+  ## Parameters
+    * `xml_element` - The XML element to query
+    * `index` - The index to look up
+    * `default` - The default value to return if index is out of bounds (defaults to nil)
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
+      iex> elem = Yex.XmlFragment.push_and_get(xml, Yex.XmlElementPrelim.empty("div"))
+      iex> Yex.XmlElement.push(elem, Yex.XmlTextPrelim.from("content"))
+      iex> text = Yex.XmlElement.get(elem, 0)
+      iex> match?(%Yex.XmlText{}, text)
+      true
+      iex> Yex.XmlElement.get(elem, 10)
+      nil
+      iex> Yex.XmlElement.get(elem, 10, :not_found)
+      :not_found
+  """
+  @spec get(t, integer(), default :: term()) :: Yex.XmlElement.t() | Yex.XmlText.t() | term()
+  def get(%__MODULE__{} = xml_element, index, default \\ nil) do
+    case fetch(xml_element, index) do
+      {:ok, value} -> value
+      :error -> default
+    end
+  end
+
+  @doc """
+  Gets a child node by index from the XML element, or lazily evaluates the given function if the index is out of bounds.
+  This is useful when the default value is expensive to compute and should only be evaluated when needed.
+
+  ## Parameters
+    * `xml_element` - The XML element to query
+    * `index` - The index to look up
+    * `fun` - A function that returns the default value (only called if index is out of bounds)
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
+      iex> elem = Yex.XmlFragment.push_and_get(xml, Yex.XmlElementPrelim.empty("div"))
+      iex> Yex.XmlElement.push(elem, Yex.XmlTextPrelim.from("content"))
+      iex> text = Yex.XmlElement.get_lazy(elem, 0, fn -> Yex.XmlTextPrelim.from("default") end)
+      iex> match?(%Yex.XmlText{}, text)
+      true
+
+  Particularly useful with `*_and_get` functions for get-or-create patterns:
+
+      iex> doc = Yex.Doc.new()
+      iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
+      iex> elem = Yex.XmlFragment.push_and_get(xml, Yex.XmlElementPrelim.empty("div"))
+      iex> # Get existing child or create and return new one
+      iex> child = Yex.XmlElement.get_lazy(elem, 0, fn ->
+      ...>   Yex.XmlElement.push_and_get(elem, Yex.XmlElementPrelim.empty("span"))
+      ...> end)
+      iex> Yex.XmlElement.get_tag(child)
+      "span"
+  """
+  @spec get_lazy(t, integer(), fun :: (-> term())) ::
+          Yex.XmlElement.t() | Yex.XmlText.t() | term()
+  def get_lazy(%__MODULE__{} = xml_element, index, fun) do
+    case fetch(xml_element, index) do
+      {:ok, value} -> value
+      :error -> fun.()
+    end
   end
 
   @doc """

@@ -20,6 +20,8 @@ defmodule Yex.Array do
           doc: Yex.Doc.t(),
           reference: reference()
         }
+
+  @type value :: term()
   alias Yex.Doc
   require Yex.Doc
 
@@ -41,18 +43,23 @@ defmodule Yex.Array do
 
   @doc """
   Inserts content at the specified index and returns the inserted content.
-  Returns {:ok, content} on success, :error on failure.
+  Returns the content on success, raises on failure.
+
   ## Parameters
     * `array` - The array to modify
     * `index` - The position to insert at (0-based)
     * `content` - The content to insert
   """
-  @spec insert_and_get(t, integer(), Yex.input_type()) :: {:ok, term()} | :error
+  @spec insert_and_get(t, integer(), Yex.input_type()) :: value()
   def insert_and_get(%__MODULE__{doc: doc} = array, index, content) when is_integer(index) do
     Doc.run_in_worker_process doc do
       index = if index < 0, do: __MODULE__.length(array) + index, else: index
       :ok = Yex.Nif.array_insert(array, cur_txn(array), index, content)
-      Yex.Nif.array_get(array, cur_txn(array), index)
+
+      case Yex.Nif.array_get(array, cur_txn(array), index) do
+        {:ok, value} -> value
+        :error -> raise RuntimeError, "Failed to get inserted value"
+      end
     end
   end
 
@@ -90,7 +97,7 @@ defmodule Yex.Array do
 
   @doc """
   Pushes content to the end of the array and returns the pushed content.
-  Returns {:ok, content} on success, :error on failure.
+  Returns the content on success, raises on failure.
 
   ## Parameters
     * `array` - The array to modify
@@ -99,16 +106,20 @@ defmodule Yex.Array do
   ## Examples
       iex> doc = Yex.Doc.new()
       iex> array = Yex.Doc.get_array(doc, "array")
-      iex> {:ok, value} = Yex.Array.push_and_get(array, "Hello")
+      iex> value = Yex.Array.push_and_get(array, "Hello")
       iex> value
       "Hello"
   """
-  @spec push_and_get(t, Yex.input_type()) :: {:ok, term()} | :error
+  @spec push_and_get(t, Yex.input_type()) :: value()
   def push_and_get(%__MODULE__{doc: doc} = array, content) do
     Doc.run_in_worker_process doc do
       index = __MODULE__.length(array)
       :ok = Yex.Nif.array_insert(array, cur_txn(array), index, content)
-      Yex.Nif.array_get(array, cur_txn(array), index)
+
+      case Yex.Nif.array_get(array, cur_txn(array), index) do
+        {:ok, value} -> value
+        :error -> raise RuntimeError, "Failed to get pushed value"
+      end
     end
   end
 
@@ -173,10 +184,52 @@ defmodule Yex.Array do
     )
   end
 
-  @deprecated "Rename to `fetch/2`"
-  @spec get(t, integer()) :: {:ok, term()} | :error
-  def get(array, index) do
-    fetch(array, index)
+  @spec get(t, integer(), default :: value()) :: value()
+  def get(array, index, default \\ nil) do
+    case fetch(array, index) do
+      {:ok, value} -> value
+      :error -> default
+    end
+  end
+
+  @doc """
+  Gets a value by index from the array, or lazily evaluates the given function if the index is out of bounds.
+  This is useful when the default value is expensive to compute and should only be evaluated when needed.
+
+  ## Parameters
+    * `array` - The array to query
+    * `index` - The index to look up
+    * `fun` - A function that returns the default value (only called if index is out of bounds)
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "Hello")
+      iex> Yex.Array.get_lazy(array, 0, fn -> "Default" end)
+      "Hello"
+      iex> Yex.Array.get_lazy(array, 10, fn -> "Computed" end)
+      "Computed"
+
+  Particularly useful with `insert_and_get/3` or `push_and_get/2` for get-or-create patterns:
+
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> # Get existing value or create and return new one
+      iex> value = Yex.Array.get_lazy(array, 0, fn ->
+      ...>   Yex.Array.push_and_get(array, "initial")
+      ...> end)
+      iex> value
+      "initial"
+      iex> # Next call returns existing value without calling the function
+      iex> Yex.Array.get_lazy(array, 0, fn -> Yex.Array.push_and_get(array, "initial") end)
+      "initial"
+  """
+  @spec get_lazy(t, integer(), fun :: (-> value())) :: value()
+  def get_lazy(%__MODULE__{} = array, index, fun) do
+    case fetch(array, index) do
+      {:ok, value} -> value
+      :error -> fun.()
+    end
   end
 
   @doc """
@@ -188,7 +241,7 @@ defmodule Yex.Array do
       iex> Yex.Array.fetch(array, 0)
       {:ok, "Hello"}
   """
-  @spec fetch(t, integer()) :: {:ok, term()} | :error
+  @spec fetch(t, integer()) :: {:ok, value()} | :error
   def fetch(%__MODULE__{doc: doc} = array, index) when is_integer(index) do
     Doc.run_in_worker_process doc do
       index = if index < 0, do: __MODULE__.length(array) + index, else: index
@@ -196,7 +249,7 @@ defmodule Yex.Array do
     end
   end
 
-  @spec fetch!(t, integer()) :: term()
+  @spec fetch!(t, integer()) :: value()
   def fetch!(%__MODULE__{} = array, index) when is_integer(index) do
     case fetch(array, index) do
       {:ok, value} -> value

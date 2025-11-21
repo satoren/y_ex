@@ -19,20 +19,20 @@ defmodule Yex.ArrayTest do
     end
 
     test "insert_and_get/3 inserts and returns the element", %{array: array} do
-      assert {:ok, "first"} = Array.insert_and_get(array, 0, "first")
-      assert {:ok, "second"} = Array.insert_and_get(array, 1, "second")
-      assert {:ok, "middle"} = Array.insert_and_get(array, 1, "middle")
+      assert "first" = Array.insert_and_get(array, 0, "first")
+      assert "second" = Array.insert_and_get(array, 1, "second")
+      assert "middle" = Array.insert_and_get(array, 1, "middle")
       assert ["first", "middle", "second"] = Array.to_list(array)
     end
 
     test "insert_and_get/3 with ArrayPrelim returns nested Array", %{array: array} do
-      assert {:ok, %Array{}} = Array.insert_and_get(array, 0, ArrayPrelim.from([1.0, 2.0, 3.0]))
+      assert %Array{} = Array.insert_and_get(array, 0, ArrayPrelim.from([1.0, 2.0, 3.0]))
       assert {:ok, nested_array} = Array.fetch(array, 0)
       assert [1.0, 2.0, 3.0] = Array.to_json(nested_array)
     end
 
     test "insert_and_get/3 with MapPrelim returns nested Map", %{array: array} do
-      assert {:ok, %Yex.Map{}} =
+      assert %Yex.Map{} =
                Array.insert_and_get(array, 0, Yex.MapPrelim.from(%{"key" => "value"}))
 
       assert {:ok, nested_map} = Array.fetch(array, 0)
@@ -42,7 +42,7 @@ defmodule Yex.ArrayTest do
     test "insert_and_get/3 with negative index", %{array: array} do
       Array.push(array, "first")
       Array.push(array, "second")
-      assert {:ok, "inserted"} = Array.insert_and_get(array, -1, "inserted")
+      assert "inserted" = Array.insert_and_get(array, -1, "inserted")
       assert ["first", "inserted", "second"] = Array.to_list(array)
     end
 
@@ -58,19 +58,19 @@ defmodule Yex.ArrayTest do
     end
 
     test "push_and_get/2 pushes and returns the element", %{array: array} do
-      assert {:ok, "first"} = Array.push_and_get(array, "first")
-      assert {:ok, "second"} = Array.push_and_get(array, "second")
+      assert "first" = Array.push_and_get(array, "first")
+      assert "second" = Array.push_and_get(array, "second")
       assert ["first", "second"] = Array.to_list(array)
     end
 
     test "push_and_get/2 with ArrayPrelim", %{array: array} do
-      assert {:ok, %Array{}} = Array.push_and_get(array, ArrayPrelim.from([1.0, 2.0, 3.0]))
+      assert %Array{} = Array.push_and_get(array, ArrayPrelim.from([1.0, 2.0, 3.0]))
       assert {:ok, nested_array} = Array.fetch(array, 0)
       assert [1.0, 2.0, 3.0] = Array.to_json(nested_array)
     end
 
     test "push_and_get/2 with MapPrelim", %{array: array} do
-      assert {:ok, %Yex.Map{}} =
+      assert %Yex.Map{} =
                Array.push_and_get(array, Yex.MapPrelim.from(%{"nested" => "data"}))
 
       assert {:ok, nested_map} = Array.fetch(array, 0)
@@ -127,9 +127,24 @@ defmodule Yex.ArrayTest do
       assert_raise ArgumentError, fn -> Array.fetch!(array, 1) end
     end
 
-    test "deprecated get/2 still works", %{array: array} do
+    test "get/2 still works", %{array: array} do
       Array.push(array, "Hello")
-      assert {:ok, "Hello"} = Array.get(array, 0)
+      assert "Hello" = Array.get(array, 0)
+    end
+
+    test "get/3 returns default value when index out of bounds", %{array: array} do
+      assert is_nil(Array.get(array, 10))
+      assert "default" = Array.get(array, 10, "default")
+    end
+
+    test "get_lazy/3 evaluates function only when index out of bounds", %{array: array} do
+      Array.push(array, "Hello")
+
+      # When index exists, function should not be called
+      assert "Hello" = Array.get_lazy(array, 0, fn -> flunk("Function should not be called") end)
+
+      # When index doesn't exist, function should be called
+      assert "computed" = Array.get_lazy(array, 10, fn -> "computed" end)
     end
   end
 

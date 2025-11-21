@@ -59,7 +59,7 @@ defmodule Yex.Doc do
           unquote(block)
 
         nil ->
-          raise "Document has no worker process assigned"
+          raise RuntimeError, "Document has no worker process assigned"
 
         worker_pid ->
           wrapped_fun = fn ->
@@ -180,6 +180,8 @@ defmodule Yex.Doc do
   @doc """
   Start a transaction.
 
+  Raises RuntimeError if a transaction is already in progress.
+
   ## Examples
       iex> doc = Doc.new()
       iex> text = Doc.get_text(doc, "text")
@@ -196,7 +198,7 @@ defmodule Yex.Doc do
   def transaction(%__MODULE__{reference: ref} = doc, origin \\ nil, exec) do
     run_in_worker_process doc do
       if cur_txn(doc) do
-        raise "Transaction already in progress"
+        raise RuntimeError, "Transaction already in progress"
       end
 
       txn = Yex.Nif.doc_begin_transaction(doc, origin)
