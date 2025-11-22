@@ -118,37 +118,12 @@ defmodule Yex.Map do
     end
   end
 
+  
+  
   @doc """
-  Gets a value by key from the map, or lazily evaluates the given function if the key is not found.
-  This is useful when the default value is expensive to compute and should only be evaluated when needed.
-
-  ## Parameters
-    * `map` - The map to query
-    * `key` - The key to look up
-    * `fun` - A function that returns the default value (only called if key is not found)
-
-  ## Examples
-      iex> doc = Yex.Doc.new()
-      iex> map = Yex.Doc.get_map(doc, "map")
-      iex> Yex.Map.set(map, "plane", ["Hello", "World"])
-      iex> Yex.Map.get_lazy(map, "plane", fn -> ["Default"] end)
-      ["Hello", "World"]
-      iex> Yex.Map.get_lazy(map, "not_found", fn -> ["Computed"] end)
-      ["Computed"]
-
-  Particularly useful with `set_and_get/3` for get-or-create patterns:
-
-      iex> doc = Yex.Doc.new()
-      iex> map = Yex.Doc.get_map(doc, "map")
-      iex> # Get existing value or create and return new one
-      iex> value = Yex.Map.get_lazy(map, "counter", fn ->
-      ...>   Yex.Map.set_and_get(map, "counter", 0)
-      ...> end)
-      iex> value
-      0.0
-      iex> # Next call returns existing value without calling the function
-      iex> Yex.Map.get_lazy(map, "counter", fn -> Yex.Map.set_and_get(map, "counter", 0) end)
-      0.0
+  Retrieve the value for a given key, or compute and return a fallback by invoking the provided zero-arity function when the key is not present.
+  
+  The function is called only if the key is missing.
   """
   @spec get_lazy(t, binary(), fun :: (-> value())) :: value()
   def get_lazy(%__MODULE__{} = map, key, fun) do
@@ -233,17 +208,14 @@ defmodule Yex.Map do
     )
   end
 
+  
+  
   @doc """
-  Returns a list of all keys in the map.
-
-  ## Examples
-      iex> doc = Yex.Doc.new()
-      iex> map = Yex.Doc.get_map(doc, "map")
-      iex> Yex.Map.set(map, "foo", "bar")
-      iex> Yex.Map.set(map, "baz", "qux")
-      iex> keys = Yex.Map.keys(map)
-      iex> Enum.sort(keys) # keys order is not guaranteed
-      ["baz", "foo"]
+  List all keys stored in the shared map.
+  
+  The order of keys is not guaranteed.
+  
+  @returns A list of binary keys present in the map.
   """
   @spec keys(t) :: list(binary())
   def keys(%__MODULE__{doc: doc} = map) do
@@ -252,10 +224,15 @@ defmodule Yex.Map do
     )
   end
 
+  
+  
   @doc """
-  Returns a list of all values in the map.
-
+  List all values stored in the map.
+  
+  Order of values is not guaranteed.
+  
   ## Examples
+  
       iex> doc = Yex.Doc.new()
       iex> map = Yex.Doc.get_map(doc, "map")
       iex> Yex.Map.set(map, "foo", "bar")
@@ -263,6 +240,7 @@ defmodule Yex.Map do
       iex> values = Yex.Map.values(map)
       iex> Enum.sort(values) # values order is not guaranteed
       [123.0, "bar"]
+  
   """
   @spec values(t) :: list(value())
   def values(%__MODULE__{doc: doc} = map) do

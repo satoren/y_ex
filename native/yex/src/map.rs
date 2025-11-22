@@ -120,6 +120,25 @@ fn map_to_map(
             .collect())
     })
 }
+/// Serialize the given map to a JSON value.
+///
+/// The function performs a read-only transaction and returns the map encoded as JSON.
+///
+/// # Parameters
+///
+/// - `current_transaction`: optional transaction resource to use; if `None`, a read-only transaction is created.
+///
+/// # Returns
+///
+/// A JSON representation of the map as a NIF term.
+///
+/// # Examples
+///
+/// ```
+/// // `map` is a `NifMap` obtained from the surrounding NIF context.
+/// let json_term = map_to_json(map, None).unwrap();
+/// // `json_term` now contains the map encoded as JSON (as a `NifAny`).
+/// ```
 #[rustler::nif]
 fn map_to_json(
     map: NifMap,
@@ -130,6 +149,23 @@ fn map_to_json(
         Ok(map.to_json(txn).into())
     })
 }
+/// Returns all keys stored in the map.
+///
+/// Performs the operation inside the provided read transaction or opens a read transaction when `None`.
+///
+/// # Returns
+/// A vector containing each map key as a `String`.
+///
+/// # Examples
+///
+/// ```no_run
+/// # use yex::map::map_keys;
+/// # use yex::types::NifMap;
+/// # use rustler::ResourceArc;
+/// # use yex::transaction::TransactionResource;
+/// # let map: NifMap = unimplemented!();
+/// let keys = map_keys(map, None).unwrap();
+/// ```
 #[rustler::nif]
 fn map_keys(
     map: NifMap,
@@ -140,6 +176,18 @@ fn map_keys(
         Ok(map.keys(txn).map(String::from).collect())
     })
 }
+/// Return all values stored in the map as `NifYOut`, using the map's document for conversion.
+///
+/// The result is a `Vec<NifYOut>` containing every value from the map. Any nested vectors produced
+/// by the underlying `values()` iterator are flattened so the returned vector is a single-level list.
+///
+/// # Examples
+///
+/// ```
+/// // assume `map` is a `NifMap` and `txn_res` is an optional TransactionResource
+/// let values: Vec<NifYOut> = map_values(map, None).unwrap();
+/// assert!(values.iter().all(|v| matches!(v, NifYOut::Y(..) | NifYOut::Scalar(..))));
+/// ```
 #[rustler::nif]
 fn map_values(
     map: NifMap,

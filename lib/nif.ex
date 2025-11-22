@@ -92,14 +92,90 @@ defmodule Yex.Nif do
   def map_set(_map, _cur_txn, _key, _value), do: :erlang.nif_error(:nif_not_loaded)
   def map_size(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_get(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
-  def map_contains_key(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
-  def map_delete(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
-  def map_to_map(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
-  def map_keys(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
-  def map_values(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
-  def map_to_json(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  @doc """
+Checks whether the given map contains the specified key.
 
-  def xml_fragment_insert(_xml_fragment, _cur_txn, _index, _content),
+## Parameters
+
+  - map: The map resource to query.
+  - cur_txn: The current transaction context.
+  - key: The key to look up in the map.
+
+@returns `true` if the map contains `key`, `false` otherwise.
+"""
+@spec map_contains_key(term(), term(), term()) :: boolean()
+def map_contains_key(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
+  @doc """
+Delete `key` from `map` within the given transaction and return the updated map.
+"""
+@spec map_delete(term(), term(), term()) :: term()
+def map_delete(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
+  @doc """
+Converts a Yex map value into a plain Elixir map.
+
+## Parameters
+
+  - map: A Yex map handle or reference to convert.
+  - _cur_txn: Current transaction context (passed through; not documented).
+
+## Returns
+
+  - An Elixir `map()` containing the same key-value pairs as the Yex map.
+"""
+@spec map_to_map(term(), term()) :: map()
+def map_to_map(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  @doc """
+Retrieve the keys of a map within the given transaction.
+
+## Parameters
+
+  - map: The Yex map reference or representation to query.
+  - cur_txn: The current transaction context to read from.
+
+## Returns
+
+  - List of keys present in the map.
+"""
+@spec map_keys(term(), term()) :: [term()]
+def map_keys(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  @doc """
+Retrieve all values from the shared map in the context of a transaction.
+
+## Parameters
+
+  - map: The shared map handle.
+  - cur_txn: The current transaction context.
+
+## Returns
+
+  - A list of values contained in the map.
+"""
+@spec map_values(term(), term()) :: [term()]
+def map_values(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  @doc """
+Serialize the shared map to a JSON string.
+
+Converts the map's contents into a JSON-formatted binary suitable for external consumption.
+"""
+@spec map_to_json(term(), term()) :: String.t()
+def map_to_json(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  @doc """
+    Insert content into an XML fragment at the given index.
+    
+    ## Parameters
+    
+      - xml_fragment: The target XML fragment.
+      - cur_txn: Current transaction context.
+      - index: Zero-based position at which to insert the content.
+      - content: XML node(s) or text to insert.
+    
+    ## Returns
+    
+    The updated XML fragment.
+    """
+    @spec xml_fragment_insert(term(), term(), non_neg_integer(), term()) :: term()
+    def xml_fragment_insert(_xml_fragment, _cur_txn, _index, _content),
     do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_delete_range(_xml_fragment, _cur_txn, _index, _length),
