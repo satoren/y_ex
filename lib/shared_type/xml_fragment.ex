@@ -222,10 +222,11 @@ defmodule Yex.XmlFragment do
   ## Examples
       iex> doc = Yex.Doc.new()
       iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
-      iex> Yex.XmlFragment.push(xml, Yex.XmlElementPrelim.empty("div"))
-      iex> node = Yex.XmlFragment.get_lazy(xml, 0, fn -> Yex.XmlElementPrelim.empty("default") end)
-      iex> match?(%Yex.XmlElement{}, node)
-      true
+      iex> Yex.XmlFragment.push(xml, Yex.XmlTextPrelim.from("Hello"))
+      iex> Yex.XmlFragment.get_lazy(xml, 0, fn -> Yex.XmlFragment.push_and_get(xml, Yex.XmlTextPrelim.from("Computed")) end) |> to_string()
+      "Hello"
+      iex> Yex.XmlFragment.get_lazy(xml, 10, fn -> Yex.XmlFragment.push_and_get(xml, Yex.XmlTextPrelim.from("Computed")) end) |> to_string()
+      "Computed"
 
   Particularly useful with `*_and_get` functions for get-or-create patterns:
 
@@ -301,12 +302,20 @@ defmodule Yex.XmlFragment do
 
   defimpl Yex.Output do
     @doc """
-    Implementation of the Yex.Output protocol for XmlFragment.
-    Converts the XML fragment to its preliminary representation.
+    Converts an XmlFragment into its preliminary (serializable) representation.
     """
+    @spec as_prelim(Yex.XmlFragment.t()) :: Yex.XmlFragmentPrelim.t()
     def as_prelim(xml_fragment) do
       Yex.XmlFragment.as_prelim(xml_fragment)
     end
+  end
+
+  defimpl String.Chars do
+    @doc """
+    Convert the XML fragment to its string representation.
+    """
+    @spec to_string(Yex.XmlFragment.t()) :: String.t()
+    def to_string(xml_fragment), do: Yex.XmlFragment.to_string(xml_fragment)
   end
 end
 

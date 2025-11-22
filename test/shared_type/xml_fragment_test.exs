@@ -113,9 +113,9 @@ defmodule YexXmlFragmentTest do
       XmlFragment.push(f, XmlTextPrelim.from("3"))
       assert text2 = XmlFragment.fetch!(f, 1)
       XmlFragment.insert_after(f, text2, XmlElementPrelim.empty("div"))
-      assert "12<div></div>3" = XmlFragment.to_string(f)
+      assert "12<div></div>3" = to_string(f)
       XmlFragment.insert_after(f, nil, XmlElementPrelim.empty("div"))
-      assert "<div></div>12<div></div>3" = XmlFragment.to_string(f)
+      assert "<div></div>12<div></div>3" = to_string(f)
     end
 
     test "compare", %{xml_fragment: f} do
@@ -227,7 +227,7 @@ defmodule YexXmlFragmentTest do
     test "to_string", %{xml_fragment: f} do
       XmlFragment.push(f, XmlTextPrelim.from("test"))
       XmlFragment.push(f, XmlElementPrelim.empty("div"))
-      assert "test<div></div>" = XmlFragment.to_string(f)
+      assert "test<div></div>" = to_string(f)
     end
 
     test "next_sibling", %{xml_fragment: f} do

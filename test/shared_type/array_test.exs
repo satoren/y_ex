@@ -667,6 +667,20 @@ defmodule Yex.ArrayTest do
       assert :default == Enum.at(array, 10, :default)
       assert :not_found == Enum.at(array, -10, :not_found)
     end
+
+    test "into" do
+      doc = Doc.new()
+
+      array = Doc.get_array(doc, "array")
+      Array.push(array, "Hello1")
+      Array.push(array, "Hello2")
+      Array.push(array, "Hello3")
+
+      result =
+        Enum.into(array, MapSet.new())
+
+      assert MapSet.new(["Hello1", "Hello2", "Hello3"]) == result
+    end
   end
 
   describe "edge and error cases for coverage" do

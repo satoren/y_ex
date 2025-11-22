@@ -132,9 +132,21 @@ defmodule Yex.Text do
   end
 
   defimpl Yex.Output do
+    @doc """
+    Converts the given text into a preliminary `Yex.TextPrelim` representation.
+    """
+    @spec as_prelim(Yex.Text.t()) :: Yex.TextPrelim.t()
     def as_prelim(text) do
       Yex.Text.as_prelim(text)
     end
+  end
+
+  defimpl String.Chars do
+    @doc """
+    Convert a Yex.Text value into its textual content.
+    """
+    @spec to_string(Yex.Text.t()) :: String.t()
+    def to_string(text), do: Yex.Text.to_string(text)
   end
 
   @doc """
