@@ -74,6 +74,10 @@ defmodule Yex.Nif do
 
   def array_insert(_array, _cur_txn, _index, _value), do: :erlang.nif_error(:nif_not_loaded)
   def array_insert_list(_array, _cur_txn, _index, _values), do: :erlang.nif_error(:nif_not_loaded)
+
+  def array_insert_and_get(_array, _cur_txn, _index, _value),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def array_length(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def array_to_list(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
@@ -100,6 +104,9 @@ defmodule Yex.Nif do
   def xml_fragment_insert(_xml_fragment, _cur_txn, _index, _content),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def xml_fragment_insert_and_get(_xml_fragment, _cur_txn, _index, _content),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def xml_fragment_delete_range(_xml_fragment, _cur_txn, _index, _length),
     do: :erlang.nif_error(:nif_not_loaded)
 
@@ -110,6 +117,9 @@ defmodule Yex.Nif do
   def xml_fragment_parent(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_element_insert(_xml_element, _cur_txn, _index, _content),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_element_insert_and_get(_xml_element, _cur_txn, _index, _content),
     do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_element_delete_range(_xml_element, _cur_txn, _index, _length),

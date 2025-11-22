@@ -22,6 +22,35 @@ defmodule YexXmlFragmentTest do
   end
 
   describe "xml_fragment" do
+    @doc """
+    Tests behavior of `insert/3` and `insert_and_get/3` when given negative indices.
+    - `-1`: append at the end
+    - `-2`: insert before the last element
+    """
+    test "insert/3 and insert_and_get/3 with negative index", %{xml_fragment: frag} do
+      # Insert at the beginning
+      assert :ok = Yex.XmlFragment.insert(frag, 0, XmlTextPrelim.from("a"))
+      assert :ok = Yex.XmlFragment.insert(frag, 1, XmlTextPrelim.from("b"))
+      assert :ok = Yex.XmlFragment.insert(frag, 2, XmlTextPrelim.from("c"))
+      # -1: append at the end
+      assert :ok = Yex.XmlFragment.insert(frag, -1, XmlTextPrelim.from("x"))
+
+      assert ["a", "b", "c", "x"] =
+               Enum.map(0..3, &XmlText.to_string(Yex.XmlFragment.fetch!(frag, &1)))
+
+      # -2: insert before the last element
+      assert :ok = Yex.XmlFragment.insert(frag, -2, XmlTextPrelim.from("y"))
+
+      assert ["a", "b", "c", "y", "x"] =
+               Enum.map(0..4, &XmlText.to_string(Yex.XmlFragment.fetch!(frag, &1)))
+
+      # insert_and_get behaves the same
+      assert %XmlText{} = Yex.XmlFragment.insert_and_get(frag, -1, XmlTextPrelim.from("z"))
+
+      assert ["a", "b", "c", "y", "x", "z"] =
+               Enum.map(0..5, &XmlText.to_string(Yex.XmlFragment.fetch!(frag, &1)))
+    end
+
     test "push", %{xml_fragment: f} do
       XmlFragment.push(f, XmlTextPrelim.from(""))
       {:ok, %XmlText{}} = XmlFragment.fetch(f, 0)

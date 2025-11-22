@@ -116,6 +116,30 @@ defmodule YexXmlElementTest do
       assert 2 = XmlElement.length(xml)
     end
 
+    test "insert/3 and insert_and_get/3 with negative index", %{xml_element: xml} do
+      # Insert at the beginning
+      assert :ok = Yex.XmlElement.insert(xml, 0, XmlTextPrelim.from("a"))
+      assert :ok = Yex.XmlElement.insert(xml, 1, XmlTextPrelim.from("b"))
+      assert :ok = Yex.XmlElement.insert(xml, 2, XmlTextPrelim.from("c"))
+      # -1: append at the end
+      assert :ok = Yex.XmlElement.insert(xml, -1, XmlTextPrelim.from("x"))
+
+      assert ["a", "b", "c", "x"] =
+               Enum.map(0..3, &XmlText.to_string(Yex.XmlElement.fetch!(xml, &1)))
+
+      # -2: insert before the last element
+      assert :ok = Yex.XmlElement.insert(xml, -2, XmlTextPrelim.from("y"))
+
+      assert ["a", "b", "c", "y", "x"] =
+               Enum.map(0..4, &XmlText.to_string(Yex.XmlElement.fetch!(xml, &1)))
+
+      # insert_and_get behaves the same
+      assert %XmlText{} = Yex.XmlElement.insert_and_get(xml, -1, XmlTextPrelim.from("z"))
+
+      assert ["a", "b", "c", "y", "x", "z"] =
+               Enum.map(0..5, &XmlText.to_string(Yex.XmlElement.fetch!(xml, &1)))
+    end
+
     test "insert_and_get/3 inserts and returns the element", %{xml_element: xml} do
       assert %XmlElement{} =
                XmlElement.insert_and_get(xml, 0, XmlElementPrelim.empty("p"))
@@ -676,37 +700,17 @@ defmodule YexXmlElementTest do
       assert_raise ArgumentError, fn -> XmlElement.fetch!(xml, 0) end
     end
 
-    test "insert/3 with out of bounds index", %{xml_element: xml} do
-      assert :ok == XmlElement.insert(xml, 0, XmlTextPrelim.from("a"))
-
-      try do
-        XmlElement.insert(xml, 10, XmlTextPrelim.from("b"))
-        flunk("Expected error for out of bounds insert")
-      rescue
-        ErlangError -> :ok
-        ArgumentError -> :ok
-      end
-    end
-
     test "delete/3 with out of bounds and negative index", %{xml_element: xml} do
-      try do
-        XmlElement.delete(xml, 0, 1)
-        flunk("Expected error for out of bounds delete")
-      rescue
-        ErlangError -> :ok
-        ArgumentError -> :ok
-      end
+      assert :ok == XmlElement.delete(xml, 0, 1)
+      assert "<div></div>" == XmlElement.to_string(xml)
 
       XmlElement.push(xml, XmlTextPrelim.from("a"))
+      assert "<div>a</div>" == XmlElement.to_string(xml)
       assert :ok == XmlElement.delete(xml, 0, 1)
+      assert "<div></div>" == XmlElement.to_string(xml)
 
-      try do
-        XmlElement.delete(xml, 0, 1)
-        flunk("Expected error for out of bounds delete")
-      rescue
-        ErlangError -> :ok
-        ArgumentError -> :ok
-      end
+      assert :ok == XmlElement.delete(xml, 0, 1)
+      assert "<div></div>" == XmlElement.to_string(xml)
     end
 
     test "insert_attribute/3, remove_attribute/2, get_attribute/2, get_attributes/1", %{

@@ -87,12 +87,7 @@ defmodule Yex.XmlFragment do
         ) :: Yex.XmlElement.t() | Yex.XmlText.t()
   def insert_and_get(%__MODULE__{doc: doc} = xml_fragment, index, content) do
     Doc.run_in_worker_process doc do
-      :ok = Yex.Nif.xml_fragment_insert(xml_fragment, cur_txn(xml_fragment), index, content)
-
-      case Yex.Nif.xml_fragment_get(xml_fragment, cur_txn(xml_fragment), index) do
-        {:ok, value} -> value
-        :error -> raise RuntimeError, "Failed to get inserted XML fragment"
-      end
+      Yex.Nif.xml_fragment_insert_and_get(xml_fragment, cur_txn(xml_fragment), index, content)
     end
   end
 
@@ -139,12 +134,12 @@ defmodule Yex.XmlFragment do
           index + 1
         end
 
-      :ok = insert(xml_fragment, target_index, content)
-
-      case fetch(xml_fragment, target_index) do
-        {:ok, value} -> value
-        :error -> raise RuntimeError, "Failed to get inserted XML fragment"
-      end
+      Yex.Nif.xml_fragment_insert_and_get(
+        xml_fragment,
+        cur_txn(xml_fragment),
+        target_index,
+        content
+      )
     end
   end
 

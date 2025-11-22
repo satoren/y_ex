@@ -77,12 +77,7 @@ defmodule Yex.XmlElement do
           Yex.XmlElement.t() | Yex.XmlText.t()
   def insert_and_get(%__MODULE__{doc: doc} = xml_element, index, content) do
     Doc.run_in_worker_process doc do
-      :ok = Yex.Nif.xml_element_insert(xml_element, cur_txn(xml_element), index, content)
-
-      case Yex.Nif.xml_element_get(xml_element, cur_txn(xml_element), index) do
-        {:ok, value} -> value
-        :error -> raise RuntimeError, "Failed to get inserted XML element"
-      end
+      Yex.Nif.xml_element_insert_and_get(xml_element, cur_txn(xml_element), index, content)
     end
   end
 
@@ -130,12 +125,7 @@ defmodule Yex.XmlElement do
           index + 1
         end
 
-      :ok = insert(xml_element, target_index, content)
-
-      case fetch(xml_element, target_index) do
-        {:ok, value} -> value
-        :error -> raise RuntimeError, "Failed to get inserted XML element"
-      end
+      insert_and_get(xml_element, target_index, content)
     end
   end
 

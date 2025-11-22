@@ -11,11 +11,44 @@ defmodule Yex.ArrayTest do
   end
 
   describe "basic array operations" do
+    test "insert/3 with index is capped at the list length", %{array: array} do
+      assert :ok = Array.insert(array, 0, "A")
+      assert ["A"] = Array.to_list(array)
+
+      assert :ok = Array.insert(array, 100, "B")
+      assert ["A", "B"] = Array.to_list(array)
+    end
+
     test "insert/3 adds element at specified position", %{array: array} do
       assert :ok = Array.insert(array, 0, "first")
       assert :ok = Array.insert(array, 1, "second")
       assert :ok = Array.insert(array, 1, "middle")
       assert ["first", "middle", "second"] = Array.to_list(array)
+    end
+
+    test "insert/3 with negative index", %{array: array} do
+      Array.push(array, "first")
+      Array.push(array, "second")
+      Array.push(array, "third")
+      # Insert at the end (-1 means after "third")
+      assert :ok = Array.insert(array, -1, "after_last")
+      assert ["first", "second", "third", "after_last"] = Array.to_list(array)
+
+      # Insert before last element (-2 means before last, i.e., at length-2)
+      assert :ok = Array.insert(array, -2, "before_last")
+      assert ["first", "second", "third", "before_last", "after_last"] = Array.to_list(array)
+
+      assert :ok = Array.insert(array, -9999, "-9999")
+
+      assert ["-9999", "first", "second", "third", "before_last", "after_last"] =
+               Array.to_list(array)
+    end
+
+    test "insert_list/3 with negative index", %{array: array} do
+      Array.push(array, "first")
+      Array.push(array, "last")
+      assert :ok = Array.insert_list(array, -1, ["a", "b", "c"])
+      assert ["first", "last", "a", "b", "c"] = Array.to_list(array)
     end
 
     test "insert_and_get/3 inserts and returns the element", %{array: array} do
@@ -43,7 +76,7 @@ defmodule Yex.ArrayTest do
       Array.push(array, "first")
       Array.push(array, "second")
       assert "inserted" = Array.insert_and_get(array, -1, "inserted")
-      assert ["first", "inserted", "second"] = Array.to_list(array)
+      assert ["first", "second", "inserted"] = Array.to_list(array)
     end
 
     test "insert_list/3 adds multiple elements", %{array: array} do
@@ -295,7 +328,8 @@ defmodule Yex.ArrayTest do
 
     Array.push(array, "1")
     Array.push(array, "2")
-    assert :error == Array.delete_range(array, 0, 3)
+    assert :ok == Array.delete_range(array, 0, 3)
+    assert [] == Array.to_list(array)
   end
 
   test "delete with minus" do
@@ -667,22 +701,16 @@ defmodule Yex.ArrayTest do
       assert {:ok, "a"} = Array.fetch(array, 0)
       assert {:ok, "a"} = Array.fetch(array, -1)
       assert :error = Array.fetch(array, 2)
-      assert_raise ArgumentError, fn -> Array.fetch(array, -2) end
+      assert :error = Array.fetch(array, -2)
     end
 
     test "delete/2 with empty array and out of bounds" do
       doc = Doc.new()
       array = Doc.get_array(doc, "array")
-      assert :error = Array.delete(array, 0)
+      assert :ok = Array.delete(array, 0)
       Array.push(array, "a")
       assert :ok = Array.delete(array, 0)
-      assert :error = Array.delete(array, 0)
-    end
-
-    test "insert/3 with out of bounds index" do
-      doc = Doc.new()
-      array = Doc.get_array(doc, "array")
-      assert_raise ErlangError, fn -> Array.insert(array, 10, "x") end
+      assert :ok = Array.delete(array, 0)
     end
 
     test "to_list/1 and to_json/1 with empty and nested" do

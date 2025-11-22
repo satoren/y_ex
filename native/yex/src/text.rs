@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::utils::{normalize_index, normalize_index_for_insert};
 use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
 use types::text::{Diff, YChange};
 use yrs::*;
@@ -54,11 +55,12 @@ fn text_insert(
     env: Env<'_>,
     text: NifText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     chunk: &str,
 ) -> NifResult<Atom> {
     text.mutably(env, current_transaction, |txn| {
         let text = text.get_ref(txn)?;
+        let index = normalize_index_for_insert(text.len(txn), index);
         text.insert(txn, index, chunk);
         Ok(atoms::ok())
     })
@@ -69,12 +71,13 @@ fn text_insert_with_attributes(
     env: Env<'_>,
     text: NifText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     chunk: &str,
     attr: NifAttr,
 ) -> NifResult<Atom> {
     text.mutably(env, current_transaction, |txn| {
         let text = text.get_ref(txn)?;
+        let index = normalize_index_for_insert(text.len(txn), index);
         text.insert_with_attributes(txn, index, chunk, attr.0);
         Ok(atoms::ok())
     })
@@ -85,11 +88,12 @@ fn text_delete(
     env: Env<'_>,
     text: NifText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     len: u32,
 ) -> NifResult<Atom> {
     text.mutably(env, current_transaction, |txn| {
         let text = text.get_ref(txn)?;
+        let index = normalize_index(text.len(txn), index);
         text.remove_range(txn, index, len);
         Ok(atoms::ok())
     })
@@ -100,12 +104,13 @@ fn text_format(
     env: Env<'_>,
     text: NifText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     len: u32,
     attr: NifAttr,
 ) -> NifResult<Atom> {
     text.mutably(env, current_transaction, |txn| {
         let text = text.get_ref(txn)?;
+        let index = normalize_index(text.len(txn), index);
         text.format(txn, index, len, attr.0);
         Ok(atoms::ok())
     })
