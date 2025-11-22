@@ -51,8 +51,6 @@ defmodule Yex.XmlText do
   @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{doc: doc} = xml_text, index, length) do
     Doc.run_in_worker_process doc do
-      index = if index < 0, do: __MODULE__.length(xml_text) + index, else: index
-
       Yex.Nif.xml_text_delete(xml_text, cur_txn(xml_text), index, length)
     end
   end

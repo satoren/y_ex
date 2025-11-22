@@ -23,3 +23,6 @@ jobs:
     - name: format check
       run: cargo fmt --check
       working-directory: native/yex
+    - name: Test
+      run: cargo test --workspace
+      working-directory: native/yex

@@ -72,7 +72,6 @@ defmodule Yex.Text do
   @spec delete(t, integer(), integer()) :: :ok | :error
   def delete(%__MODULE__{doc: doc} = text, index, length) do
     Doc.run_in_worker_process doc do
-      index = if index < 0, do: __MODULE__.length(text) + index, else: index
       Yex.Nif.text_delete(text, cur_txn(text), index, length)
     end
   end

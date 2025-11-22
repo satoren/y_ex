@@ -14,6 +14,7 @@ use crate::{
     shared_type::{NifSharedType, SharedTypeId},
     text::encode_diffs,
     transaction::TransactionResource,
+    utils::{capped_index_and_length, normalize_index, normalize_index_for_insert},
     yinput::{NifXmlIn, NifYInput, NifYInputDelta},
     youtput::NifYOut,
     ENV,
@@ -128,14 +129,38 @@ fn xml_fragment_insert(
     env: Env<'_>,
     xml: NifXmlFragment,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     value: NifXmlIn,
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         xml.mutably(env, current_transaction, |txn| {
             let xml = xml.get_ref(txn)?;
+            let index = normalize_index_for_insert(xml.len(txn), index);
             xml.insert(txn, index, value);
             Ok(atoms::ok())
+        })
+    })
+}
+#[rustler::nif]
+fn xml_fragment_insert_and_get(
+    env: Env<'_>,
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: i64,
+    value: NifXmlIn,
+) -> NifResult<NifYOut> {
+    let doc = xml.doc();
+    ENV.set(&mut env.clone(), || {
+        xml.mutably(env, current_transaction, |txn| {
+            let xml = xml.get_ref(txn)?;
+            let index = normalize_index_for_insert(xml.len(txn), index);
+            xml.insert(txn, index, value);
+
+            xml.get(txn, index)
+                .map(|out| NifYOut::from_xml_out(out, doc.clone()))
+                .ok_or_else(|| {
+                    rustler::Error::RaiseTerm(Box::new("Failed to retrieve inserted element"))
+                })
         })
     })
 }
@@ -154,11 +179,12 @@ fn xml_fragment_length(
 fn xml_fragment_get(
     xml: NifXmlFragment,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
 ) -> NifResult<(Atom, NifYOut)> {
     let doc = xml.doc();
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
+        let index = normalize_index(xml.len(txn), index);
         xml.get(txn, index)
             .map(|b| (atoms::ok(), NifYOut::from_xml_out(b, doc.clone())))
             .ok_or(rustler::Error::Atom("error"))
@@ -169,12 +195,15 @@ fn xml_fragment_delete_range(
     env: Env<'_>,
     xml: NifXmlFragment,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     length: u32,
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        xml.remove_range(txn, index, length);
+        let capped_len = capped_index_and_length(xml.len(txn), index, length);
+        if let Some((index, len)) = capped_len {
+            xml.remove_range(txn, index, len);
+        }
         Ok(atoms::ok())
     })
 }
@@ -208,14 +237,37 @@ fn xml_element_insert(
     env: Env<'_>,
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     value: NifXmlIn,
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         xml.mutably(env, current_transaction, |txn| {
             let xml = xml.get_ref(txn)?;
+            let index = normalize_index_for_insert(xml.len(txn), index);
             xml.insert(txn, index, value);
             Ok(atoms::ok())
+        })
+    })
+}
+#[rustler::nif]
+fn xml_element_insert_and_get(
+    env: Env<'_>,
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: i64,
+    value: NifXmlIn,
+) -> NifResult<NifYOut> {
+    let doc = xml.doc();
+    ENV.set(&mut env.clone(), || {
+        xml.mutably(env, current_transaction, |txn| {
+            let xml = xml.get_ref(txn)?;
+            let index = normalize_index_for_insert(xml.len(txn), index);
+            xml.insert(txn, index, value);
+            xml.get(txn, index)
+                .map(|out| NifYOut::from_xml_out(out, doc.clone()))
+                .ok_or_else(|| {
+                    rustler::Error::RaiseTerm(Box::new("Failed to retrieve inserted element"))
+                })
         })
     })
 }
@@ -233,11 +285,12 @@ fn xml_element_length(
 fn xml_element_get(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
 ) -> NifResult<(Atom, NifYOut)> {
     let doc = xml.doc();
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
+        let index = normalize_index(xml.len(txn), index);
         xml.get(txn, index)
             .map(|b| (atoms::ok(), NifYOut::from_xml_out(b, doc.clone())))
             .ok_or(rustler::Error::Atom("error"))
@@ -248,12 +301,16 @@ fn xml_element_delete_range(
     env: Env<'_>,
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     length: u32,
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        xml.remove_range(txn, index, length);
+        let target_len = xml.len(txn);
+        let capped_len = capped_index_and_length(target_len, index, length);
+        if let Some((index, len)) = capped_len {
+            xml.remove_range(txn, index, len);
+        }
         Ok(atoms::ok())
     })
 }
@@ -389,11 +446,12 @@ fn xml_text_insert(
     env: Env<'_>,
     xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     chunk: &str,
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
+        let index = normalize_index_for_insert(xml.len(txn), index);
         xml.insert(txn, index, chunk);
         Ok(atoms::ok())
     })
@@ -404,12 +462,13 @@ fn xml_text_insert_with_attributes(
     env: Env<'_>,
     xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     chunk: &str,
     attr: NifAttr,
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
+        let index = normalize_index_for_insert(xml.len(txn), index);
         xml.insert_with_attributes(txn, index, chunk, attr.0);
         Ok(atoms::ok())
     })
@@ -420,12 +479,16 @@ fn xml_text_delete(
     env: Env<'_>,
     xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     len: u32,
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        xml.remove_range(txn, index, len);
+        let capped_len = capped_index_and_length(xml.len(txn), index, len);
+
+        if let Some((index, len)) = capped_len {
+            xml.remove_range(txn, index, len);
+        }
         Ok(atoms::ok())
     })
 }
@@ -445,13 +508,17 @@ fn xml_text_format(
     env: Env<'_>,
     xml: NifXmlText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     len: u32,
     attr: NifAttr,
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        xml.format(txn, index, len, attr.0);
+        let capped_len = capped_index_and_length(xml.len(txn), index, len);
+
+        if let Some((index, len)) = capped_len {
+            xml.format(txn, index, len, attr.0);
+        }
         Ok(atoms::ok())
     })
 }

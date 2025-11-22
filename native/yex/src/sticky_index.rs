@@ -4,7 +4,7 @@ use yrs::{Assoc, IndexedSequence, StickyIndex};
 
 use crate::{
     atoms, doc::NifDoc, shared_type::NifSharedType, transaction::TransactionResource,
-    wrap::SliceIntoBinary, yinput::NifSharedTypeInput,
+    utils::normalize_index, wrap::SliceIntoBinary, yinput::NifSharedTypeInput,
 };
 
 pub struct StickyIndexRef(pub StickyIndex);
@@ -67,7 +67,7 @@ fn create_sticky_index<T>(
     shared_type: &T,
     env: Env<'_>,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     assoc: NifAssoc,
 ) -> NifResult<NifStickyIndex>
 where
@@ -77,6 +77,8 @@ where
     shared_type.mutably(env, current_transaction, |txn| {
         let doc = shared_type.doc().clone();
         let shared_ref = shared_type.get_ref(txn)?;
+        let len = shared_ref.as_ref().len();
+        let index = normalize_index(len, index);
         let sticky_index = shared_ref
             .sticky_index(txn, index, (&assoc).into())
             .ok_or(rustler::Error::BadArg)?;
@@ -93,7 +95,7 @@ fn sticky_index_new(
     env: Env<'_>,
     shared_type: NifSharedTypeInput,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    index: u32,
+    index: i64,
     assoc: NifAssoc,
 ) -> NifResult<NifStickyIndex> {
     match shared_type {

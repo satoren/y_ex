@@ -25,20 +25,50 @@ defmodule Yex.Array do
   alias Yex.Doc
   require Yex.Doc
 
+  @u32_max 2 ** 32 - 1
+
   @doc """
   Inserts content at the specified index.
   Returns :ok on success.
 
   ## Parameters
     * `array` - The array to modify
-    * `index` - The position to insert at (0-based)
-    * `content` - The content to insert
+    * `index` - The position to insert at (0-based). Supports negative indexing: -1 for end (append), -2 for before last, etc.
+    * `content` - The content to insert (can be any JSON-compatible value or shared type)
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.insert(array, 0, "Hello")
+      :ok
+      iex> Yex.Array.insert(array, 1, "World")
+      :ok
+      iex> Yex.Array.to_json(array)
+      ["Hello", "World"]
+
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.insert(array, 0, Yex.ArrayPrelim.from([1, 2, 3]))
+      :ok
+      iex> {:ok, nested} = Yex.Array.fetch(array, 0)
+      iex> Yex.Array.to_json(nested)
+      [1.0, 2.0, 3.0]
+
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "first")
+      iex> Yex.Array.push(array, "second")
+      iex> Yex.Array.push(array, "third")
+      iex> Yex.Array.insert(array, -1, "after_last")
+      :ok
+      iex> Yex.Array.to_json(array)
+      ["first", "second", "third", "after_last"]
   """
   @spec insert(t, integer(), Yex.input_type()) :: :ok
   def insert(%__MODULE__{doc: doc} = array, index, content) when is_integer(index) do
-    Doc.run_in_worker_process(doc,
-      do: Yex.Nif.array_insert(array, cur_txn(array), index, content)
-    )
+    Doc.run_in_worker_process doc do
+      Yex.Nif.array_insert(array, cur_txn(array), index, content)
+    end
   end
 
   @doc """
@@ -53,18 +83,17 @@ defmodule Yex.Array do
   @spec insert_and_get(t, integer(), Yex.input_type()) :: value()
   def insert_and_get(%__MODULE__{doc: doc} = array, index, content) when is_integer(index) do
     Doc.run_in_worker_process doc do
-      index = if index < 0, do: __MODULE__.length(array) + index, else: index
-      :ok = Yex.Nif.array_insert(array, cur_txn(array), index, content)
-
-      case Yex.Nif.array_get(array, cur_txn(array), index) do
-        {:ok, value} -> value
-        :error -> raise RuntimeError, "Failed to get inserted value"
-      end
+      Yex.Nif.array_insert_and_get(array, cur_txn(array), index, content)
     end
   end
 
   @doc """
   Insert contents at the specified index.
+
+  ## Parameters
+    * `array` - The array to modify
+    * `index` - The position to insert at (0-based). Supports negative indexing: -1 for end (append), -2 for before last, etc.
+    * `contents` - A list of contents to insert
 
   ## Examples
       iex> doc = Yex.Doc.new()
@@ -75,9 +104,9 @@ defmodule Yex.Array do
   """
   @spec insert_list(t, integer(), list(Yex.any_type())) :: :ok
   def insert_list(%__MODULE__{doc: doc} = array, index, contents) when is_integer(index) do
-    Doc.run_in_worker_process(doc,
-      do: Yex.Nif.array_insert_list(array, cur_txn(array), index, contents)
-    )
+    Doc.run_in_worker_process doc do
+      Yex.Nif.array_insert_list(array, cur_txn(array), index, contents)
+    end
   end
 
   @doc """
@@ -89,10 +118,8 @@ defmodule Yex.Array do
     * `content` - The content to append
   """
   @spec push(t, Yex.input_type()) :: :ok
-  def push(%__MODULE__{doc: doc} = array, content) do
-    Doc.run_in_worker_process(doc,
-      do: insert(array, __MODULE__.length(array), content)
-    )
+  def push(array, content) do
+    insert(array, @u32_max, content)
   end
 
   @doc """
@@ -111,16 +138,8 @@ defmodule Yex.Array do
       "Hello"
   """
   @spec push_and_get(t, Yex.input_type()) :: value()
-  def push_and_get(%__MODULE__{doc: doc} = array, content) do
-    Doc.run_in_worker_process doc do
-      index = __MODULE__.length(array)
-      :ok = Yex.Nif.array_insert(array, cur_txn(array), index, content)
-
-      case Yex.Nif.array_get(array, cur_txn(array), index) do
-        {:ok, value} -> value
-        :error -> raise RuntimeError, "Failed to get pushed value"
-      end
-    end
+  def push_and_get(array, content) do
+    insert_and_get(array, @u32_max, content)
   end
 
   @doc """
@@ -151,17 +170,31 @@ defmodule Yex.Array do
   @doc """
   Deletes a range of contents starting at the specified index.
   Returns :ok on success, :error on failure.
+  capped to the array bounds.
 
   ## Parameters
     * `array` - The array to modify
     * `index` - The starting position to delete from (0-based)
     * `length` - The number of elements to delete
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "1")
+      iex> Yex.Array.push(array, "2")
+      iex> Yex.Array.push(array, "3")
+      iex> :ok = Yex.Array.delete_range(array, 0, 2); Yex.Array.to_list(array)
+      ["3"]
+      iex> :ok = Yex.Array.delete_range(array, 0, 1); Yex.Array.to_list(array)
+      []
+      iex> Yex.Array.insert_list(array, 0, ["1", "2", "3", "4", "5"])
+      iex> Yex.Array.delete_range(array, -4, 10); Yex.Array.to_list(array)
+      ["1"]
+
   """
   @spec delete_range(t, integer(), integer()) :: :ok
   def delete_range(%__MODULE__{doc: doc} = array, index, length)
       when is_integer(index) and is_integer(length) do
     Doc.run_in_worker_process doc do
-      index = if index < 0, do: __MODULE__.length(array) + index, else: index
       Yex.Nif.array_delete_range(array, cur_txn(array), index, length)
     end
   end
@@ -179,9 +212,9 @@ defmodule Yex.Array do
   """
   @spec move_to(t, integer(), integer()) :: :ok
   def move_to(%__MODULE__{doc: doc} = array, from, to) when is_integer(from) and is_integer(to) do
-    Doc.run_in_worker_process(doc,
-      do: Yex.Nif.array_move_to(array, cur_txn(array), from, to)
-    )
+    Doc.run_in_worker_process doc do
+      Yex.Nif.array_move_to(array, cur_txn(array), from, to)
+    end
   end
 
   @spec get(t, integer(), default :: value()) :: value()
@@ -244,7 +277,6 @@ defmodule Yex.Array do
   @spec fetch(t, integer()) :: {:ok, value()} | :error
   def fetch(%__MODULE__{doc: doc} = array, index) when is_integer(index) do
     Doc.run_in_worker_process doc do
-      index = if index < 0, do: __MODULE__.length(array) + index, else: index
       Yex.Nif.array_get(array, cur_txn(array), index)
     end
   end
