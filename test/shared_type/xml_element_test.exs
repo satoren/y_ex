@@ -217,16 +217,16 @@ defmodule YexXmlElementTest do
       XmlElement.push(xml, XmlTextPrelim.from("3"))
       assert text2 = XmlElement.fetch!(xml, 1)
       XmlElement.insert_after(xml, text2, XmlElementPrelim.empty("div"))
-      assert "<div>12<div></div>3</div>" = XmlElement.to_string(xml)
+      assert "<div>12<div></div>3</div>" = to_string(xml)
       XmlElement.insert_after(xml, nil, XmlElementPrelim.empty("div"))
-      assert "<div><div></div>12<div></div>3</div>" = XmlElement.to_string(xml)
+      assert "<div><div></div>12<div></div>3</div>" = to_string(xml)
     end
 
     test "delete", %{xml_element: xml} do
       XmlElement.push(xml, XmlTextPrelim.from("content"))
-      assert "<div>content</div>" == XmlElement.to_string(xml)
+      assert "<div>content</div>" == to_string(xml)
       assert :ok == XmlElement.delete(xml, 0, 1)
-      assert "<div></div>" == XmlElement.to_string(xml)
+      assert "<div></div>" == to_string(xml)
     end
 
     test "get_tag", %{xml_element: xml1} do
@@ -441,7 +441,7 @@ defmodule YexXmlElementTest do
       assert container == XmlElement.parent(span)
 
       # Test XML output - Skipping exact string comparison since attribute order might differ
-      result = XmlElement.to_string(root)
+      result = to_string(root)
       assert String.contains?(result, "<div id=\"container\">")
       assert String.contains?(result, "<span")
       assert String.contains?(result, "class=\"highlight\"")
@@ -702,15 +702,15 @@ defmodule YexXmlElementTest do
 
     test "delete/3 with out of bounds and negative index", %{xml_element: xml} do
       assert :ok == XmlElement.delete(xml, 0, 1)
-      assert "<div></div>" == XmlElement.to_string(xml)
+      assert "<div></div>" == to_string(xml)
 
       XmlElement.push(xml, XmlTextPrelim.from("a"))
-      assert "<div>a</div>" == XmlElement.to_string(xml)
+      assert "<div>a</div>" == to_string(xml)
       assert :ok == XmlElement.delete(xml, 0, 1)
-      assert "<div></div>" == XmlElement.to_string(xml)
+      assert "<div></div>" == to_string(xml)
 
       assert :ok == XmlElement.delete(xml, 0, 1)
-      assert "<div></div>" == XmlElement.to_string(xml)
+      assert "<div></div>" == to_string(xml)
     end
 
     test "insert_attribute/3, remove_attribute/2, get_attribute/2, get_attributes/1", %{
@@ -725,7 +725,7 @@ defmodule YexXmlElementTest do
 
     test "get_tag/1, to_string/1, as_prelim/1 with empty and after ops", %{xml_element: xml} do
       assert "div" == XmlElement.get_tag(xml)
-      assert is_binary(XmlElement.to_string(xml))
+      assert is_binary(to_string(xml))
       prelim = XmlElement.as_prelim(xml)
       assert %XmlElementPrelim{tag: "div"} = prelim
     end
@@ -735,30 +735,6 @@ defmodule YexXmlElementTest do
       XmlElement.push(xml, XmlTextPrelim.from("b"))
       {:ok, n1} = XmlElement.fetch(xml, 0)
       {:ok, n2} = XmlElement.fetch(xml, 1)
-      # n1, n2はXmlText型なので、XmlElement.next_sibling/1はFunctionClauseError等を許容
-      try do
-        XmlElement.next_sibling(n1)
-        flunk("Expected error for next_sibling/1 with XmlText")
-      rescue
-        FunctionClauseError -> :ok
-        _ -> :ok
-      end
-
-      try do
-        XmlElement.prev_sibling(n2)
-        flunk("Expected error for prev_sibling/1 with XmlText")
-      rescue
-        FunctionClauseError -> :ok
-        _ -> :ok
-      end
-
-      try do
-        XmlElement.parent(n1)
-        flunk("Expected error for parent/1 with XmlText")
-      rescue
-        FunctionClauseError -> :ok
-        _ -> :ok
-      end
 
       # top-level parent
       assert frag == XmlElement.parent(xml)

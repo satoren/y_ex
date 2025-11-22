@@ -211,10 +211,11 @@ defmodule Yex.XmlElement do
       iex> doc = Yex.Doc.new()
       iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
       iex> elem = Yex.XmlFragment.push_and_get(xml, Yex.XmlElementPrelim.empty("div"))
-      iex> Yex.XmlElement.push(elem, Yex.XmlTextPrelim.from("content"))
-      iex> text = Yex.XmlElement.get_lazy(elem, 0, fn -> Yex.XmlTextPrelim.from("default") end)
-      iex> match?(%Yex.XmlText{}, text)
-      true
+      iex> Yex.XmlElement.push(elem, Yex.XmlTextPrelim.from("Hello"))
+      iex> Yex.XmlElement.get_lazy(elem, 0, fn -> Yex.XmlElement.push_and_get(elem, Yex.XmlTextPrelim.from("Computed")) end) |> to_string()
+      "Hello"
+      iex> Yex.XmlElement.get_lazy(elem, 10, fn -> Yex.XmlElement.push_and_get(elem, Yex.XmlTextPrelim.from("Computed")) end) |> to_string()
+      "Computed"
 
   Particularly useful with `*_and_get` functions for get-or-create patterns:
 
@@ -380,6 +381,10 @@ defmodule Yex.XmlElement do
     defdelegate prev_sibling(xml), to: Yex.XmlElement
     defdelegate parent(xml), to: Yex.XmlElement
     defdelegate to_string(xml), to: Yex.XmlElement
+  end
+
+  defimpl String.Chars do
+    def to_string(xml_element), do: Yex.XmlElement.to_string(xml_element)
   end
 end
 

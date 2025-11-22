@@ -174,6 +174,10 @@ defmodule Yex.XmlText do
     defdelegate parent(xml), to: Yex.XmlText
     defdelegate to_string(xml), to: Yex.XmlText
   end
+
+  defimpl String.Chars do
+    def to_string(xml_text), do: Yex.XmlText.to_string(xml_text)
+  end
 end
 
 defmodule Yex.XmlTextPrelim do

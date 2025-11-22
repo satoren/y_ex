@@ -21,7 +21,7 @@ defmodule Yex.TextTest do
         Text.insert(text, 0, "Hello", %{"bold" => true})
       end)
 
-    assert "HelloHello" == Text.to_string(text)
+    assert "HelloHello" == to_string(text)
     assert 10 == Text.length(text)
   end
 
@@ -41,7 +41,7 @@ defmodule Yex.TextTest do
       ]
 
       Text.apply_delta(text, delta)
-      assert "45" == Text.to_string(text)
+      assert "45" == to_string(text)
 
       assert [%{insert: "4"}, %{attributes: %{"bold" => true}, insert: "5"}] ==
                Text.to_delta(text)
@@ -64,7 +64,7 @@ defmodule Yex.TextTest do
 
     Text.insert(text, 0, "12345")
     Text.apply_delta(text, delta)
-    assert "15" == Text.to_string(text)
+    assert "15" == to_string(text)
 
     assert [%{insert: "15"}] ==
              Text.to_delta(text)
@@ -148,9 +148,9 @@ defmodule Yex.TextTest do
 
     Text.insert(text, 0, "123456")
 
-    assert "123456" == Text.to_string(text)
+    assert "123456" == to_string(text)
     assert :ok == Text.delete(text, -1, 1)
-    assert "12345" == Text.to_string(text)
+    assert "12345" == to_string(text)
   end
 
   test "format" do
@@ -295,14 +295,14 @@ defmodule Yex.TextTest do
 
     # Just check that some deletion occurred rather than expecting exact results
     # since implementation may vary
-    result = Text.to_string(text)
+    result = to_string(text)
     assert String.length(result) < 11
     assert String.starts_with?(result, "Hello")
 
     # Delete more text
     Text.delete(text, -3, 2)
     # Just check text was modified rather than exact result
-    assert String.length(Text.to_string(text)) < String.length(result)
+    assert String.length(to_string(text)) < String.length(result)
   end
 
   # Test format functionality more extensively
@@ -331,7 +331,7 @@ defmodule Yex.TextTest do
     Yex.Map.set(map, "empty_text", TextPrelim.from(""))
     {:ok, text} = Yex.Map.fetch(map, "empty_text")
 
-    assert Text.to_string(text) == ""
+    assert to_string(text) == ""
     assert Text.length(text) == 0
     # Implementation may return empty list for empty text
     delta = Text.to_delta(text)
@@ -351,7 +351,7 @@ defmodule Yex.TextTest do
     ]
 
     Text.apply_delta(text, delta)
-    assert Text.to_string(text) == "Hello Universe"
+    assert to_string(text) == "Hello Universe"
 
     # Apply another delta with formatting
     delta = [
@@ -401,13 +401,13 @@ defmodule Yex.TextTest do
   describe "basic text operations" do
     test "insert/3 adds text at specified position", %{text: text} do
       assert :ok = Text.insert(text, 0, "hello")
-      assert "hello" = Text.to_string(text)
+      assert "hello" = to_string(text)
 
       assert :ok = Text.insert(text, 5, " world")
-      assert "hello world" = Text.to_string(text)
+      assert "hello world" = to_string(text)
 
       assert :ok = Text.insert(text, 5, ",")
-      assert "hello, world" = Text.to_string(text)
+      assert "hello, world" = to_string(text)
     end
 
     test "insert/4 adds text with attributes", %{text: text} do
@@ -418,13 +418,13 @@ defmodule Yex.TextTest do
     test "delete/3 removes text", %{text: text} do
       Text.insert(text, 0, "hello world")
       assert :ok = Text.delete(text, 5, 6)
-      assert "hello" = Text.to_string(text)
+      assert "hello" = to_string(text)
     end
 
     test "delete/3 with negative index", %{text: text} do
       Text.insert(text, 0, "hello world")
       assert :ok = Text.delete(text, -5, 5)
-      assert "hello " = Text.to_string(text)
+      assert "hello " = to_string(text)
     end
 
     test "format/4 applies attributes to text range", %{text: text} do
@@ -443,7 +443,7 @@ defmodule Yex.TextTest do
       Text.insert(text, 0, "12345")
       delta = [%{"retain" => 1}, %{"delete" => 3}]
       assert :ok = Text.apply_delta(text, delta)
-      assert "15" = Text.to_string(text)
+      assert "15" = to_string(text)
     end
 
     test "apply_delta/2 with insert and attributes", %{text: text} do
@@ -470,7 +470,7 @@ defmodule Yex.TextTest do
 
     test "to_string/1 returns text content", %{text: text} do
       Text.insert(text, 0, "hello")
-      assert "hello" = Text.to_string(text)
+      assert "hello" = to_string(text)
     end
 
     test "to_delta/1 returns delta representation", %{text: text} do
@@ -555,18 +555,18 @@ defmodule Yex.TextTest do
   describe "boundary cases" do
     test "delete at text boundaries", %{text: text} do
       Text.insert(text, 0, "Hello")
-      # 先頭の文字を削除
+      # Delete the first character
       assert :ok = Text.delete(text, 0, 1)
-      assert "ello" = Text.to_string(text)
+      assert "ello" = to_string(text)
 
-      # 末尾の文字を削除
+      # Delete the last character
       assert :ok = Text.delete(text, 3, 1)
-      assert "ell" = Text.to_string(text)
+      assert "ell" = to_string(text)
     end
 
     test "format at text boundaries", %{text: text} do
       Text.insert(text, 0, "Hello")
-      # 先頭の文字をフォーマット
+      # Format the first character
       assert :ok = Text.format(text, 0, 1, %{"bold" => true})
 
       assert [
@@ -574,7 +574,7 @@ defmodule Yex.TextTest do
                %{insert: "ello"}
              ] = Text.to_delta(text)
 
-      # 末尾の文字をフォーマット
+      # Format the last character
       assert :ok = Text.format(text, 4, 1, %{"italic" => true})
 
       assert [
@@ -585,17 +585,17 @@ defmodule Yex.TextTest do
     end
 
     test "insert at text boundaries", %{text: text} do
-      # 空のテキストの先頭に挿入
+      # Insert at the beginning of an empty text
       assert :ok = Text.insert(text, 0, "Hello")
-      assert "Hello" = Text.to_string(text)
+      assert "Hello" = to_string(text)
 
-      # テキストの末尾に挿入
+      # Insert at the end of the text
       assert :ok = Text.insert(text, 5, " World")
-      assert "Hello World" = Text.to_string(text)
+      assert "Hello World" = to_string(text)
 
-      # テキストの中間に挿入
+      # Insert in the middle of the text
       assert :ok = Text.insert(text, 5, ",")
-      assert "Hello, World" = Text.to_string(text)
+      assert "Hello, World" = to_string(text)
     end
   end
 
@@ -640,7 +640,7 @@ defmodule Yex.TextTest do
       ]
 
       assert :ok = Text.apply_delta(text, delta)
-      assert "Hello-World" = Text.to_string(text)
+      assert "Hello-World" = to_string(text)
     end
 
     test "apply_delta with formatting", %{text: text} do
@@ -700,24 +700,24 @@ defmodule Yex.TextTest do
 
       Text.insert(text, 0, "abc")
       assert :ok = Text.delete(text, 1, 2)
-      assert "a" = Text.to_string(text)
+      assert "a" = to_string(text)
 
       assert :ok = Text.delete(text, 10, 1)
-      assert "a" = Text.to_string(text)
+      assert "a" = to_string(text)
 
       assert :ok = Text.delete(text, -10, 1)
-      assert "a" = Text.to_string(text)
+      assert "a" = to_string(text)
       assert :ok = Text.delete(text, -1, 1)
-      assert "" = Text.to_string(text)
+      assert "" = to_string(text)
     end
 
     test "to_string/1 and length/1 with empty and after ops" do
       doc = Doc.new()
       text = Doc.get_text(doc, "text")
-      assert "" = Text.to_string(text)
+      assert "" = to_string(text)
       assert 0 = Text.length(text)
       Text.insert(text, 0, "abc")
-      assert "abc" = Text.to_string(text)
+      assert "abc" = to_string(text)
       assert 3 = Text.length(text)
     end
 

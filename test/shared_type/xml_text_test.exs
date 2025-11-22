@@ -24,7 +24,7 @@ defmodule YexXmlTextTest do
       ]
 
       XmlText.apply_delta(text, delta)
-      assert "4<bold>5</bold>" == XmlText.to_string(text)
+      assert "4<bold>5</bold>" == to_string(text)
 
       assert [%{insert: "4"}, %{attributes: %{"bold" => true}, insert: "5"}] ==
                XmlText.to_delta(text)
@@ -42,7 +42,7 @@ defmodule YexXmlTextTest do
 
       XmlText.insert(text, 0, "12345")
       XmlText.apply_delta(text, delta)
-      assert "15" == XmlText.to_string(text)
+      assert "15" == to_string(text)
 
       assert [%{insert: "15"}] ==
                XmlText.to_delta(text)
@@ -110,9 +110,9 @@ defmodule YexXmlTextTest do
     test "delete with minus", %{xml_text: text} do
       XmlText.insert(text, 0, "123456")
 
-      assert "123456" == XmlText.to_string(text)
+      assert "123456" == to_string(text)
       assert :ok == XmlText.delete(text, -1, 1)
-      assert "12345" == XmlText.to_string(text)
+      assert "12345" == to_string(text)
     end
 
     test "format", %{xml_text: text} do
@@ -129,8 +129,8 @@ defmodule YexXmlTextTest do
       next = XmlText.next_sibling(text)
       next_next = XmlText.next_sibling(next)
 
-      assert "next_content" == XmlText.to_string(next)
-      assert "next_next_content" == XmlText.to_string(next_next)
+      assert "next_content" == to_string(next)
+      assert "next_next_content" == to_string(next_next)
     end
 
     test "prev_sibling", %{xml_text: text, xml_fragment: xml_fragment} do
@@ -140,7 +140,7 @@ defmodule YexXmlTextTest do
       next = XmlText.next_sibling(text)
       next_prev = XmlText.prev_sibling(next)
 
-      assert "content" == XmlText.to_string(next_prev)
+      assert "content" == to_string(next_prev)
     end
 
     test "parent", %{xml_text: text, xml_fragment: xml_fragment} do

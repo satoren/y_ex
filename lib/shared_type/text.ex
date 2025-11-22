@@ -137,6 +137,10 @@ defmodule Yex.Text do
     end
   end
 
+  defimpl String.Chars do
+    def to_string(text), do: Yex.Text.to_string(text)
+  end
+
   @doc """
   Transforms this type to a Quill Delta
 
