@@ -130,3 +130,29 @@ fn map_to_json(
         Ok(map.to_json(txn).into())
     })
 }
+#[rustler::nif]
+fn map_keys(
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Vec<String>> {
+    map.readonly(current_transaction, |txn| {
+        let map = map.get_ref(txn)?;
+        Ok(map.keys(txn).map(String::from).collect())
+    })
+}
+#[rustler::nif]
+fn map_values(
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Vec<NifYOut>> {
+    let doc = map.doc();
+    map.readonly(current_transaction, |txn| {
+        let map = map.get_ref(txn)?;
+        // idk why values() returns Iterator<Item = Vec<Out>>
+        Ok(map
+            .values(txn)
+            .flatten()
+            .map(|v| NifYOut::from_native(v, doc.clone()))
+            .collect())
+    })
+}

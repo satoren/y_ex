@@ -1,6 +1,8 @@
 defmodule Yex.MapTest do
   use ExUnit.Case
   alias Yex.{Doc, Map, MapPrelim, ArrayPrelim}
+  doctest Map
+  doctest MapPrelim
 
   setup do
     doc = Doc.new()
@@ -147,6 +149,41 @@ defmodule Yex.MapTest do
       assert 1 = Map.size(map)
       Map.set(map, "key2", "value2")
       assert 2 = Map.size(map)
+    end
+
+    test "keys/1 returns list of all keys", %{map: map} do
+      assert [] = Map.keys(map)
+      Map.set(map, "foo", "bar")
+      Map.set(map, "baz", "qux")
+      keys = Map.keys(map)
+      assert length(keys) == 2
+      assert "foo" in keys
+      assert "baz" in keys
+    end
+
+    test "values/1 returns list of all values", %{map: map} do
+      assert [] = Map.values(map)
+      Map.set(map, "foo", "bar")
+      Map.set(map, "baz", 123)
+      values = Map.values(map)
+      assert length(values) == 2
+      assert "bar" in values
+      assert 123.0 in values
+    end
+
+    test "keys/1 and values/1 with nested types", %{map: map} do
+      Map.set(map, "array", ArrayPrelim.from([1, 2, 3]))
+      Map.set(map, "text", "hello")
+
+      keys = Map.keys(map)
+      assert length(keys) == 2
+      assert "array" in keys
+      assert "text" in keys
+
+      values = Map.values(map)
+      assert length(values) == 2
+      assert "hello" in values
+      assert Enum.any?(values, fn v -> match?(%Yex.Array{}, v) end)
     end
   end
 
