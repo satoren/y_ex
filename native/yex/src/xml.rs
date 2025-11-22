@@ -481,8 +481,11 @@ fn xml_text_delete(
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        let index = normalize_index(xml.len(txn), index);
-        xml.remove_range(txn, index, len);
+        let capped_len = capped_index_and_length(xml.len(txn), index, len);
+
+        if let Some((index, len)) = capped_len {
+            xml.remove_range(txn, index, len);
+        }
         Ok(atoms::ok())
     })
 }
@@ -508,8 +511,11 @@ fn xml_text_format(
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        let index = normalize_index(xml.len(txn), index);
-        xml.format(txn, index, len, attr.0);
+        let capped_len = capped_index_and_length(xml.len(txn), index, len);
+
+        if let Some((index, len)) = capped_len {
+            xml.format(txn, index, len, attr.0);
+        }
         Ok(atoms::ok())
     })
 }

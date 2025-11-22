@@ -695,33 +695,20 @@ defmodule Yex.TextTest do
       doc = Doc.new()
       text = Doc.get_text(doc, "text")
 
-      try do
-        Text.delete(text, 0, 1)
-        flunk("Expected error for out of bounds delete")
-      rescue
-        ErlangError -> :ok
-        ArgumentError -> :ok
-      end
+      # noop deletions
+      assert :ok = Text.delete(text, 0, 1)
 
       Text.insert(text, 0, "abc")
       assert :ok = Text.delete(text, 1, 2)
       assert "a" = Text.to_string(text)
 
-      try do
-        Text.delete(text, 10, 1)
-        flunk("Expected error for out of bounds delete")
-      rescue
-        ErlangError -> :ok
-        ArgumentError -> :ok
-      end
+      assert :ok = Text.delete(text, 10, 1)
+      assert "a" = Text.to_string(text)
 
-      try do
-        Text.delete(text, -10, 1)
-        flunk("Expected error for negative index delete")
-      rescue
-        ErlangError -> :ok
-        ArgumentError -> :ok
-      end
+      assert :ok = Text.delete(text, -10, 1)
+      assert "a" = Text.to_string(text)
+      assert :ok = Text.delete(text, -1, 1)
+      assert "" = Text.to_string(text)
     end
 
     test "to_string/1 and length/1 with empty and after ops" do
