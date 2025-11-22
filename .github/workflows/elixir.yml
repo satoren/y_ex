@@ -26,8 +26,8 @@ jobs:
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: "1.15.8"
-          otp-version: "26.0"
+          version-file: '.tool-versions'
+          version-type: 'strict'
       - name: Restore dependencies cache
         uses: actions/cache@v4
         with:
@@ -48,8 +48,8 @@ jobs:
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: "1.15.8"
-          otp-version: "26.0"
+          version-file: '.tool-versions'
+          version-type: 'strict'
       - name: Restore dependencies cache
         uses: actions/cache@v4
         with:
