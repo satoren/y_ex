@@ -176,7 +176,11 @@ defmodule Yex.XmlText do
   end
 
   defimpl String.Chars do
-    def to_string(xml_text), do: Yex.XmlText.to_string(xml_text)
+    @doc """
+Converts an XML text node to its string representation including formatting tags.
+"""
+@spec to_string(Yex.XmlText.t()) :: String.t()
+def to_string(xml_text), do: Yex.XmlText.to_string(xml_text)
   end
 end
 
