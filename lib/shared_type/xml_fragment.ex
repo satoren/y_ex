@@ -302,16 +302,20 @@ defmodule Yex.XmlFragment do
 
   defimpl Yex.Output do
     @doc """
-    Implementation of the Yex.Output protocol for XmlFragment.
-    Converts the XML fragment to its preliminary representation.
+    Converts an XmlFragment into its preliminary (serializable) representation.
     """
+    @spec as_prelim(Yex.XmlFragment.t()) :: Yex.XmlFragmentPrelim.t()
     def as_prelim(xml_fragment) do
       Yex.XmlFragment.as_prelim(xml_fragment)
     end
   end
 
   defimpl String.Chars do
-    def to_string(xml_fragment), do: Yex.XmlFragment.to_string(xml_fragment)
+    @doc """
+Convert the XML fragment to its string representation.
+"""
+@spec to_string(Yex.XmlFragment.t()) :: String.t()
+def to_string(xml_fragment), do: Yex.XmlFragment.to_string(xml_fragment)
   end
 end
 
