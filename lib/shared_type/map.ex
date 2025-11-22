@@ -145,10 +145,10 @@ defmodule Yex.Map do
       ...>   Yex.Map.set_and_get(map, "counter", 0)
       ...> end)
       iex> value
-      0
+      0.0
       iex> # Next call returns existing value without calling the function
       iex> Yex.Map.get_lazy(map, "counter", fn -> Yex.Map.set_and_get(map, "counter", 0) end)
-      0
+      0.0
   """
   @spec get_lazy(t, binary(), fun :: (-> value())) :: value()
   def get_lazy(%__MODULE__{} = map, key, fun) do
@@ -242,7 +242,7 @@ defmodule Yex.Map do
       iex> Yex.Map.set(map, "foo", "bar")
       iex> Yex.Map.set(map, "baz", "qux")
       iex> keys = Yex.Map.keys(map)
-      iex> Enum.sort(keys)
+      iex> Enum.sort(keys) # keys order is not guaranteed
       ["baz", "foo"]
   """
   @spec keys(t) :: list(binary())
@@ -261,8 +261,8 @@ defmodule Yex.Map do
       iex> Yex.Map.set(map, "foo", "bar")
       iex> Yex.Map.set(map, "baz", 123)
       iex> values = Yex.Map.values(map)
-      iex> Enum.sort(values)
-      [123, "bar"]
+      iex> Enum.sort(values) # values order is not guaranteed
+      [123.0, "bar"]
   """
   @spec values(t) :: list(value())
   def values(%__MODULE__{doc: doc} = map) do
