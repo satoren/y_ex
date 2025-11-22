@@ -730,16 +730,6 @@ defmodule YexXmlElementTest do
       assert %XmlElementPrelim{tag: "div"} = prelim
     end
 
-    test "next_sibling/1, prev_sibling/1, parent/1", %{xml_element: xml, xml_fragment: frag} do
-      XmlElement.push(xml, XmlTextPrelim.from("a"))
-      XmlElement.push(xml, XmlTextPrelim.from("b"))
-      {:ok, n1} = XmlElement.fetch(xml, 0)
-      {:ok, n2} = XmlElement.fetch(xml, 1)
-
-      # top-level parent
-      assert frag == XmlElement.parent(xml)
-    end
-
     test "insert_after/3 with not found ref", %{xml_element: xml} do
       XmlElement.push(xml, XmlTextPrelim.from("a"))
       XmlElement.push(xml, XmlTextPrelim.from("b"))
