@@ -143,10 +143,10 @@ defmodule Yex.Text do
 
   defimpl String.Chars do
     @doc """
-Convert a Yex.Text value into its textual content.
-"""
-@spec to_string(Yex.Text.t()) :: String.t()
-def to_string(text), do: Yex.Text.to_string(text)
+    Convert a Yex.Text value into its textual content.
+    """
+    @spec to_string(Yex.Text.t()) :: String.t()
+    def to_string(text), do: Yex.Text.to_string(text)
   end
 
   @doc """

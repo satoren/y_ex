@@ -385,10 +385,10 @@ defmodule Yex.XmlElement do
 
   defimpl String.Chars do
     @doc """
-Converts the given XML element to its textual XML representation.
-"""
-@spec to_string(Yex.XmlElement.t()) :: String.t()
-def to_string(xml_element), do: Yex.XmlElement.to_string(xml_element)
+    Converts the given XML element to its textual XML representation.
+    """
+    @spec to_string(Yex.XmlElement.t()) :: String.t()
+    def to_string(xml_element), do: Yex.XmlElement.to_string(xml_element)
   end
 end
 

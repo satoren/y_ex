@@ -312,10 +312,10 @@ defmodule Yex.XmlFragment do
 
   defimpl String.Chars do
     @doc """
-Convert the XML fragment to its string representation.
-"""
-@spec to_string(Yex.XmlFragment.t()) :: String.t()
-def to_string(xml_fragment), do: Yex.XmlFragment.to_string(xml_fragment)
+    Convert the XML fragment to its string representation.
+    """
+    @spec to_string(Yex.XmlFragment.t()) :: String.t()
+    def to_string(xml_fragment), do: Yex.XmlFragment.to_string(xml_fragment)
   end
 end
 
