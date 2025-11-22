@@ -36,7 +36,7 @@ defmodule Yex do
   def encode_state_vector!(%Yex.Doc{} = doc) do
     case encode_state_vector(doc) do
       {:ok, binary} -> binary
-      {:error, reason} -> raise reason
+      {:error, reason} -> raise RuntimeError, message: inspect(reason)
     end
   end
 
@@ -68,7 +68,7 @@ defmodule Yex do
     case encode_state_as_update(doc, encoded_state_vector) do
       {:ok, binary} -> binary
       {:error, {:encoding_exception, message}} -> raise ArgumentError, message: message
-      {:error, reason} -> raise reason
+      {:error, reason} -> raise RuntimeError, message: inspect(reason)
     end
   end
 

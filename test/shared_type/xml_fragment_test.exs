@@ -457,5 +457,10 @@ defmodule YexXmlFragmentTest do
                }
              ] = prelim.children
     end
+
+    test "Yex.Output protocol delegates to XmlFragment.as_prelim", %{xml_fragment: f} do
+      # Ensure protocol implementation is exercised
+      assert Yex.Output.as_prelim(f) == XmlFragment.as_prelim(f)
+    end
   end
 end

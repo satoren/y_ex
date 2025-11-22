@@ -1,5 +1,6 @@
 defmodule Yex.MapTest do
   use ExUnit.Case
+  import Mock
   alias Yex.{Doc, Map, MapPrelim, ArrayPrelim}
   doctest Map
   doctest MapPrelim
@@ -37,6 +38,12 @@ defmodule Yex.MapTest do
 
       {:ok, nested_map} = Map.fetch(map, "nested_map")
       assert {:ok, "value"} = Yex.Map.fetch(nested_map, "inner")
+    end
+
+    test "set_and_get/3 fail", %{map: map} do
+      with_mock Yex.Nif, [], map_set: fn _, _, _, _ -> :ok end, map_get: fn _, _, _ -> :error end do
+        assert_raise RuntimeError, fn -> Map.set_and_get(map, "key", "value") end
+      end
     end
 
     test "set/3 with big integer", %{map: map} do
@@ -201,6 +208,8 @@ defmodule Yex.MapTest do
       prelim = Map.as_prelim(map)
       assert %MapPrelim{} = prelim
       assert %{"key" => "value", "array" => %ArrayPrelim{}} = prelim.map
+
+      assert %MapPrelim{} = Yex.Output.as_prelim(map)
     end
   end
 
