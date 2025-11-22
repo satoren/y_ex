@@ -279,6 +279,7 @@ defmodule Yex.ArrayTest do
       Array.insert_list(array, 0, [1, 2, 3, 4, 5])
       {:ok, 5, fun} = Enumerable.slice(array)
       assert [2, 3] == fun.(1, 2, 1)
+      assert [] == fun.(10, 1, 1)
     end
 
     test "implements reduce", %{array: array} do

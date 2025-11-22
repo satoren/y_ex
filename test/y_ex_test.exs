@@ -1,5 +1,6 @@
 defmodule YexTest do
   use ExUnit.Case
+  import Mock
   doctest Yex
 
   describe "apply_update" do
@@ -51,6 +52,15 @@ defmodule YexTest do
       doc = Yex.Doc.new()
       {:ok, _binary} = Yex.encode_state_as_update_v2(doc)
     end
+
+    test "encode_state_as_update! raise error" do
+      doc = Yex.Doc.new()
+
+      with_mock Yex.Nif,
+        encode_state_as_update_v1: fn _, _, _ -> {:error, :some_error} end do
+        assert_raise RuntimeError, fn -> Yex.encode_state_as_update!(doc) end
+      end
+    end
   end
 
   describe "encode_state_vector" do
@@ -67,6 +77,15 @@ defmodule YexTest do
     test "encode_state_vector_v2" do
       doc = Yex.Doc.new()
       {:ok, _binary} = Yex.encode_state_vector_v2(doc)
+    end
+
+    test "encode_state_vector! raise error" do
+      doc = Yex.Doc.new()
+
+      with_mock Yex.Nif,
+        encode_state_vector_v1: fn _, _ -> {:error, :some_error} end do
+        assert_raise RuntimeError, fn -> Yex.encode_state_vector!(doc) end
+      end
     end
   end
 end

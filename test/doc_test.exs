@@ -1,5 +1,6 @@
 defmodule Yex.DocTest do
   use ExUnit.Case
+  import Mock
   alias Yex.{Doc, Text}
   doctest Doc
 
@@ -347,6 +348,15 @@ defmodule Yex.DocTest do
       end
     end
 
+    test "monitor_subdocs fail" do
+      doc = Doc.new()
+
+      with_mock Yex.Nif,
+        doc_monitor_subdocs: fn _, _notify_pid, _metadata -> {:error, :some_error} end do
+        assert {:error, :some_error} = Doc.monitor_subdocs(doc)
+      end
+    end
+
     test "monitor_subdocs with metadata" do
       doc = Doc.new()
       metadata = "subdoc_metadata"
@@ -468,6 +478,26 @@ defmodule Yex.DocTest do
       assert options.skip_gc == true
       assert options.auto_load == true
       assert options.should_load == false
+    end
+  end
+
+  describe "monitor_update" do
+    test "monitor_update_v1 fail" do
+      doc = Doc.new()
+
+      with_mock Yex.Nif,
+        doc_monitor_update_v1: fn _, _options, _metadata -> {:error, :some_error} end do
+        assert {:error, :some_error} = Doc.monitor_update_v1(doc)
+      end
+    end
+
+    test "monitor_update_v2 fail" do
+      doc = Doc.new()
+
+      with_mock Yex.Nif,
+        doc_monitor_update_v2: fn _, _options, _metadata -> {:error, :some_error} end do
+        assert {:error, :some_error} = Doc.monitor_update_v2(doc)
+      end
     end
   end
 

@@ -149,6 +149,11 @@ defmodule YexXmlTextTest do
       assert parent == xml_fragment
     end
 
+    test "length", %{xml_text: text} do
+      XmlText.insert(text, 0, "abcd")
+      assert XmlText.length(text) == 4
+    end
+
     test "observe", %{doc: doc, xml_text: text} do
       ref = SharedType.observe(text)
 
