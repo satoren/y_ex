@@ -20,6 +20,7 @@ defmodule Yex.XmlFragment do
           reference: reference()
         }
 
+  @u32_max 2 ** 32 - 1
   @doc """
   Returns the first child node of the XML fragment.
   Returns nil if the fragment has no children.
@@ -157,10 +158,8 @@ defmodule Yex.XmlFragment do
   Appends a new child node at the end of the children list.
   Returns :ok on success, :error on failure.
   """
-  def push(%__MODULE__{doc: doc} = xml_fragment, content) do
-    Doc.run_in_worker_process(doc,
-      do: insert(xml_fragment, __MODULE__.length(xml_fragment), content)
-    )
+  def push(xml_fragment, content) do
+    insert(xml_fragment, @u32_max, content)
   end
 
   @doc """
@@ -171,16 +170,8 @@ defmodule Yex.XmlFragment do
           t,
           Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()
         ) :: Yex.XmlElement.t() | Yex.XmlText.t()
-  def push_and_get(%__MODULE__{doc: doc} = xml_fragment, content) do
-    Doc.run_in_worker_process doc do
-      index = __MODULE__.length(xml_fragment)
-      :ok = insert(xml_fragment, index, content)
-
-      case fetch(xml_fragment, index) do
-        {:ok, value} -> value
-        :error -> raise RuntimeError, "Failed to get pushed XML fragment"
-      end
-    end
+  def push_and_get(xml_fragment, content) do
+    insert_and_get(xml_fragment, @u32_max, content)
   end
 
   @doc """

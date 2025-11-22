@@ -20,6 +20,7 @@ defmodule Yex.XmlElement do
           reference: reference()
         }
 
+  @u32_max 2 ** 32 - 1
   @doc """
   Returns the first child node of the XML element.
   Returns nil if the element has no children.
@@ -145,10 +146,8 @@ defmodule Yex.XmlElement do
   Returns :ok on success, :error on failure.
   """
   @spec push(t, Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) :: :ok | :error
-  def push(%__MODULE__{doc: doc} = xml_element, content) do
-    Doc.run_in_worker_process(doc,
-      do: insert(xml_element, __MODULE__.length(xml_element), content)
-    )
+  def push(xml_element, content) do
+    insert(xml_element, @u32_max, content)
   end
 
   @doc """
@@ -157,16 +156,8 @@ defmodule Yex.XmlElement do
   """
   @spec push_and_get(t, Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()) ::
           Yex.XmlElement.t() | Yex.XmlText.t()
-  def push_and_get(%__MODULE__{doc: doc} = xml_element, content) do
-    Doc.run_in_worker_process doc do
-      index = __MODULE__.length(xml_element)
-      :ok = insert(xml_element, index, content)
-
-      case fetch(xml_element, index) do
-        {:ok, value} -> value
-        :error -> raise RuntimeError, "Failed to get pushed XML element"
-      end
-    end
+  def push_and_get(xml_element, content) do
+    insert_and_get(xml_element, @u32_max, content)
   end
 
   @doc """
