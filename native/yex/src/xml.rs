@@ -155,10 +155,12 @@ fn xml_fragment_insert_and_get(
             let xml = xml.get_ref(txn)?;
             let index = normalize_index_for_insert(xml.len(txn), index);
             xml.insert(txn, index, value);
-            Ok(NifYOut::from_xml_out(
-                xml.get(txn, index).unwrap(),
-                doc.clone(),
-            ))
+
+            xml.get(txn, index)
+                .map(|out| NifYOut::from_xml_out(out, doc.clone()))
+                .ok_or_else(|| {
+                    rustler::Error::RaiseTerm(Box::new("Failed to retrieve inserted element"))
+                })
         })
     })
 }
@@ -261,10 +263,11 @@ fn xml_element_insert_and_get(
             let xml = xml.get_ref(txn)?;
             let index = normalize_index_for_insert(xml.len(txn), index);
             xml.insert(txn, index, value);
-            Ok(NifYOut::from_xml_out(
-                xml.get(txn, index).unwrap(),
-                doc.clone(),
-            ))
+            xml.get(txn, index)
+                .map(|out| NifYOut::from_xml_out(out, doc.clone()))
+                .ok_or_else(|| {
+                    rustler::Error::RaiseTerm(Box::new("Failed to retrieve inserted element"))
+                })
         })
     })
 }
