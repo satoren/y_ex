@@ -26,7 +26,7 @@ end
 ## Feature parity
 
 
-|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.18)               |                y_ex<br/>(0.7.0)               | 
+|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.18)               |                y_ex<br/>(0.10.0)               | 
 |-----------------------------------------|:-------------------------------------------------:|:------------------------------------------:|:------------------------------------------:|
 | YText: insert/delete                    |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | YText: formatting attributes and deltas |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
@@ -37,7 +37,7 @@ end
 | YArray & YText quotations               | &#x2705; <br/> <small>(weak links branch)</small> |                  &#x2705;                  |                  &#x2705;                  |
 | YArray: move                            |    &#x2705; <br/> <small>(move branch)</small>    |                  &#x2705;                  |                  &#x2705;                  |
 | XML Element, Fragment and Text          |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
-| Sub-documents                           |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
+| Sub-documents                           |                     &#x2705;                      |                  &#x2705;                  | &#x2705;<br/> <small>(experimental)</small>|
 | Shared collections: observers           |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Shared collections: recursive nesting   |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Document observers                      |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
