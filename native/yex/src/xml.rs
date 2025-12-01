@@ -15,10 +15,11 @@ use crate::{
     text::encode_diffs,
     transaction::TransactionResource,
     utils::{capped_index_and_length, normalize_index, normalize_index_for_insert},
-    yinput::{NifXmlIn, NifYInput, NifYInputDelta},
+    yinput::{NifWeakPrelim, NifXmlIn, NifYInput, NifYInputDelta},
     youtput::NifYOut,
     ENV,
 };
+use yrs::Quotable;
 
 pub type XmlFragmentId = SharedTypeId<XmlFragmentRef>;
 pub type XmlElementId = SharedTypeId<XmlElementRef>;
@@ -600,5 +601,28 @@ fn xml_text_parent(
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
         Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
+    })
+}
+
+#[rustler::nif]
+fn xml_text_quote(
+    env: Env<'_>,
+    text: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: i64,
+    len: u32,
+) -> NifResult<NifWeakPrelim> {
+    text.mutably(env, current_transaction, |txn| {
+        let text_ref = text.get_ref(txn)?;
+        let capped_len = capped_index_and_length(text_ref.len(txn), index, len);
+
+        if let Some((index, len)) = capped_len {
+            if let Ok(quote) = text_ref.quote(txn, index..index + len) {
+                let weak = NifWeakPrelim::new(quote.upcast());
+                return Ok(weak);
+            }
+        }
+
+        Err(rustler::Error::Term(Box::new(atoms::out_of_bounds())))
     })
 }

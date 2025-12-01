@@ -217,6 +217,22 @@ defmodule Yex.Array do
     end
   end
 
+  @doc """
+  ### ⚠️ Experimental
+  Quotes a range of array content, returning it as a new WeakPrelim object.
+  """
+  @spec quote(Yex.Array.t(), integer(), integer()) :: Yex.WeakPrelim.t() | {:error, term()}
+  def quote(%__MODULE__{doc: doc} = array, index, length)
+      when is_integer(index) and is_integer(length) and length > 0 do
+    Doc.run_in_worker_process doc do
+      Yex.Nif.array_quote(array, cur_txn(array), index, length)
+    end
+  end
+
+  def quote(_array, _index, _length) do
+    {:error, :out_of_bounds}
+  end
+
   @spec get(t, integer(), default :: value()) :: value()
   def get(array, index, default \\ nil) do
     case fetch(array, index) do
@@ -281,6 +297,10 @@ defmodule Yex.Array do
     end
   end
 
+  @doc """
+  Get content at the specified index or raises ArgumentError if out of bounds.
+  @see fetch/2
+  """
   @spec fetch!(t, integer()) :: value()
   def fetch!(%__MODULE__{} = array, index) when is_integer(index) do
     case fetch(array, index) do

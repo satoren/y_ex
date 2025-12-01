@@ -7,6 +7,7 @@ use crate::{
     doc::NifDoc,
     map::NifMap,
     text::NifText,
+    weak::NifWeakLink,
     wrap::NifWrap,
     xml::{NifXmlElement, NifXmlFragment, NifXmlText},
 };
@@ -15,8 +16,8 @@ use yrs::{
     block::{ItemContent, Prelim, Unused},
     branch::{Branch, BranchPtr},
     types::{xml::XmlPrelim, Delta, TypeRef},
-    Any, Array, ArrayRef, Map, MapRef, ReadTxn, Text, TextRef, TransactionMut, Xml, XmlElementRef,
-    XmlFragment, XmlFragmentRef, XmlTextRef,
+    Any, Array, ArrayRef, Map, MapRef, ReadTxn, Text, TextRef, TransactionMut, WeakPrelim, Xml,
+    XmlElementRef, XmlFragment, XmlFragmentRef, XmlTextRef,
 };
 
 #[derive(NifStruct)]
@@ -112,6 +113,25 @@ impl Prelim for NifXmlTextPrelim {
     }
 }
 
+pub type WeakPrelimResource = NifWrap<WeakPrelim<BranchPtr>>;
+
+#[rustler::resource_impl]
+impl rustler::Resource for WeakPrelimResource {}
+
+#[derive(NifStruct)]
+#[module = "Yex.WeakPrelim"]
+pub struct NifWeakPrelim {
+    reference: ResourceArc<WeakPrelimResource>,
+}
+
+impl NifWeakPrelim {
+    pub fn new(weak: WeakPrelim<BranchPtr>) -> NifWeakPrelim {
+        NifWeakPrelim {
+            reference: ResourceArc::new(weak.into()),
+        }
+    }
+}
+
 #[derive(NifUntaggedEnum)]
 pub enum NifYInput {
     Any(NifAny),
@@ -121,6 +141,7 @@ pub enum NifYInput {
     XmlTextPrelim(NifXmlTextPrelim),
     XmlElementPrelim(NifXmlElementPrelim),
     XmlFragmentPrelim(NifXmlFragmentPrelim),
+    WeakPrelim(NifWeakPrelim),
     Doc(NifDoc),
 }
 
@@ -166,6 +187,11 @@ impl Prelim for NifYInput {
                 let inner = Branch::new(TypeRef::XmlFragment);
                 (ItemContent::Type(inner), Some(self))
             }
+            NifYInput::WeakPrelim(ref v) => {
+                let link_source = v.reference.0.source().clone();
+                let inner = Branch::new(TypeRef::WeakLink(link_source));
+                (ItemContent::Type(inner), Some(self))
+            }
             NifYInput::Doc(doc) => {
                 if txn.parent_doc().is_some() {
                     panic!("Cannot integrate the document, because it's already being used as a sub-document elsewhere");
@@ -200,6 +226,7 @@ impl Prelim for NifYInput {
             NifYInput::XmlTextPrelim(v) => v.integrate(txn, inner_ref),
             NifYInput::XmlElementPrelim(v) => v.integrate(txn, inner_ref),
             NifYInput::XmlFragmentPrelim(v) => v.integrate(txn, inner_ref),
+            NifYInput::WeakPrelim(_) => {}
             NifYInput::Doc(doc) => {
                 let doc = doc.reference.0.clone();
                 doc.integrate(txn, inner_ref);
@@ -231,7 +258,7 @@ impl Prelim for NifXmlIn {
                 (ItemContent::Type(inner), Some(self))
             }
             NifXmlIn::Fragment(_) => {
-                let inner = Branch::new(TypeRef::XmlText);
+                let inner = Branch::new(TypeRef::XmlFragment);
                 (ItemContent::Type(inner), Some(self))
             }
         }
@@ -348,4 +375,5 @@ pub enum NifSharedTypeInput {
     XmlText(NifXmlText),
     XmlElement(NifXmlElement),
     XmlFragment(NifXmlFragment),
+    WeakLink(NifWeakLink),
 }

@@ -4,6 +4,7 @@ use crate::event::{NifMapEvent, NifSharedTypeDeepObservable, NifSharedTypeObserv
 use crate::shared_type::NifSharedType;
 use crate::shared_type::SharedTypeId;
 use crate::transaction::TransactionResource;
+use crate::yinput::NifWeakPrelim;
 use crate::{yinput::NifYInput, youtput::NifYOut, NifAny};
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
 use std::collections::HashMap;
@@ -154,5 +155,18 @@ fn map_values(
             .flatten()
             .map(|v| NifYOut::from_native(v, doc.clone()))
             .collect())
+    })
+}
+
+#[rustler::nif]
+fn map_link(
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    key: &str,
+) -> NifResult<Option<NifWeakPrelim>> {
+    map.readonly(current_transaction, |txn| {
+        let map = map.get_ref(txn)?;
+        let weak = map.link(txn, key).map(|w| NifWeakPrelim::new(w.upcast()));
+        Ok(weak)
     })
 }

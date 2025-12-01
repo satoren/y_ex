@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::utils::{capped_index_and_length, normalize_index_for_insert};
+use crate::{
+    utils::{capped_index_and_length, normalize_index_for_insert},
+    yinput::NifWeakPrelim,
+};
 use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
 use types::text::{Diff, YChange};
 use yrs::*;
@@ -157,6 +160,29 @@ fn text_to_delta(
         },
     )?;
     encode_diffs(diff, &text.doc, env)
+}
+
+#[rustler::nif]
+fn text_quote(
+    env: Env<'_>,
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: i64,
+    len: u32,
+) -> NifResult<NifWeakPrelim> {
+    text.mutably(env, current_transaction, |txn| {
+        let text_ref = text.get_ref(txn)?;
+        let capped_len = capped_index_and_length(text_ref.len(txn), index, len);
+
+        if let Some((index, len)) = capped_len {
+            if let Ok(quote) = text_ref.quote(txn, index..index + len) {
+                let weak = NifWeakPrelim::new(quote.upcast());
+                return Ok(weak);
+            }
+        }
+
+        Err(rustler::Error::Term(Box::new(atoms::out_of_bounds())))
+    })
 }
 
 #[rustler::nif]

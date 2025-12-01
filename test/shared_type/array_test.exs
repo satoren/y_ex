@@ -7,7 +7,11 @@ defmodule Yex.ArrayTest do
   setup do
     doc = Doc.new()
     array = Doc.get_array(doc, "array")
-    {:ok, doc: doc, array: array}
+    map = Doc.get_map(doc, "map")
+    deleted_array = Yex.Map.set_and_get(map, "array", Yex.ArrayPrelim.from([]))
+    Yex.Map.delete(map, "array")
+
+    {:ok, doc: doc, array: array, deleted_array: deleted_array}
   end
 
   describe "basic array operations" do
@@ -138,6 +142,18 @@ defmodule Yex.ArrayTest do
       Array.insert_list(array, 0, [1, 2, 3, 4])
       assert :ok = Array.move_to(array, 0, 2)
       assert [2, 1, 3, 4] == Array.to_list(array)
+    end
+  end
+
+  describe "operations on deleted array reference" do
+    test "deleted_array operations raise Yex.DeletedSharedTypeError", %{
+      deleted_array: deleted_array
+    } do
+      # The shared type has been deleted; operations should raise DeletedSharedTypeError
+      assert_raise Yex.DeletedSharedTypeError, fn -> Array.to_list(deleted_array) end
+      assert_raise Yex.DeletedSharedTypeError, fn -> Array.push(deleted_array, "value") end
+      assert_raise Yex.DeletedSharedTypeError, fn -> Array.length(deleted_array) end
+      assert_raise Yex.DeletedSharedTypeError, fn -> Array.fetch(deleted_array, 0) end
     end
   end
 
@@ -736,6 +752,35 @@ defmodule Yex.ArrayTest do
       Array.push(array, %{"k" => 1})
       assert [%{} = _m] = Array.to_list(array)
       assert [%{"k" => 1}] == Array.to_json(array)
+    end
+  end
+
+  describe "quote" do
+    setup do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+      Array.insert(array, 0, [1, 2, 3])
+      %{doc: doc, array: array}
+    end
+
+    test "returns {:error, :out_of_bounds} when length is zero", %{array: array} do
+      assert {:error, :out_of_bounds} = Array.quote(array, 0, 0)
+    end
+
+    test "returns {:error, :out_of_bounds} when length is negative", %{array: array} do
+      assert {:error, :out_of_bounds} = Array.quote(array, 0, -1)
+    end
+
+    test "returns {:error, :out_of_bounds} when index is out of bounds (negative)", %{
+      array: array
+    } do
+      assert {:error, :out_of_bounds} = Array.quote(array, -10, 1)
+    end
+
+    test "returns {:error, :out_of_bounds} when index + length exceeds array length", %{
+      array: array
+    } do
+      assert {:error, :out_of_bounds} = Array.quote(array, 0, 10)
     end
   end
 end

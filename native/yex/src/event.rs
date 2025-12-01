@@ -9,6 +9,7 @@ use yrs::{
         array::ArrayEvent,
         map::MapEvent,
         text::TextEvent,
+        weak::WeakEvent,
         xml::{XmlEvent, XmlTextEvent},
         Change, Delta, EntryChange,
     },
@@ -27,6 +28,7 @@ use crate::{
     text::NifText,
     transaction::TransactionResource,
     utils::origin_to_term,
+    weak::NifWeakLink,
     wrap::NifWrap,
     xml::NifXmlText,
     yinput::NifSharedTypeInput,
@@ -340,6 +342,22 @@ impl NifEventConstructor<XmlTextEvent> for NifXmlTextEvent {
     }
 }
 
+#[derive(NifStruct)]
+#[module = "Yex.WeakLinkEvent"]
+pub struct NifWeakLinkEvent {
+    pub path: NifPath,
+    pub target: NifWeakLink,
+}
+
+impl NifEventConstructor<WeakEvent> for NifWeakLinkEvent {
+    fn new(doc: &NifDoc, event: &WeakEvent, _txn: &TransactionMut<'_>) -> Self {
+        NifWeakLinkEvent {
+            path: event.path().into(),
+            target: NifWeakLink::new(doc.clone(), event.as_target()),
+        }
+    }
+}
+
 #[derive(NifUntaggedEnum)]
 pub enum NifEvent {
     Text(NifTextEvent),
@@ -347,6 +365,7 @@ pub enum NifEvent {
     Map(NifMapEvent),
     XmlFragment(NifXmlEvent),
     XmlText(NifXmlTextEvent),
+    Weak(NifWeakLinkEvent),
 }
 
 impl NifEvent {
@@ -362,6 +381,9 @@ impl NifEvent {
             }
             yrs::types::Event::XmlText(event) => {
                 NifEvent::XmlText(NifXmlTextEvent::new(&doc, event, txn))
+            }
+            yrs::types::Event::Weak(event) => {
+                NifEvent::Weak(NifWeakLinkEvent::new(&doc, event, txn))
             }
         }
     }
@@ -489,6 +511,9 @@ fn shared_type_observe(
         NifSharedTypeInput::XmlElement(xml_element) => {
             xml_element.observe(current_transaction, pid, ref_term, metadata)
         }
+        NifSharedTypeInput::WeakLink(weak_link) => {
+            weak_link.observe(current_transaction, pid, ref_term, metadata)
+        }
     }
 }
 
@@ -518,6 +543,9 @@ fn shared_type_observe_deep(
         }
         NifSharedTypeInput::XmlElement(xml_element) => {
             xml_element.observe_deep(current_transaction, pid, ref_term, metadata)
+        }
+        NifSharedTypeInput::WeakLink(weak_link) => {
+            weak_link.observe_deep(current_transaction, pid, ref_term, metadata)
         }
     }
 }

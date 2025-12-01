@@ -62,6 +62,11 @@ impl From<&NifAssoc> for Assoc {
         }
     }
 }
+impl From<&NifStickyIndex> for StickyIndex {
+    fn from(val: &NifStickyIndex) -> Self {
+        val.reference.0.clone()
+    }
+}
 
 fn create_sticky_index<T>(
     shared_type: &T,

@@ -9,7 +9,7 @@ use crate::{
     shared_type::{NifSharedType, SharedTypeId},
     transaction::TransactionResource,
     utils::{capped_index_and_length, normalize_index, normalize_index_for_insert},
-    yinput::NifYInput,
+    yinput::{NifWeakPrelim, NifYInput},
     youtput::NifYOut,
     NifAny,
 };
@@ -162,6 +162,30 @@ fn array_move_to(
         Ok(atoms::ok())
     })
 }
+
+#[rustler::nif]
+fn array_quote(
+    env: Env<'_>,
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: i64,
+    len: u32,
+) -> NifResult<NifWeakPrelim> {
+    array.mutably(env, current_transaction, |txn: &mut TransactionMut<'_>| {
+        let array_ref = array.get_ref(txn)?;
+        let capped_len = capped_index_and_length(array_ref.len(txn), index, len);
+
+        if let Some((index, len)) = capped_len {
+            if let Ok(quote) = array_ref.quote(txn, index..index + len) {
+                let weak = NifWeakPrelim::new(quote.upcast());
+                return Ok(weak);
+            }
+        }
+
+        Err(rustler::Error::Term(Box::new(atoms::out_of_bounds())))
+    })
+}
+
 #[rustler::nif]
 fn array_to_list(
     array: NifArray,
