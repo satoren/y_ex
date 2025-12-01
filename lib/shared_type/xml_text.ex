@@ -154,6 +154,17 @@ defmodule Yex.XmlText do
     Yex.XmlTextPrelim.from(to_delta(xml_text))
   end
 
+  @doc """
+  ### ⚠️ Experimental
+  Returns [WeakPrelim] to a given range of elements, if it's in a boundaries of a current quotable collection.
+  """
+  @spec quote(t(), integer(), integer()) :: Yex.WeakPrelim.t()
+  def quote(%__MODULE__{doc: doc} = text, index, length) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_text_quote(text, cur_txn(text), index, length)
+    )
+  end
+
   defimpl Yex.Output do
     @doc """
     Implementation of the Yex.Output protocol for XmlText.

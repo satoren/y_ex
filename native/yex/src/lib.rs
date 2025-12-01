@@ -15,6 +15,7 @@ mod text;
 mod transaction;
 mod undo;
 mod utils;
+mod weak;
 mod wrap;
 mod xml;
 mod yinput;
@@ -28,6 +29,7 @@ use map::NifMap;
 use rustler::{Env, NifStruct};
 use scoped_thread_local::scoped_thread_local;
 use text::NifText;
+use weak::NifWeakLink;
 
 scoped_thread_local!(
   pub static ENV: for<'a> Env<'a>
@@ -38,13 +40,6 @@ pub trait TryInto<T>: Sized {
 
     // Required method
     fn try_into(self) -> Result<T, Self::Error>;
-}
-
-#[derive(NifStruct)]
-#[module = "Yex.WeakLink"]
-pub struct NifWeakLink {
-    // not supported yet
-    doc: NifDoc,
 }
 
 #[derive(NifStruct)]

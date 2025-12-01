@@ -30,6 +30,7 @@ impl NifYOut {
             yrs::Out::YXmlElement(xml) => NifYOut::YXmlElement(NifXmlElement::new(doc, xml)),
             yrs::Out::YXmlFragment(xml) => NifYOut::YXmlFragment(NifXmlFragment::new(doc, xml)),
             yrs::Out::YXmlText(xml) => NifYOut::YXmlText(NifXmlText::new(doc, xml)),
+            yrs::Out::YWeakLink(weak) => NifYOut::YWeakLink(NifWeakLink::new(doc, weak)),
             yrs::Out::YDoc(subdoc) => {
                 NifYOut::YDoc(NifDoc::with_worker_pid(subdoc, doc.worker_pid))
             }
