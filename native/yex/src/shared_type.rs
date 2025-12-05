@@ -26,7 +26,7 @@ impl<T> Deref for SharedTypeId<T> {
         &self.hook
     }
 }
-impl<'de, 'a: 'de, T> Encoder for SharedTypeId<T> {
+impl<T> Encoder for SharedTypeId<T> {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
         let mut s = flexbuffers::FlexbufferSerializer::new();
 

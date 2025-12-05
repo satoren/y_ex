@@ -40,8 +40,8 @@ impl TermBoxContents {
         let owned_env = OwnedEnv::new();
         let saved_term = owned_env.save(term);
         Self {
-            owned_env: owned_env,
-            saved_term: saved_term,
+            owned_env,
+            saved_term,
         }
     }
 }

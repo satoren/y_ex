@@ -29,7 +29,7 @@ impl<'a> SliceIntoBinary<'a> {
     }
 }
 
-impl<'a> rustler::Encoder for SliceIntoBinary<'a> {
+impl rustler::Encoder for SliceIntoBinary<'_> {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
         let mut bin = rustler::NewBinary::new(env, self.bytes.len());
         bin.as_mut_slice().copy_from_slice(self.bytes);

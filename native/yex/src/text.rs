@@ -189,7 +189,7 @@ pub fn encode_diff<'a>(diff: &Diff<YChange>, doc: &NifDoc, env: Env<'a>) -> NifR
 
     let mut attribute = diff.attributes.as_deref().map(|attr| {
         attr.iter()
-            .map(|(k, v)| (k.to_string(), Any::from(v.clone())))
+            .map(|(k, v)| (k.to_string(), v.clone()))
             .collect::<HashMap<String, Any>>()
     });
 

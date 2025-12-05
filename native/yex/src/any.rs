@@ -29,7 +29,7 @@ fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
         }
     }
 }
-impl<'de, 'a: 'de> rustler::Encoder for NifAny {
+impl rustler::Encoder for NifAny {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
         encode(env, &self.0)
     }
@@ -50,7 +50,7 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
         // Check if the number is within the safe integer range for f64
         // If it is not, we return it as a BigInt
         if v > F64_MAX_SAFE_INTEGER as i64 || v < F64_MIN_SAFE_INTEGER as i64 {
-            return Ok(Any::BigInt(v.into()));
+            return Ok(Any::BigInt(v));
         }
         return Ok(Any::Number(v as f64));
     } else if let Ok(v) = term.decode::<f64>() {
@@ -95,7 +95,7 @@ impl<'a> Decoder<'a> for NifAttr {
     }
 }
 
-impl<'de, 'a: 'de> rustler::Encoder for NifAttr {
+impl rustler::Encoder for NifAttr {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
         let map: HashMap<String, NifAny> = self
             .0

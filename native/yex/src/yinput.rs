@@ -330,7 +330,7 @@ fn encode_delta<'a>(env: Env<'a>, delta: &Delta<NifYInput>) -> Term<'a> {
     }
     map
 }
-impl<'de, 'a: 'de> rustler::Encoder for NifYInputDelta {
+impl rustler::Encoder for NifYInputDelta {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
         let deltas: Vec<Term<'b>> = self
             .iter()

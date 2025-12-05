@@ -352,16 +352,16 @@ pub enum NifEvent {
 impl NifEvent {
     pub fn new(doc: NifDoc, event: &yrs::types::Event, txn: &TransactionMut<'_>) -> Self {
         match event {
-            yrs::types::Event::Text(event) => NifEvent::Text(NifTextEvent::new(&doc, &event, txn)),
+            yrs::types::Event::Text(event) => NifEvent::Text(NifTextEvent::new(&doc, event, txn)),
             yrs::types::Event::Array(event) => {
-                NifEvent::Array(NifArrayEvent::new(&doc, &event, txn))
+                NifEvent::Array(NifArrayEvent::new(&doc, event, txn))
             }
-            yrs::types::Event::Map(event) => NifEvent::Map(NifMapEvent::new(&doc, &event, txn)),
+            yrs::types::Event::Map(event) => NifEvent::Map(NifMapEvent::new(&doc, event, txn)),
             yrs::types::Event::XmlFragment(event) => {
-                NifEvent::XmlFragment(NifXmlEvent::new(&doc, &event, txn))
+                NifEvent::XmlFragment(NifXmlEvent::new(&doc, event, txn))
             }
             yrs::types::Event::XmlText(event) => {
-                NifEvent::XmlText(NifXmlTextEvent::new(&doc, &event, txn))
+                NifEvent::XmlText(NifXmlTextEvent::new(&doc, event, txn))
             }
         }
     }
@@ -534,17 +534,14 @@ impl NifSubdocsEvent {
     pub fn new(event: &yrs::SubdocsEvent, worker_pid: Option<LocalPid>) -> Self {
         let added = event
             .added()
-            .into_iter()
             .map(|doc| NifDoc::with_worker_pid(doc.clone(), worker_pid))
             .collect();
         let removed = event
             .removed()
-            .into_iter()
             .map(|doc| NifDoc::with_worker_pid(doc.clone(), worker_pid))
             .collect();
         let loaded = event
             .loaded()
-            .into_iter()
             .map(|doc| NifDoc::with_worker_pid(doc.clone(), worker_pid))
             .collect();
 
