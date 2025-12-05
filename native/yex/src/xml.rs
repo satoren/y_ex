@@ -215,7 +215,7 @@ fn xml_fragment_to_string(
 ) -> NifResult<String> {
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        Ok(xml.get_string(txn).into())
+        Ok(xml.get_string(txn))
     })
 }
 
@@ -322,7 +322,7 @@ fn xml_element_to_string(
 ) -> NifResult<String> {
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        Ok(xml.get_string(txn).into())
+        Ok(xml.get_string(txn))
     })
 }
 
@@ -587,7 +587,7 @@ fn xml_text_to_string(
 ) -> NifResult<String> {
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        Ok(xml.get_string(txn).into())
+        Ok(xml.get_string(txn))
     })
 }
 

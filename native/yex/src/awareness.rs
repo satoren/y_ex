@@ -45,7 +45,7 @@ fn awareness_new(doc: NifDoc) -> NifAwareness {
     let resource = AwarenessResource::from(awareness);
     NifAwareness {
         reference: ResourceArc::new(resource),
-        doc: doc,
+        doc,
     }
 }
 
@@ -58,13 +58,15 @@ fn awareness_get_client_ids(awareness: NifAwareness) -> Vec<ClientID> {
     awareness
         .reference
         .iter()
-        .filter_map(|(id, state)| {
-            if let Some(_) = state.data {
-                Some(id)
-            } else {
-                None
-            }
-        })
+        .filter_map(
+            |(id, state)| {
+                if state.data.is_some() {
+                    Some(id)
+                } else {
+                    None
+                }
+            },
+        )
         .collect()
 }
 #[rustler::nif]
@@ -234,11 +236,7 @@ pub fn awareness_apply_update_v1(
     })
 }
 #[rustler::nif]
-pub fn awareness_remove_states(
-    env: Env<'_>,
-    awareness: NifAwareness,
-    clients: Vec<ClientID>,
-) -> () {
+pub fn awareness_remove_states(env: Env<'_>, awareness: NifAwareness, clients: Vec<ClientID>) {
     ENV.set(&mut env.clone(), || {
         for client_id in clients {
             awareness.reference.remove_state(client_id);

@@ -14,7 +14,7 @@ impl StickyIndexRef {
     }
 }
 
-impl<'de, 'a: 'de> Encoder for StickyIndexRef {
+impl Encoder for StickyIndexRef {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
         let mut s = flexbuffers::FlexbufferSerializer::new();
 

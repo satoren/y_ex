@@ -458,7 +458,7 @@ fn doc_monitor_subdocs(
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let metadata = TermBox::new(metadata);
-    let worker_pid = doc.worker_pid.clone();
+    let worker_pid = doc.worker_pid;
     doc.observe_subdocs(move |txn, event: &SubdocsEvent| {
         ENV.with(|env| {
             let event = NifSubdocsEvent::new(event, worker_pid);

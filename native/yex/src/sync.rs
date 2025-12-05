@@ -49,7 +49,7 @@ fn encode_sync_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Resul
             return Ok(());
         }
     }
-    Err(Error::Message(format!("Unexpected structure")))
+    Err(Error::Message("Unexpected structure".to_string()))
 }
 
 fn decode_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<'a>, Error> {
@@ -115,7 +115,7 @@ fn encode_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Result<(),
             return Ok(());
         }
     }
-    return Err(Error::Message("Unexpected structure".into()));
+    Err(Error::Message("Unexpected structure".into()))
 }
 
 #[rustler::nif]

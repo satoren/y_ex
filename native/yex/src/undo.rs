@@ -89,7 +89,7 @@ fn create_undo_manager_with_options<T: NifSharedType>(
         atoms::ok(),
         NifUndoManager {
             reference: ResourceArc::new(NifWrap(RwLock::new(wrapper))),
-            doc: doc,
+            doc,
         },
     ))
 }
