@@ -313,6 +313,16 @@ defmodule Yex.Map do
     )
   end
 
+  @doc """
+  ### ⚠️ Experimental
+  Creates a weak link to a value in the map by key.
+  """
+  def link(%__MODULE__{doc: doc} = map, key) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.map_link(map, cur_txn(map), key)
+    )
+  end
+
   @doc false
   # Gets the current transaction reference from the process dictionary for the given document
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
@@ -423,5 +433,9 @@ defmodule Yex.MapPrelim do
   @spec from(%{binary() => Yex.input_type()}) :: t()
   def from(%{} = map) do
     %__MODULE__{map: map}
+  end
+
+  def from(entries) when is_list(entries) do
+    %__MODULE__{map: Map.new(entries)}
   end
 end
