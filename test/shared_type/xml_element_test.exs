@@ -551,6 +551,45 @@ defmodule YexXmlElementTest do
       %{doc: d1, xml_fragment: f}
     end
 
+    test "insert prelim with any attribute types", %{xml_fragment: xml_fragment} do
+      assert :ok ==
+               Yex.XmlFragment.insert(xml_fragment, 0, %Yex.XmlElementPrelim{
+                 tag: "blockContainer",
+                 attributes: %{"id" => "f6d3b168-05b2-4eb7-8d4e-132beb6fdc5b"},
+                 children: [
+                   %Yex.XmlElementPrelim{
+                     tag: "checkListItem",
+                     attributes: %{
+                       "backgroundColor" => "default",
+                       "checked" => false,
+                       "data" => %{"custom" => "data"},
+                       "indentation" => 0,
+                       "itemType" => <<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15>>,
+                       "lineHeight" => 1.5,
+                       "array" => [1, 2, 3],
+                       "textAlignment" => "left",
+                       "textColor" => "default"
+                     },
+                     children: []
+                   }
+                 ]
+               })
+
+      {:ok, root} = Yex.XmlFragment.fetch(xml_fragment, 0)
+      assert "blockContainer" == Yex.XmlElement.get_tag(root)
+      assert "f6d3b168-05b2-4eb7-8d4e-132beb6fdc5b" == Yex.XmlElement.get_attribute(root, "id")
+
+      {:ok, child} = Yex.XmlElement.fetch(root, 0)
+      assert false == Yex.XmlElement.get_attribute(child, "checked")
+      assert 0 == Yex.XmlElement.get_attribute(child, "indentation")
+      assert 1.5 == Yex.XmlElement.get_attribute(child, "lineHeight")
+      assert [1, 2, 3] == Yex.XmlElement.get_attribute(child, "array")
+      assert %{"custom" => "data"} == Yex.XmlElement.get_attribute(child, "data")
+
+      assert <<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15>> ==
+               Yex.XmlElement.get_attribute(child, "itemType")
+    end
+
     test "XmlElementPrelim.new", %{xml_fragment: xml_fragment} do
       XmlFragment.push(
         xml_fragment,

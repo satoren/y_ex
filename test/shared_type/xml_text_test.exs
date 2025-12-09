@@ -215,6 +215,58 @@ defmodule YexXmlTextTest do
     end
   end
 
+  describe "XmlTextPrelim" do
+    setup do
+      d1 = Doc.with_options(%Doc.Options{client_id: 1})
+      f = Doc.get_xml_fragment(d1, "xml")
+      %{doc: d1, xml_fragment: f}
+    end
+
+    test "insert prelim with any attribute types", %{xml_fragment: xml_fragment} do
+      assert :ok =
+               XmlFragment.insert(xml_fragment, 0, %Yex.XmlTextPrelim{
+                 delta: [
+                   %{
+                     attributes: %{
+                       "link" => %{
+                         "class" => nil,
+                         "indentation" => 0,
+                         "itemType" => <<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15>>,
+                         "lineHeight" => 1.5,
+                         "array" => [1, 2, 3],
+                         "href" => "http://google.com",
+                         "rel" => "noopener noreferrer nofollow",
+                         "target" => "_blank"
+                       }
+                     },
+                     insert: "http://google.com"
+                   }
+                 ],
+                 attributes: %{}
+               })
+
+      {:ok, text} = XmlFragment.fetch(xml_fragment, 0)
+
+      assert [
+               %{
+                 insert: "http://google.com",
+                 attributes: %{
+                   "link" => %{
+                     "class" => nil,
+                     "indentation" => 0,
+                     "itemType" => <<0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15>>,
+                     "lineHeight" => 1.5,
+                     "array" => [1, 2, 3],
+                     "href" => "http://google.com",
+                     "rel" => "noopener noreferrer nofollow",
+                     "target" => "_blank"
+                   }
+                 }
+               }
+             ] == Yex.XmlText.to_delta(text)
+    end
+  end
+
   describe "as_prelim" do
     setup do
       d1 = Doc.with_options(%Doc.Options{client_id: 1})
