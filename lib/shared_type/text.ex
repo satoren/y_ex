@@ -150,6 +150,22 @@ defmodule Yex.Text do
   end
 
   @doc """
+  ### ⚠️ Experimental
+  Returns [WeakPrelim] to a given range of elements, if it's in a boundaries of a current quotable collection.
+  """
+  @spec quote(t(), integer(), integer()) :: Yex.WeakPrelim.t() | {:error, term()}
+  def quote(%__MODULE__{doc: doc} = text, index, length)
+      when is_integer(index) and is_integer(length) and length > 0 do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_quote(text, cur_txn(text), index, length)
+    )
+  end
+
+  def quote(_text, _index, _length) do
+    {:error, :out_of_bounds}
+  end
+
+  @doc """
   Transforms this type to a Quill Delta
 
   ## Examples Syncs two clients by exchanging the complete document structure

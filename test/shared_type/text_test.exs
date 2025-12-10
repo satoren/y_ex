@@ -741,4 +741,20 @@ defmodule Yex.TextTest do
       assert %TextPrelim{delta: ^d} = p2
     end
   end
+
+  test "quote returns WeakPrelim for valid range" do
+    doc = Yex.Doc.new()
+    text = Yex.Doc.get_text(doc, "text")
+    Yex.Text.insert(text, 0, "abcdef")
+    result = Yex.Text.quote(text, 1, 3)
+    assert match?(%Yex.WeakPrelim{}, result)
+  end
+
+  test "quote returns error for out-of-bounds range" do
+    doc = Yex.Doc.new()
+    text = Yex.Doc.get_text(doc, "text")
+    Yex.Text.insert(text, 0, "abc")
+    result = Yex.Text.quote(text, 10, 5)
+    assert result == {:error, :out_of_bounds}
+  end
 end

@@ -62,6 +62,8 @@ defmodule Yex.Nif do
   def text_insert_with_attributes(_text, _cur_txn, _index, _content, _attr),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def text_quote(_text, _cur_txn, _index, _len), do: :erlang.nif_error(:nif_not_loaded)
+
   def text_apply_delta(_text, _cur_txn, _delta),
     do: :erlang.nif_error(:nif_not_loaded)
 
@@ -91,6 +93,8 @@ defmodule Yex.Nif do
 
   def array_move_to(_array, _cur_txn, _from, _to), do: :erlang.nif_error(:nif_not_loaded)
 
+  def array_quote(_array, _cur_txn, _index, _len), do: :erlang.nif_error(:nif_not_loaded)
+
   def array_to_json(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def map_set(_map, _cur_txn, _key, _value), do: :erlang.nif_error(:nif_not_loaded)
@@ -102,6 +106,7 @@ defmodule Yex.Nif do
   def map_keys(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_values(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_json(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  def map_link(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_insert(_xml_fragment, _cur_txn, _index, _content),
     do: :erlang.nif_error(:nif_not_loaded)
@@ -168,6 +173,7 @@ defmodule Yex.Nif do
   def xml_text_to_string(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_text_parent(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_text_quote(_xml_text, _cur_txn, _index, _len), do: :erlang.nif_error(:nif_not_loaded)
 
   def shared_type_observe(_map, _cur_txn, _pid, _ref, _metadata),
     do: :erlang.nif_error(:nif_not_loaded)
@@ -228,6 +234,17 @@ defmodule Yex.Nif do
   def undo_manager_exclude_origin(_undo_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_stop_capturing(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_clear(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
+
+  def weak_string(_weak, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def weak_unquote(_weak, _cur_txn),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def weak_deref(_weak, _cur_txn),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def weak_as_prelim(_weak, _cur_txn),
+    do: :erlang.nif_error(:nif_not_loaded)
 
   def normalize_number(_number),
     do: :erlang.nif_error(:nif_not_loaded)

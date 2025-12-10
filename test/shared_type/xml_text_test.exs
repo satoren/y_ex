@@ -269,4 +269,34 @@ defmodule YexXmlTextTest do
              ] = prelim.delta
     end
   end
+
+  describe "quote" do
+    setup do
+      d1 = Doc.with_options(%Doc.Options{client_id: 1})
+      f = Doc.get_xml_fragment(d1, "xml")
+      XmlFragment.push(f, XmlTextPrelim.from("Hello"))
+      {:ok, xml} = XmlFragment.fetch(f, 0)
+      %{doc: d1, xml_text: xml, xml_fragment: f}
+    end
+
+    test "returns {:error, :out_of_bounds} when length is zero", %{xml_text: xml_text} do
+      assert {:error, :out_of_bounds} = XmlText.quote(xml_text, 0, 0)
+    end
+
+    test "returns {:error, :out_of_bounds} when length is negative", %{xml_text: xml_text} do
+      assert {:error, :out_of_bounds} = XmlText.quote(xml_text, 0, -1)
+    end
+
+    test "returns {:error, :out_of_bounds} when index is out of bounds (negative)", %{
+      xml_text: xml_text
+    } do
+      assert {:error, :out_of_bounds} = XmlText.quote(xml_text, -10, 1)
+    end
+
+    test "returns {:error, :out_of_bounds} when index + length exceeds text length", %{
+      xml_text: xml_text
+    } do
+      assert {:error, :out_of_bounds} = XmlText.quote(xml_text, 0, 10)
+    end
+  end
 end

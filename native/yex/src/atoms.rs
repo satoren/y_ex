@@ -12,6 +12,8 @@ rustler::atoms! {
     observe_event,
     observe_deep_event,
 
+    out_of_bounds,
+
 // messages types
   sync,
   awareness,

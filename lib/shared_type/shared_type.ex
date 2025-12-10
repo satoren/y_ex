@@ -157,6 +157,7 @@ defmodule Yex.PrelimType do
   @type t ::
           Yex.MapPrelim.t()
           | Yex.TextPrelim.t()
+          | Yex.WeakPrelim.t()
           | Yex.ArrayPrelim.t()
           | Yex.XmlElementPrelim.t()
           | Yex.XmlFragmentPrelim.t()

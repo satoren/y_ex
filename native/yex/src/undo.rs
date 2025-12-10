@@ -49,6 +49,7 @@ pub fn undo_manager_new(
         NifSharedTypeInput::XmlText(text) => create_undo_manager(env, doc, text),
         NifSharedTypeInput::XmlElement(element) => create_undo_manager(env, doc, element),
         NifSharedTypeInput::XmlFragment(fragment) => create_undo_manager(env, doc, fragment),
+        NifSharedTypeInput::WeakLink(weak_link) => create_undo_manager(env, doc, weak_link),
     })
 }
 
@@ -119,6 +120,9 @@ pub fn undo_manager_new_with_options(
         }
         NifSharedTypeInput::XmlFragment(fragment) => {
             create_undo_manager_with_options(env, doc, fragment, options)
+        }
+        NifSharedTypeInput::WeakLink(weak_link) => {
+            create_undo_manager_with_options(env, doc, weak_link, options)
         }
     }
 }
@@ -252,6 +256,14 @@ pub fn undo_manager_expand_scope(
                     .readonly(None, |txn| fragment.get_ref(txn))
                     .map_err(|_| {
                         Error::Message("Failed to get xml fragment branch reference".to_string())
+                    })?;
+                wrapper.manager.expand_scope(&branch);
+            }
+            NifSharedTypeInput::WeakLink(weak_link) => {
+                let branch = weak_link
+                    .readonly(None, |txn| weak_link.get_ref(txn))
+                    .map_err(|_| {
+                        Error::Message("Failed to get weak link branch reference".to_string())
                     })?;
                 wrapper.manager.expand_scope(&branch);
             }
