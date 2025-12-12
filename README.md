@@ -26,15 +26,15 @@ end
 ## Feature parity
 
 
-|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.18)               |                y_ex<br/>(0.10.0)               | 
+|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.18)               |                y_ex<br/>(0.10.2)               | 
 |-----------------------------------------|:-------------------------------------------------:|:------------------------------------------:|:------------------------------------------:|
 | YText: insert/delete                    |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | YText: formatting attributes and deltas |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | YText: embeded elements                 |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | YMap: update/delete                     |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
-| YMap: weak links                        | &#x2705; <br/> <small>(weak-links branch)</small> |                  &#x2705;                  |                  &#x274C;                  |
+| YMap: weak links                        | &#x2705; <br/> <small>(weak-links branch)</small> |                  &#x2705;                  | &#x2705;<br/> <small>(experimental)</small>|
 | YArray: insert/delete                   |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
-| YArray & YText quotations               | &#x2705; <br/> <small>(weak links branch)</small> |                  &#x2705;                  |                  &#x274C;                  |
+| YArray & YText quotations               | &#x2705; <br/> <small>(weak links branch)</small> |                  &#x2705;                  | &#x2705;<br/> <small>(experimental)</small>|
 | YArray: move                            |    &#x2705; <br/> <small>(move branch)</small>    |                  &#x2705;                  |                  &#x2705;                  |
 | XML Element, Fragment and Text          |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Sub-documents                           |                     &#x2705;                      |                  &#x2705;                  | &#x2705;<br/> <small>(experimental)</small>|
