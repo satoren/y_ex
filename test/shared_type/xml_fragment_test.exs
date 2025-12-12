@@ -462,5 +462,22 @@ defmodule YexXmlFragmentTest do
       # Ensure protocol implementation is exercised
       assert Yex.Output.as_prelim(f) == XmlFragment.as_prelim(f)
     end
+
+    test "load blocknote_data.bin and as_prelim" do
+      path = Path.expand("../test_data/blocknote_data.bin", __DIR__)
+      {:ok, bin} = File.read(path)
+      doc = Yex.Doc.new()
+      Yex.apply_update(doc, bin)
+      prelim = Yex.Doc.get_xml_fragment(doc, "document-store") |> Yex.Output.as_prelim()
+
+      new_doc = Yex.Doc.new()
+      frag = Yex.Doc.get_xml_fragment(new_doc, "document-store")
+
+      Enum.each(prelim.children, fn child ->
+        Yex.XmlFragment.insert(frag, Yex.XmlFragment.length(frag), child)
+      end)
+
+      assert frag |> Yex.Output.as_prelim() == prelim
+    end
   end
 end
