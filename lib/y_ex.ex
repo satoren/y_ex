@@ -132,6 +132,21 @@ defmodule Yex do
     end
   end
 
+  @spec merge_updates([binary()]) :: {:ok, binary()} | {:error, term()}
+  def merge_updates(updates) when is_list(updates) do
+    merge_updates_v1(updates)
+  end
+
+  @spec merge_updates_v1([binary()]) :: {:ok, binary()} | {:error, term()}
+  def merge_updates_v1(updates) when is_list(updates) do
+    Yex.Nif.merge_updates_v1(updates)
+  end
+
+  @spec merge_updates_v2([binary()]) :: {:ok, binary()} | {:error, term()}
+  def merge_updates_v2(updates) when is_list(updates) do
+    Yex.Nif.merge_updates_v2(updates)
+  end
+
   @doc """
   Normalize a number to a format that can be used in Yjs.
   """
