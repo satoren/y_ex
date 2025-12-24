@@ -395,13 +395,15 @@ fn apply_update_v2(
 
 #[rustler::nif]
 fn merge_updates_v1<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
-    let merged = yrs::merge_updates_v1(updates.iter().map(Binary::as_slice)).map_err(Error::from)?;
+    let merged =
+        yrs::merge_updates_v1(updates.iter().map(Binary::as_slice)).map_err(Error::from)?;
     Ok((atoms::ok(), SliceIntoBinary::new(merged.as_slice())).encode(env))
 }
 
 #[rustler::nif]
 fn merge_updates_v2<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
-    let merged = yrs::merge_updates_v2(updates.iter().map(Binary::as_slice)).map_err(Error::from)?;
+    let merged =
+        yrs::merge_updates_v2(updates.iter().map(Binary::as_slice)).map_err(Error::from)?;
     Ok((atoms::ok(), SliceIntoBinary::new(merged.as_slice())).encode(env))
 }
 
