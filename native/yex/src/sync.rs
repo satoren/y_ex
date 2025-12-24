@@ -16,6 +16,69 @@ use yrs::updates::decoder::{Decode, Decoder, DecoderV1, DecoderV2};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1, EncoderV2};
 use yrs::{ReadTxn, StateVector};
 
+fn read_var_u64(bytes: &[u8], pos: &mut usize) -> Option<u64> {
+    let mut value: u64 = 0;
+    let mut shift: u32 = 0;
+
+    while *pos < bytes.len() {
+        let b = bytes[*pos];
+        *pos += 1;
+
+        value |= u64::from(b & 0x7f) << shift;
+        if b < 0x80 {
+            return Some(value);
+        }
+
+        shift += 7;
+        if shift >= 64 {
+            return None;
+        }
+    }
+
+    None
+}
+
+fn read_buf_span(bytes: &[u8], pos: &mut usize) -> Option<(usize, usize)> {
+    let len = usize::try_from(read_var_u64(bytes, pos)?).ok()?;
+    let start = *pos;
+    let end = pos.checked_add(len)?;
+    if end > bytes.len() {
+        return None;
+    }
+    *pos = end;
+    Some((start, len))
+}
+
+fn try_decode_message_v1_fast<'a>(env: Env<'a>, msg: Binary<'a>) -> Option<Term<'a>> {
+    let bytes = msg.as_slice();
+    if bytes.is_empty() {
+        return None;
+    }
+
+    let mut pos = 1;
+    match bytes[0] {
+        MSG_QUERY_AWARENESS => Some(atoms::query_awareness().encode(env)),
+        MSG_AWARENESS => {
+            let (offset, len) = read_buf_span(bytes, &mut pos)?;
+            let data = msg.make_subbinary(offset, len).ok()?;
+            Some((atoms::awareness(), data).encode(env))
+        }
+        MSG_SYNC => {
+            let inner_tag = u8::try_from(read_var_u64(bytes, &mut pos)?).ok()?;
+            let (offset, len) = read_buf_span(bytes, &mut pos)?;
+            let data = msg.make_subbinary(offset, len).ok()?;
+
+            match inner_tag {
+                MSG_SYNC_STEP_1 => Some((atoms::sync(), (atoms::sync_step1(), data)).encode(env)),
+                MSG_SYNC_STEP_2 => Some((atoms::sync(), (atoms::sync_step2(), data)).encode(env)),
+                MSG_SYNC_UPDATE => Some((atoms::sync(), (atoms::sync_update(), data)).encode(env)),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 fn decode_sync_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<'a>, Error> {
     let tag: u8 = decoder.read_var()?;
     match tag {
@@ -148,6 +211,10 @@ fn encode_awareness_term<'a>(env: Env<'a>, payload: &[u8]) -> Term<'a> {
 
 #[rustler::nif]
 fn sync_message_decode_v1<'a>(env: Env<'a>, msg: Binary<'a>) -> NifResult<(Atom, Term<'a>)> {
+    if let Some(term) = try_decode_message_v1_fast(env, msg) {
+        return Ok((atoms::ok(), term));
+    }
+
     let mut decoder = DecoderV1::new(Cursor::new(msg.as_slice()));
     decode_message(env, &mut decoder)
         .map(|term| (atoms::ok(), term))
