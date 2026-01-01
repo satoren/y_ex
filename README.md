@@ -46,7 +46,7 @@ end
 | Sticky indexes                          |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Undo Manager                            |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Awareness                               |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
-| Network provider: WebSockets            |    &#x2705; <br/> <small>(y-websocket)</small>    |  &#x2705; <br/> <small>(yrs-warp)</small>  |                  &#x274C;                  |
+| Network provider: WebSockets            |    &#x2705; <br/> <small>(y-websocket)</small>    |  &#x2705; <br/> <small>(yrs-warp)</small>  |                  &#x2705; <br/> <small>(y-phoenix-channel)</small>                   |
 | Network provider: WebRTC                |     &#x2705; <br/> <small>(y-webrtc)</small>      | &#x2705; <br/> <small>(yrs-webrtc)</small> |                  &#x274C;                  |
 
 
