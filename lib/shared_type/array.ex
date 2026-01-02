@@ -388,6 +388,28 @@ defmodule Yex.Array do
     Enum.member?(to_list(array), val)
   end
 
+  @spec observe(
+          Yex.Array.t(),
+          handler :: (update :: Yex.ArrayEvent.t(), origin :: term() -> nil)
+        ) :: reference()
+  def observe(%__MODULE__{doc: doc} = array, handler) do
+    Yex.SharedType.observe(array,
+      metadata: {Yex.ObserveCallbackHandler, handler},
+      notify_pid: doc.worker_pid
+    )
+  end
+
+  @spec observe_deep(
+          Yex.Array.t(),
+          handler :: (update :: list(Yex.event_type()), origin :: term() -> nil)
+        ) :: reference()
+  def observe_deep(%__MODULE__{doc: doc} = array, handler) do
+    Yex.SharedType.observe_deep(array,
+      metadata: {Yex.ObserveCallbackHandler, handler},
+      notify_pid: doc.worker_pid
+    )
+  end
+
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end

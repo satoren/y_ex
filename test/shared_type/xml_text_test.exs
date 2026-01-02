@@ -351,4 +351,48 @@ defmodule YexXmlTextTest do
       assert {:error, :out_of_bounds} = XmlText.quote(xml_text, 0, 10)
     end
   end
+
+  test "observe with handler" do
+    doc = Doc.with_options(%Doc.Options{client_id: 1})
+    frag = Doc.get_xml_fragment(doc, "xml")
+    XmlFragment.push(frag, XmlTextPrelim.from(""))
+    {:ok, xml_text} = XmlFragment.fetch(frag, 0)
+
+    parent = self()
+
+    handler = fn update, origin ->
+      send(parent, {:handler_called, update, origin})
+    end
+
+    _ref = XmlText.observe(xml_text, handler)
+
+    :ok =
+      Doc.transaction(doc, "test_origin", fn ->
+        XmlText.insert(xml_text, 0, "Hello")
+      end)
+
+    assert_receive {:handler_called, %Yex.XmlTextEvent{}, "test_origin"}
+  end
+
+  test "observe_deep with handler" do
+    doc = Doc.with_options(%Doc.Options{client_id: 1})
+    frag = Doc.get_xml_fragment(doc, "xml")
+    XmlFragment.push(frag, XmlTextPrelim.from(""))
+    {:ok, xml_text} = XmlFragment.fetch(frag, 0)
+
+    parent = self()
+
+    handler = fn updates, origin ->
+      send(parent, {:deep_handler_called, updates, origin})
+    end
+
+    _ref = XmlText.observe_deep(xml_text, handler)
+
+    :ok =
+      Doc.transaction(doc, "test_origin", fn ->
+        XmlText.insert(xml_text, 0, "Hello")
+      end)
+
+    assert_receive {:deep_handler_called, _updates, "test_origin"}
+  end
 end

@@ -202,6 +202,28 @@ defmodule Yex.Text do
     )
   end
 
+  @spec observe(
+          t,
+          handler :: (update :: Yex.TextEvent.t(), origin :: term() -> nil)
+        ) :: reference()
+  def observe(%__MODULE__{doc: doc} = text, handler) do
+    Yex.SharedType.observe(text,
+      metadata: {Yex.ObserveCallbackHandler, handler},
+      notify_pid: doc.worker_pid
+    )
+  end
+
+  @spec observe_deep(
+          t,
+          handler :: (update :: list(Yex.event_type()), origin :: term() -> nil)
+        ) :: reference()
+  def observe_deep(%__MODULE__{doc: doc} = text, handler) do
+    Yex.SharedType.observe_deep(text,
+      metadata: {Yex.ObserveCallbackHandler, handler},
+      notify_pid: doc.worker_pid
+    )
+  end
+
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end

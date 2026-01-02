@@ -109,3 +109,20 @@ defmodule Yex.XmlTextEvent do
           delta: Yex.Text.delta()
         }
 end
+
+defmodule Yex.WeakEvent do
+  @moduledoc """
+
+  Event when Weak type changes
+
+  @see Yex.SharedType.observe/1
+  @see Yex.SharedType.observe_deep/1
+  """
+  defstruct [
+    :path
+  ]
+
+  @type t :: %__MODULE__{
+          path: list(number() | String.t())
+        }
+end

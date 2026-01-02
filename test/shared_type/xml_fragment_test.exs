@@ -479,5 +479,39 @@ defmodule YexXmlFragmentTest do
 
       assert frag |> Yex.Output.as_prelim() == prelim
     end
+
+    test "observe with handler", %{xml_fragment: frag, doc: doc} do
+      parent = self()
+
+      handler = fn update, origin ->
+        send(parent, {:handler_called, update, origin})
+      end
+
+      _ref = XmlFragment.observe(frag, handler)
+
+      :ok =
+        Doc.transaction(doc, "test_origin", fn ->
+          XmlFragment.push(frag, XmlElementPrelim.empty("div"))
+        end)
+
+      assert_receive {:handler_called, %Yex.XmlEvent{}, "test_origin"}
+    end
+
+    test "observe_deep with handler", %{xml_fragment: frag, doc: doc} do
+      parent = self()
+
+      handler = fn updates, origin ->
+        send(parent, {:deep_handler_called, updates, origin})
+      end
+
+      _ref = XmlFragment.observe_deep(frag, handler)
+
+      :ok =
+        Doc.transaction(doc, "test_origin", fn ->
+          XmlFragment.push(frag, XmlElementPrelim.empty("div"))
+        end)
+
+      assert_receive {:deep_handler_called, _updates, "test_origin"}
+    end
   end
 end

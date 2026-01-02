@@ -1,7 +1,7 @@
 defmodule Yex.DocTest do
   use ExUnit.Case
   import Mock
-  alias Yex.{Doc, Text}
+  alias Yex.{Doc, Text, Map}
   doctest Doc
 
   test "new" do
@@ -544,5 +544,171 @@ defmodule Yex.DocTest do
     def handle_call(_msg, _from, state) do
       {:reply, :ok, state}
     end
+  end
+
+  test "on_update callback" do
+    doc = Doc.new()
+    test_pid = self()
+
+    {:ok, _monitor_ref} =
+      Doc.on_update(doc, fn update, origin ->
+        send(test_pid, {:callback_called, update, origin})
+      end)
+
+    text = Doc.get_text(doc, "text")
+    Text.insert(text, 0, "Hello")
+
+    assert_receive {:callback_called, update, nil}
+    assert is_binary(update)
+    assert byte_size(update) > 0
+  end
+
+  test "on_update_v1 callback with transaction origin" do
+    doc = Doc.new()
+    test_pid = self()
+
+    {:ok, _monitor_ref} =
+      Doc.on_update_v1(doc, fn update, origin ->
+        send(test_pid, {:callback_v1, update, origin})
+      end)
+
+    text = Doc.get_text(doc, "text")
+
+    Doc.transaction(doc, "test_origin", fn ->
+      Text.insert(text, 0, "World")
+    end)
+
+    assert_receive {:callback_v1, update, "test_origin"}
+    assert is_binary(update)
+  end
+
+  test "on_update_v2 callback" do
+    doc = Doc.new()
+    test_pid = self()
+
+    {:ok, _monitor_ref} =
+      Doc.on_update_v2(doc, fn update, origin ->
+        send(test_pid, {:callback_v2, update, origin})
+      end)
+
+    text = Doc.get_text(doc, "text")
+    Text.insert(text, 0, "Test")
+
+    assert_receive {:callback_v2, update, nil}
+    assert is_binary(update)
+  end
+
+  test "on_update multiple callbacks" do
+    doc = Doc.new()
+    test_pid = self()
+
+    {:ok, _monitor_ref1} =
+      Doc.on_update(doc, fn update, origin ->
+        send(test_pid, {:callback1, byte_size(update), origin})
+      end)
+
+    {:ok, _monitor_ref2} =
+      Doc.on_update(doc, fn update, origin ->
+        send(test_pid, {:callback2, byte_size(update), origin})
+      end)
+
+    text = Doc.get_text(doc, "text")
+
+    Doc.transaction(doc, "multi", fn ->
+      Text.insert(text, 0, "ABC")
+    end)
+
+    assert_receive {:callback1, size1, "multi"}
+    assert_receive {:callback2, size2, "multi"}
+    assert size1 == size2
+    assert size1 > 0
+  end
+
+  test "on_update callback can access update data" do
+    doc = Doc.new()
+    test_pid = self()
+
+    {:ok, _monitor_ref} =
+      Doc.on_update(doc, fn update, _origin ->
+        # Verify we can use the update to sync another doc
+        doc2 = Doc.new()
+        :ok = Yex.apply_update(doc2, update)
+        text2 = Doc.get_text(doc2, "text")
+        result = Text.to_string(text2)
+        send(test_pid, {:synced_text, result})
+      end)
+
+    text = Doc.get_text(doc, "text")
+    Text.insert(text, 0, "Sync Test")
+
+    assert_receive {:synced_text, "Sync Test"}
+  end
+
+  test "on_subdocs callback" do
+    doc = Doc.new()
+    test_pid = self()
+
+    {:ok, _monitor_ref} =
+      Doc.on_subdocs(doc, fn event ->
+        send(test_pid, {:subdocs_callback, event})
+      end)
+
+    # Subdocs events are triggered by specific operations
+    # This is a basic test to verify the callback registration works
+    # The actual event triggering depends on the Yex implementation
+    refute_receive {:subdocs_callback, _}, 100
+  end
+
+  test "on_subdocs receives events when subdoc is added" do
+    root_doc = Doc.new()
+    test_pid = self()
+
+    {:ok, _monitor_ref} =
+      Doc.on_subdocs(root_doc, fn event, _origin ->
+        send(test_pid, {:subdocs_event, event})
+      end)
+
+    folder = Doc.get_map(root_doc, "folder")
+    sub_doc = Doc.new()
+    sub_doc_text = Doc.get_text(sub_doc, "subdoc-text")
+    Text.insert(sub_doc_text, 0, "subdoc content")
+
+    Map.set(folder, "subdoc.txt", sub_doc)
+
+    assert_receive {:subdocs_event, %{added: added, loaded: loaded, removed: []}}, 1000
+    assert length(added) == 1
+    assert length(loaded) == 1
+    assert Doc.guid(sub_doc) == Doc.guid(hd(added))
+  end
+
+  test "on_subdocs returns error on failure" do
+    doc = Doc.new()
+
+    with_mock Yex.Nif,
+              [:passthrough],
+              doc_monitor_subdocs: fn _, _pid, _handler -> {:error, :test_error} end do
+      assert {:error, :test_error} = Doc.on_subdocs(doc, fn _event -> :ok end)
+    end
+  end
+
+  test "on_subdocs subscription can be cancelled" do
+    root_doc = Doc.new()
+    test_pid = self()
+
+    {:ok, monitor_ref} =
+      Doc.on_subdocs(root_doc, fn event, _origin ->
+        send(test_pid, {:subdocs_event, event})
+      end)
+
+    # Cancel the subscription
+    :ok = Yex.Subscription.unsubscribe(monitor_ref)
+
+    # Add a subdoc after cancelling
+    folder = Doc.get_map(root_doc, "folder")
+    sub_doc = Doc.new()
+    Map.set(folder, "subdoc.txt", sub_doc)
+
+    # Should not receive any event
+    refute_receive {:subdocs_event, _}, 100
   end
 end

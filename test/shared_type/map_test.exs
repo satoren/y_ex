@@ -244,5 +244,39 @@ defmodule Yex.MapTest do
       result = Enum.reduce(map, [], fn {k, v}, acc -> [{k, v} | acc] end)
       assert [{"key1", "value1"}, {"key2", "value2"}] = Enum.sort(result)
     end
+
+    test "observe with handler", %{map: map, doc: doc} do
+      parent = self()
+
+      handler = fn update, origin ->
+        send(parent, {:handler_called, update, origin})
+      end
+
+      _ref = Map.observe(map, handler)
+
+      :ok =
+        Doc.transaction(doc, "test_origin", fn ->
+          Map.set(map, "key", "value")
+        end)
+
+      assert_receive {:handler_called, %Yex.MapEvent{}, "test_origin"}
+    end
+
+    test "observe_deep with handler", %{map: map, doc: doc} do
+      parent = self()
+
+      handler = fn updates, origin ->
+        send(parent, {:deep_handler_called, updates, origin})
+      end
+
+      _ref = Map.observe_deep(map, handler)
+
+      :ok =
+        Doc.transaction(doc, "test_origin", fn ->
+          Map.set(map, "key", "value")
+        end)
+
+      assert_receive {:deep_handler_called, _updates, "test_origin"}
+    end
   end
 end

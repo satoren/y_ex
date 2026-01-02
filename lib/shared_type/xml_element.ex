@@ -351,6 +351,28 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @spec observe(
+          t,
+          handler :: (update :: Yex.XmlEvent.t(), origin :: term() -> nil)
+        ) :: reference()
+  def observe(%__MODULE__{doc: doc} = xml_element, handler) do
+    Yex.SharedType.observe(xml_element,
+      metadata: {Yex.ObserveCallbackHandler, handler},
+      notify_pid: doc.worker_pid
+    )
+  end
+
+  @spec observe_deep(
+          t,
+          handler :: (update :: list(Yex.event_type()), origin :: term() -> nil)
+        ) :: reference()
+  def observe_deep(%__MODULE__{doc: doc} = xml_element, handler) do
+    Yex.SharedType.observe_deep(xml_element,
+      metadata: {Yex.ObserveCallbackHandler, handler},
+      notify_pid: doc.worker_pid
+    )
+  end
+
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end

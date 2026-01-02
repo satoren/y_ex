@@ -15,6 +15,13 @@ defmodule Yex do
           any_type
           | Yex.PrelimType.t()
 
+  @type event_type ::
+          Yex.XmlTextEvent.t()
+          | Yex.XmlEvent.t()
+          | Yex.TextEvent.t()
+          | Yex.MapEvent.t()
+          | Yex.ArrayEvent.t()
+          | Yex.WeakEvent.t()
   @doc """
   Computes the state vector and encodes it into an Binary.
   A state vector describes the state of the local client.

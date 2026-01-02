@@ -54,38 +54,52 @@ defmodule Yex.Doc do
   """
   defmacro run_in_worker_process(doc, do: block) do
     quote do
-      case unquote(doc).worker_pid do
-        pid when pid == self() ->
-          unquote(block)
+      Yex.Doc.run_in_worker_process_fn(unquote(doc), fn ->
+        unquote(block)
+      end)
+    end
+  end
 
-        nil ->
-          raise RuntimeError, "Document has no worker process assigned"
+  @spec run_in_worker_process_fn(
+          atom() | %{:worker_pid => any(), optional(any()) => any()},
+          any()
+        ) :: any()
+  def run_in_worker_process_fn(doc, fun) do
+    case doc.worker_pid do
+      pid when pid == self() ->
+        result = fun.()
+        handle_on_update_handler()
+        result
 
-        worker_pid ->
-          wrapped_fun = fn ->
-            try do
-              unquote(block)
-            rescue
-              e ->
-                {Yex.Doc, :reraise, e, __STACKTRACE__}
-            end
+      nil ->
+        raise RuntimeError, "Document has no worker process assigned"
+
+      worker_pid ->
+        wrapped_fun = fn ->
+          try do
+            result = fun.()
+            handle_on_update_handler()
+            result
+          rescue
+            e ->
+              {Yex.Doc, :reraise, e, __STACKTRACE__}
           end
+        end
 
-          # When a Doc or SharedType operation is performed from a process different from the
-          # process that created the Doc, a message like {Yex.Doc, :run, fun} is sent to the
-          # creator process via GenServer.call and the processing is delegated to that process.
-          # If you encounter a GenServer.call timeout, this delegation mechanism may be the cause.
-          case GenServer.call(
-                 worker_pid,
-                 {Yex.Doc, :run, wrapped_fun}
-               ) do
-            {Yex.Doc, :reraise, e, stacktrace} ->
-              reraise e, stacktrace
+        # When a Doc or SharedType operation is performed from a process different from the
+        # process that created the Doc, a message like {Yex.Doc, :run, fun} is sent to the
+        # creator process via GenServer.call and the processing is delegated to that process.
+        # If you encounter a GenServer.call timeout, this delegation mechanism may be the cause.
+        case GenServer.call(
+               worker_pid,
+               {Yex.Doc, :run, wrapped_fun}
+             ) do
+          {Yex.Doc, :reraise, e, stacktrace} ->
+            reraise e, stacktrace
 
-            result ->
-              result
-          end
-      end
+          result ->
+            result
+        end
     end
   end
 
@@ -282,6 +296,82 @@ defmodule Yex.Doc do
 
       error ->
         error
+    end
+  end
+
+  def on_subdocs(%__MODULE__{} = doc, handler) do
+    result =
+      run_in_worker_process(doc,
+        do: Yex.Nif.doc_monitor_subdocs(doc, self(), {Yex.CallbackHandler, handler})
+      )
+
+    case result do
+      {:ok, sub} ->
+        {:ok, Yex.Subscription.register(sub)}
+
+      error ->
+        error
+    end
+  end
+
+  @spec on_update(Yex.Doc.t(), handler :: (update :: binary(), origin :: term() -> nil)) :: any()
+  def on_update(%__MODULE__{} = doc, handler) do
+    on_update_v1(doc, handler)
+  end
+
+  @spec on_update_v1(Yex.Doc.t(), handler :: (update :: binary(), origin :: term() -> nil)) ::
+          any()
+  def on_update_v1(%__MODULE__{} = doc, handler) do
+    result =
+      run_in_worker_process(doc,
+        do: Yex.Nif.doc_monitor_update_v1(doc, self(), {Yex.CallbackHandler, handler})
+      )
+
+    case result do
+      {:ok, sub} ->
+        {:ok, Yex.Subscription.register(sub)}
+
+      error ->
+        error
+    end
+  end
+
+  @spec on_update_v2(Yex.Doc.t(), handler :: (update :: binary(), origin :: term() -> nil)) ::
+          any()
+  def on_update_v2(%__MODULE__{} = doc, handler) do
+    result =
+      run_in_worker_process(doc,
+        do: Yex.Nif.doc_monitor_update_v2(doc, self(), {Yex.CallbackHandler, handler})
+      )
+
+    case result do
+      {:ok, sub} ->
+        {:ok, Yex.Subscription.register(sub)}
+
+      error ->
+        error
+    end
+  end
+
+  defp handle_on_update_handler() do
+    receive do
+      {_, arg1, {Yex.CallbackHandler, handler}} ->
+        handler.(arg1)
+        handle_on_update_handler()
+
+      {:subdocs, event, origin, {Yex.CallbackHandler, handler}} ->
+        handler.(event, origin)
+        handle_on_update_handler()
+
+      {_, arg1, arg2, {Yex.CallbackHandler, handler}} ->
+        handler.(arg1, arg2)
+        handle_on_update_handler()
+
+      {_, _ref, event, origin, {Yex.ObserveCallbackHandler, handler}} ->
+        handler.(event, origin)
+        handle_on_update_handler()
+    after
+      0 -> :ok
     end
   end
 

@@ -139,6 +139,28 @@ defmodule Yex.XmlText do
     )
   end
 
+  @spec observe(
+          t,
+          handler :: (update :: Yex.XmlTextEvent.t(), origin :: term() -> nil)
+        ) :: reference()
+  def observe(%__MODULE__{doc: doc} = xml_text, handler) do
+    Yex.SharedType.observe(xml_text,
+      metadata: {Yex.ObserveCallbackHandler, handler},
+      notify_pid: doc.worker_pid
+    )
+  end
+
+  @spec observe_deep(
+          t,
+          handler :: (update :: list(Yex.event_type()), origin :: term() -> nil)
+        ) :: reference()
+  def observe_deep(%__MODULE__{doc: doc} = xml_text, handler) do
+    Yex.SharedType.observe_deep(xml_text,
+      metadata: {Yex.ObserveCallbackHandler, handler},
+      notify_pid: doc.worker_pid
+    )
+  end
+
   @doc false
   # Gets the current transaction reference from the process dictionary for the given document
   defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
