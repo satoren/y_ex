@@ -757,4 +757,44 @@ defmodule Yex.TextTest do
     result = Yex.Text.quote(text, 10, 5)
     assert result == {:error, :out_of_bounds}
   end
+
+  test "observe with handler" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+
+    parent = self()
+
+    handler = fn update, origin ->
+      send(parent, {:handler_called, update, origin})
+    end
+
+    _ref = Text.observe(text, handler)
+
+    :ok =
+      Doc.transaction(doc, "test_origin", fn ->
+        Text.insert(text, 0, "Hello")
+      end)
+
+    assert_receive {:handler_called, %Yex.TextEvent{}, "test_origin"}
+  end
+
+  test "observe_deep with handler" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+
+    parent = self()
+
+    handler = fn updates, origin ->
+      send(parent, {:deep_handler_called, updates, origin})
+    end
+
+    _ref = Text.observe_deep(text, handler)
+
+    :ok =
+      Doc.transaction(doc, "test_origin", fn ->
+        Text.insert(text, 0, "Hello")
+      end)
+
+    assert_receive {:deep_handler_called, _updates, "test_origin"}
+  end
 end

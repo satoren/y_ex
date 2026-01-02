@@ -516,6 +516,46 @@ defmodule Yex.ArrayTest do
       # noop but return ok
       assert :ok = SharedType.unobserve(make_ref())
     end
+
+    test "Array.observe with handler" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+
+      parent = self()
+
+      handler = fn update, origin ->
+        send(parent, {:handler_called, update, origin})
+      end
+
+      _ref = Array.observe(array, handler)
+
+      :ok =
+        Doc.transaction(doc, "test_origin", fn ->
+          Array.insert(array, 0, "Hello")
+        end)
+
+      assert_receive {:handler_called, %Yex.ArrayEvent{}, "test_origin"}
+    end
+
+    test "Array.observe_deep with handler" do
+      doc = Doc.new()
+      array = Doc.get_array(doc, "array")
+
+      parent = self()
+
+      handler = fn updates, origin ->
+        send(parent, {:deep_handler_called, updates, origin})
+      end
+
+      _ref = Array.observe_deep(array, handler)
+
+      :ok =
+        Doc.transaction(doc, "test_origin", fn ->
+          Array.insert(array, 0, "Hello")
+        end)
+
+      assert_receive {:deep_handler_called, _updates, "test_origin"}
+    end
   end
 
   test "observe_deep" do
