@@ -7,7 +7,25 @@ defmodule Yex.DocServer.Worker do
 
   alias Yex.{Doc, Awareness}
 
+  # MSG_QUERY_AWARENESS (<<3>>) — bypass message_decode NIF
+  @query_awareness_call :__yex_query_awareness
+  @sync_step1_raw_call :__yex_sync_step1_raw
+
+  @query_awareness_message <<3>>
+  def process_message_v1(server, @query_awareness_message, _origin) do
+    GenServer.call(server, @query_awareness_call)
+  end
+
+  # MSG_SYNC (0) + MSG_SYNC_STEP_1 (0) — bypass message_decode NIF, pass sv_payload directly
+  def process_message_v1(server, <<0, 0, sv_payload::binary>>, _origin) do
+    GenServer.call(server, {@sync_step1_raw_call, sv_payload})
+  end
+
   def process_message_v1(server, message, origin) do
+    fallback_process_message_v1(server, message, origin)
+  end
+
+  defp fallback_process_message_v1(server, message, origin) do
     case Yex.Sync.message_decode(message) do
       {:ok, message} ->
         message_v1(server, message, origin)
@@ -19,7 +37,6 @@ defmodule Yex.DocServer.Worker do
 
   defp message_v1(server, {:sync, {:sync_step1, encoded_state_vector}}, origin) do
     GenServer.call(server, {__MODULE__, :document_sync_step1, encoded_state_vector, origin})
-    |> handle_process_message_result()
   end
 
   defp message_v1(server, {:sync, {message_type, encoded_diff}}, origin)
@@ -32,33 +49,12 @@ defmodule Yex.DocServer.Worker do
   end
 
   defp message_v1(server, :query_awareness, _origin) do
-    GenServer.call(server, {__MODULE__, :query_awareness})
-    |> handle_process_message_result()
+    GenServer.call(server, @query_awareness_call)
   end
 
   defp message_v1(_server, _message, _origin) do
     {:error, :unknown_message}
   end
-
-  defp handle_process_message_result({:ok, replies}) do
-    replies
-    |> Enum.reduce_while({:ok, []}, fn reply, {:ok, acc} ->
-      case Yex.Sync.message_encode(reply) do
-        {:ok, encoded} ->
-          {:cont, {:ok, [encoded | acc]}}
-
-        {:error, reason} ->
-          Logger.error("Failed to encode reply: #{inspect(reason)}")
-          {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      {:ok, encoded_replies} -> {:ok, Enum.reverse(encoded_replies)}
-      error -> error
-    end
-  end
-
-  defp handle_process_message_result(error), do: error
 
   ## Callbacks
 
@@ -107,32 +103,29 @@ defmodule Yex.DocServer.Worker do
 
   @impl true
   def handle_call(
-        {__MODULE__, :document_sync_step1, encoded_state_vector, _origin},
+        {@sync_step1_raw_call, sv_payload},
         _from,
         %{doc: doc, awareness: awareness} = state
       ) do
-    replies =
-      with {:ok, update} <- Yex.encode_state_as_update(doc, encoded_state_vector),
-           {:ok, sv} <- Yex.encode_state_vector(doc) do
-        {:ok,
-         [{:sync, {:sync_step2, update}}, {:sync, {:sync_step1, sv}}] ++
-           get_awareness_update(doc, awareness)}
-      else
-        error ->
-          error
-      end
-
-    {:reply, replies, state}
+    {:reply, Yex.Nif.encode_sync_step1_response_v1(doc, nil, sv_payload, awareness), state}
   end
 
   @impl true
   def handle_call(
-        {__MODULE__, :query_awareness},
+        @query_awareness_call,
         _from,
-        %{doc: doc, awareness: awareness} = state
+        %{awareness: nil} = state
       ) do
-    replies = {:ok, get_awareness_update(doc, awareness)}
-    {:reply, replies, state}
+    {:reply, {:ok, []}, state}
+  end
+
+  @impl true
+  def handle_call(
+        @query_awareness_call,
+        _from,
+        %{awareness: awareness} = state
+      ) do
+    {:reply, Yex.Nif.encode_awareness_reply_v1(awareness), state}
   end
 
   @impl true
@@ -226,19 +219,6 @@ defmodule Yex.DocServer.Worker do
       module.terminate(reason, state)
     else
       :ok
-    end
-  end
-
-  defp get_awareness_update(_doc, nil), do: []
-
-  defp get_awareness_update(_doc, awareness) do
-    case Awareness.encode_update(awareness) do
-      {:ok, awareness_update} ->
-        [{:awareness, awareness_update}]
-
-      {:error, reason} ->
-        Logger.log(:warning, inspect(reason))
-        []
     end
   end
 

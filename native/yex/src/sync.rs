@@ -1,15 +1,20 @@
 use crate::atoms;
+use crate::awareness::NifAwareness;
+use crate::doc::NifDoc;
 use crate::error::Error;
+use crate::transaction::TransactionResource;
 use crate::wrap::SliceIntoBinary;
-use rustler::{Atom, Binary, Encoder as NifEncoder, Env, NifResult, Term};
+use rustler::{Atom, Binary, Encoder as NifEncoder, Env, NifResult, ResourceArc, Term};
 
-use yrs::encoding::read::Cursor;
+use yrs::encoding::read::{Cursor, Read};
+use yrs::encoding::write::Write;
 use yrs::sync::protocol::{
     MSG_AUTH, MSG_AWARENESS, MSG_QUERY_AWARENESS, MSG_SYNC, MSG_SYNC_STEP_1, MSG_SYNC_STEP_2,
     MSG_SYNC_UPDATE, PERMISSION_DENIED, PERMISSION_GRANTED,
 };
-use yrs::updates::decoder::{Decoder, DecoderV1, DecoderV2};
-use yrs::updates::encoder::{Encoder, EncoderV1, EncoderV2};
+use yrs::updates::decoder::{Decode, Decoder, DecoderV1, DecoderV2};
+use yrs::updates::encoder::{Encode, Encoder, EncoderV1, EncoderV2};
+use yrs::{ReadTxn, StateVector};
 
 fn decode_sync_message<'a, D: Decoder>(env: Env<'a>, decoder: &mut D) -> Result<Term<'a>, Error> {
     let tag: u8 = decoder.read_var()?;
@@ -118,6 +123,29 @@ fn encode_message<'a, E: Encoder>(term: Term<'a>, encoder: &mut E) -> Result<(),
     Err(Error::Message("Unexpected structure".into()))
 }
 
+fn encode_sync_step2_term<'a>(env: Env<'a>, payload: &[u8]) -> Term<'a> {
+    let mut encoder = EncoderV1::new();
+    encoder.write_var(MSG_SYNC);
+    encoder.write_var(MSG_SYNC_STEP_2);
+    encoder.write_buf(payload);
+    SliceIntoBinary::new(encoder.to_vec().as_slice()).encode(env)
+}
+
+fn encode_sync_step1_term<'a>(env: Env<'a>, payload: &[u8]) -> Term<'a> {
+    let mut encoder = EncoderV1::new();
+    encoder.write_var(MSG_SYNC);
+    encoder.write_var(MSG_SYNC_STEP_1);
+    encoder.write_buf(payload);
+    SliceIntoBinary::new(encoder.to_vec().as_slice()).encode(env)
+}
+
+fn encode_awareness_term<'a>(env: Env<'a>, payload: &[u8]) -> Term<'a> {
+    let mut encoder = EncoderV1::new();
+    encoder.write_var(MSG_AWARENESS);
+    encoder.write_buf(payload);
+    SliceIntoBinary::new(encoder.to_vec().as_slice()).encode(env)
+}
+
 #[rustler::nif]
 fn sync_message_decode_v1<'a>(env: Env<'a>, msg: Binary<'a>) -> NifResult<(Atom, Term<'a>)> {
     let mut decoder = DecoderV1::new(Cursor::new(msg.as_slice()));
@@ -134,6 +162,93 @@ fn sync_message_encode_v1<'a>(env: Env<'a>, msg: Term<'a>) -> NifResult<(Atom, T
         atoms::ok(),
         SliceIntoBinary::new(encoder.to_vec().as_slice()).encode(env),
     ))
+}
+
+/// Encode several v1 protocol messages in one NIF call (fewer BEAM↔native transitions).
+#[rustler::nif]
+fn sync_messages_encode_v1<'a>(env: Env<'a>, msgs: Term<'a>) -> NifResult<Term<'a>> {
+    let msgs_vec: Vec<Term<'a>> = msgs.decode()?;
+    let mut bins = Vec::with_capacity(msgs_vec.len());
+    for msg in msgs_vec {
+        let mut encoder = EncoderV1::new();
+        encode_message(msg, &mut encoder)?;
+        let encoded = encoder.to_vec();
+        bins.push(SliceIntoBinary::new(encoded.as_slice()).encode(env));
+    }
+    Ok((atoms::ok(), bins).encode(env))
+}
+
+#[rustler::nif]
+fn sync_step1_replies_encode_v1<'a>(
+    env: Env<'a>,
+    diff: Binary<'a>,
+    state_vector: Binary<'a>,
+    awareness_update: Option<Binary<'a>>,
+) -> NifResult<Term<'a>> {
+    let mut bins = Vec::with_capacity(if awareness_update.is_some() { 3 } else { 2 });
+
+    bins.push(encode_sync_step2_term(env, diff.as_slice()));
+    bins.push(encode_sync_step1_term(env, state_vector.as_slice()));
+
+    if let Some(awareness_update) = awareness_update {
+        bins.push(encode_awareness_term(env, awareness_update.as_slice()));
+    }
+
+    Ok((atoms::ok(), bins).encode(env))
+}
+
+#[rustler::nif]
+fn encode_awareness_reply_v1<'a>(env: Env<'a>, awareness: NifAwareness) -> NifResult<Term<'a>> {
+    let update = awareness.reference.update().map_err(Error::from)?;
+    let update_bytes = update.encode_v1();
+    Ok((
+        atoms::ok(),
+        vec![encode_awareness_term(env, update_bytes.as_slice())],
+    )
+        .encode(env))
+}
+
+/// Decode sync_step1 sv_payload, compute diff+sv, encode awareness, return all message binaries.
+/// sv_payload is the raw bytes after MSG_SYNC + MSG_SYNC_STEP_1 (i.e. varint_len + sv_bytes).
+#[rustler::nif]
+fn encode_sync_step1_response_v1<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    sv_payload: Binary<'a>,
+    awareness: Option<NifAwareness>,
+) -> NifResult<Term<'a>> {
+    let mut decoder = DecoderV1::new(Cursor::new(sv_payload.as_slice()));
+    let sv_bytes = decoder.read_buf().map_err(Error::from)?;
+    let sv = StateVector::decode_v1(sv_bytes).map_err(Error::from)?;
+
+    let (diff, local_sv) = doc.readonly(current_transaction, |txn| {
+        let diff = txn.encode_diff_v1(&sv);
+        let local_sv = txn.state_vector().encode_v1();
+        Ok((diff, local_sv))
+    })?;
+
+    let awareness_bytes = if let Some(aw) = awareness {
+        Some(aw.reference.update().map_err(Error::from)?.encode_v1())
+    } else {
+        None
+    };
+
+    let mut bins = Vec::with_capacity(if awareness_bytes.is_some() { 3 } else { 2 });
+
+    bins.push(encode_sync_step2_term(env, diff.as_slice()));
+    bins.push(encode_sync_step1_term(env, local_sv.as_slice()));
+
+    if let Some(au) = awareness_bytes {
+        bins.push(encode_awareness_term(env, au.as_slice()));
+    }
+
+    Ok((atoms::ok(), bins).encode(env))
+}
+
+#[rustler::nif]
+fn awareness_message_encode_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
+    Ok((atoms::ok(), encode_awareness_term(env, update.as_slice())).encode(env))
 }
 
 #[rustler::nif]

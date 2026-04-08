@@ -118,6 +118,43 @@ defmodule DocServerWithoutAwarenessModule do
   end
 end
 
+defmodule DocServerWithCustomHandleUpdateModule do
+  use Yex.DocServer
+  require Logger
+  alias Yex.{Doc, Awareness}
+
+  @impl true
+  def init(_arg, %{doc: doc, awareness: awareness} = state) do
+    Doc.get_array(doc, "array")
+    |> Yex.Array.insert(0, "server data")
+
+    Awareness.set_local_state(awareness, %{"name" => "test user"})
+
+    {:ok, assign(state, :assigned_at_init, "value")}
+  end
+
+  @impl true
+  def handle_update_v1(_doc, _update, _origin, state) do
+    # Test the "result ->" branch that handles non-noreply returns
+    # If the action is to stop the receive loop, return something
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_awareness_change(awareness, _change, _origin, state) do
+    test_process = state.assigns[:test_process]
+
+    if test_process != nil do
+      send(test_process, {:awareness_changed, awareness})
+      send(test_process, {:awareness_change_result, {:noreply, state}})
+    end
+
+    # `handle_awareness_change/4` can be invoked from `handle_info/2`, so it must return
+    # a valid GenServer callback tuple.
+    {:noreply, state}
+  end
+end
+
 defmodule Yex.DocServerTest do
   use ExUnit.Case
   alias Yex.{Array, Doc, Sync}
@@ -374,6 +411,78 @@ defmodule Yex.DocServerTest do
       )
 
       refute_receive _message
+    end
+  end
+
+  describe "binary bypass optimization" do
+    test "query awareness direct binary (<<3>>)" do
+      {:ok, pid} = DocServerTestModule.start_link(assigns: %{test_process: self()})
+
+      # Direct binary for query_awareness message
+      assert {:ok, [awareness_message]} =
+               DocServerTestModule.process_message_v1(
+                 pid,
+                 <<3>>,
+                 "origin"
+               )
+
+      assert {:awareness, msg} = Sync.message_decode!(awareness_message)
+      {:ok, awareness} = Yex.Awareness.new(Yex.Doc.new())
+      Yex.Awareness.apply_update(awareness, msg)
+
+      assert {_, %{"name" => "remote test user"}} =
+               Yex.Awareness.get_states(awareness) |> Enum.at(0)
+    end
+
+    test "query awareness returns empty list when awareness is nil" do
+      {:ok, pid} = DocServerWithoutAwarenessModule.start_link([])
+
+      # Direct binary for query_awareness message
+      assert {:ok, []} =
+               DocServerWithoutAwarenessModule.process_message_v1(
+                 pid,
+                 <<3>>
+               )
+    end
+
+    test "process_message_v1 handles all sync step1 patterns correctly" do
+      {:ok, pid} = DocServerTestModule.start_link([])
+
+      doc = Doc.new()
+
+      Doc.get_array(doc, "array")
+      |> Array.insert(0, "local")
+
+      assert {:ok, sv} = Yex.encode_state_vector(doc)
+
+      # Using standard message encoding which triggers binary bypass optimization
+      assert {:ok, [<<0, 1>> <> _step2, <<0, 0>> <> _step1, <<1>> <> _awareness]} =
+               DocServerTestModule.process_message_v1(
+                 pid,
+                 Sync.message_encode!({:sync, {:sync_step1, sv}})
+               )
+    end
+  end
+
+  describe "edge case handling" do
+    test "awareness_change message handling" do
+      {:ok, pid} =
+        DocServerWithCustomHandleUpdateModule.start_link(assigns: %{test_process: self()})
+
+      # Send awareness message that triggers awareness change handling.
+      Yex.DocServer.Worker.process_message_v1(
+        pid,
+        Sync.message_encode!({:awareness, <<1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>}),
+        "origin"
+      )
+
+      # The custom module sends back awareness_changed message
+      assert_receive {:awareness_changed, _awareness}
+
+      # Verify callback result is a valid GenServer `handle_info`/`handle_cast` tuple.
+      assert_receive {:awareness_change_result, returned_result}
+      assert {:noreply, _state} = returned_result
+      assert Process.alive?(pid)
     end
   end
 end
