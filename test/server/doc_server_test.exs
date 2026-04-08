@@ -415,6 +415,71 @@ defmodule Yex.DocServerTest do
   end
 
   describe "binary bypass optimization" do
+    test "MSG_SYNC_UPDATE applies update to document" do
+      {:ok, pid} = DocServerTestModule.start_link(assigns: %{test_process: self()})
+
+      local_doc = Doc.new()
+
+      Doc.get_array(local_doc, "array")
+      |> Array.insert(0, "from_sync_update")
+
+      assert {:ok, update} = Yex.encode_state_as_update(local_doc, <<0>>)
+
+      assert :ok =
+               DocServerTestModule.process_message_v1(
+                 pid,
+                 Sync.message_encode!({:sync, {:sync_update, update}}),
+                 "sync_update_origin"
+               )
+
+      Process.sleep(50)
+
+      remote_doc = GenServer.call(pid, :get_doc)
+      merged_array = Doc.get_array(remote_doc, "array") |> Array.to_json()
+      assert Enum.member?(merged_array, "from_sync_update")
+      assert Enum.member?(merged_array, "server data")
+    end
+
+    test "MSG_SYNC_UPDATE calls handle_update_v1 with correct origin" do
+      {:ok, pid} = DocServerTestModule.start_link(assigns: %{test_process: self()})
+
+      local_doc = Doc.new()
+
+      Doc.get_array(local_doc, "array")
+      |> Array.insert(0, "handle_update_check")
+
+      assert {:ok, update} = Yex.encode_state_as_update(local_doc, <<0>>)
+      message = Sync.message_encode!({:sync, {:sync_update, update}})
+
+      # Verify it hits the <<0, 2, ...>> fast path
+      assert <<0, 2, _rest::binary>> = message
+
+      assert :ok =
+               DocServerTestModule.process_message_v1(
+                 pid,
+                 message,
+                 "my_origin"
+               )
+
+      assert_receive {:doc_update, _doc, _update, "my_origin"}
+    end
+
+    test "MSG_SYNC_UPDATE with invalid payload logs warning and continues" do
+      import ExUnit.CaptureLog
+
+      {:ok, pid} = DocServerTestModule.start_link([])
+
+      # <<0, 2>> prefix + clearly invalid update payload
+      invalid_message = <<0, 2, 200, 200, 200, 200>>
+
+      assert capture_log(fn ->
+               DocServerTestModule.process_message_v1(pid, invalid_message, "origin")
+               Process.sleep(50)
+             end) =~ ~r/encoding_exception|error/i
+
+      assert Process.alive?(pid)
+    end
+
     test "query awareness direct binary (<<3>>)" do
       {:ok, pid} = DocServerTestModule.start_link(assigns: %{test_process: self()})
 

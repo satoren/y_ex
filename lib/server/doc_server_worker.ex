@@ -10,6 +10,7 @@ defmodule Yex.DocServer.Worker do
   # MSG_QUERY_AWARENESS (<<3>>) — bypass message_decode NIF
   @query_awareness_call :__yex_query_awareness
   @sync_step1_raw_call :__yex_sync_step1_raw
+  @sync_update_raw_cast :__yex_sync_update_raw
 
   @query_awareness_message <<3>>
   def process_message_v1(server, @query_awareness_message, _origin) do
@@ -19,6 +20,11 @@ defmodule Yex.DocServer.Worker do
   # MSG_SYNC (0) + MSG_SYNC_STEP_1 (0) — bypass message_decode NIF, pass sv_payload directly
   def process_message_v1(server, <<0, 0, sv_payload::binary>>, _origin) do
     GenServer.call(server, {@sync_step1_raw_call, sv_payload})
+  end
+
+  # MSG_SYNC (0) + MSG_SYNC_UPDATE (2) — bypass decode NIF and pass raw payload directly
+  def process_message_v1(server, <<0, 2, update_payload::binary>>, origin) do
+    GenServer.cast(server, {@sync_update_raw_cast, update_payload, origin})
   end
 
   def process_message_v1(server, message, origin) do
@@ -39,9 +45,9 @@ defmodule Yex.DocServer.Worker do
     GenServer.cast(server, {__MODULE__, :document_update, encoded_diff, origin})
   end
 
-  defp message_v1(server, {:sync, {:sync_update, encoded_diff}}, origin) do
-    GenServer.cast(server, {__MODULE__, :document_update, encoded_diff, origin})
-  end
+  #  defp message_v1(server, {:sync, {:sync_update, encoded_diff}}, origin) do
+  #    GenServer.cast(server, {__MODULE__, :document_update, encoded_diff, origin})
+  #  end
 
   defp message_v1(server, {:awareness, awareness}, origin) do
     GenServer.cast(server, {__MODULE__, :awareness_update, awareness, origin})
@@ -139,6 +145,25 @@ defmodule Yex.DocServer.Worker do
   @impl true
   def handle_call(request, from, %{module: module} = state) do
     module.handle_call(request, from, state)
+  end
+
+  @impl true
+  def handle_cast(
+        {@sync_update_raw_cast, update_payload, origin},
+        %{doc: doc} = state
+      ) do
+    Yex.Doc.transaction(doc, origin, fn ->
+      case Yex.Nif.apply_sync_update_payload_v1(doc, cur_txn(doc), update_payload) do
+        :ok ->
+          :ok
+
+        {:error, reason} ->
+          Logger.log(:warning, inspect(reason))
+          :ok
+      end
+    end)
+
+    handle_update_v1_immediately(state)
   end
 
   @impl true
@@ -260,5 +285,9 @@ defmodule Yex.DocServer.Worker do
       0 ->
         {:noreply, state}
     end
+  end
+
+  defp cur_txn(%Yex.Doc{reference: doc_ref}) do
+    Process.get(doc_ref, nil)
   end
 end

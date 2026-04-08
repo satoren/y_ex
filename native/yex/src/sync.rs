@@ -14,7 +14,7 @@ use yrs::sync::protocol::{
 };
 use yrs::updates::decoder::{Decode, Decoder, DecoderV1, DecoderV2};
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1, EncoderV2};
-use yrs::{ReadTxn, StateVector};
+use yrs::{ReadTxn, StateVector, Update};
 
 fn read_var_u64(bytes: &[u8], pos: &mut usize) -> Option<u64> {
     let mut value: u64 = 0;
@@ -219,6 +219,24 @@ fn sync_message_decode_v1<'a>(env: Env<'a>, msg: Binary<'a>) -> NifResult<(Atom,
     decode_message(env, &mut decoder)
         .map(|term| (atoms::ok(), term))
         .map_err(|e| e.into())
+}
+
+#[rustler::nif]
+fn apply_sync_update_payload_v1(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    payload: Binary,
+) -> NifResult<Atom> {
+    let mut decoder = DecoderV1::new(Cursor::new(payload.as_slice()));
+    let update_bytes = decoder.read_buf().map_err(Error::from)?;
+    let update = Update::decode_v1(update_bytes).map_err(Error::from)?;
+
+    doc.mutably(env, current_transaction, |txn| {
+        txn.apply_update(update)
+            .map(|_| atoms::ok())
+            .map_err(|e| Error::from(e).into())
+    })
 }
 
 #[rustler::nif]

@@ -213,6 +213,9 @@ defmodule Yex.Nif do
 
   def encode_awareness_reply_v1(_awareness), do: :erlang.nif_error(:nif_not_loaded)
 
+  def apply_sync_update_payload_v1(_doc, _cur_txn, _payload),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def sync_message_decode_v2(_message), do: :erlang.nif_error(:nif_not_loaded)
   def sync_message_encode_v2(_message), do: :erlang.nif_error(:nif_not_loaded)
 
