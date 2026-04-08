@@ -22,11 +22,7 @@ defmodule Yex.DocServer.Worker do
   end
 
   def process_message_v1(server, message, origin) do
-    fallback_process_message_v1(server, message, origin)
-  end
-
-  defp fallback_process_message_v1(server, message, origin) do
-    case Yex.Sync.message_decode(message) do
+    case Yex.Nif.sync_message_decode_v1(message) do
       {:ok, message} ->
         message_v1(server, message, origin)
 
@@ -35,12 +31,15 @@ defmodule Yex.DocServer.Worker do
     end
   end
 
-  defp message_v1(server, {:sync, {:sync_step1, encoded_state_vector}}, origin) do
-    GenServer.call(server, {__MODULE__, :document_sync_step1, encoded_state_vector, origin})
+  #  defp message_v1(server, {:sync, {:sync_step1, encoded_state_vector}}, origin) do
+  #    GenServer.call(server, {__MODULE__, :document_sync_step1, encoded_state_vector, origin})
+  #  end
+
+  defp message_v1(server, {:sync, {:sync_step2, encoded_diff}}, origin) do
+    GenServer.cast(server, {__MODULE__, :document_update, encoded_diff, origin})
   end
 
-  defp message_v1(server, {:sync, {message_type, encoded_diff}}, origin)
-       when message_type in [:sync_step2, :sync_update] do
+  defp message_v1(server, {:sync, {:sync_update, encoded_diff}}, origin) do
     GenServer.cast(server, {__MODULE__, :document_update, encoded_diff, origin})
   end
 
@@ -48,9 +47,9 @@ defmodule Yex.DocServer.Worker do
     GenServer.cast(server, {__MODULE__, :awareness_update, awareness, origin})
   end
 
-  defp message_v1(server, :query_awareness, _origin) do
-    GenServer.call(server, @query_awareness_call)
-  end
+  #  defp message_v1(server, :query_awareness, _origin) do
+  #    GenServer.call(server, @query_awareness_call)
+  #  end
 
   defp message_v1(_server, _message, _origin) do
     {:error, :unknown_message}
