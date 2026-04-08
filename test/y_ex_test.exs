@@ -53,6 +53,20 @@ defmodule YexTest do
       {:ok, _binary} = Yex.encode_state_as_update_v2(doc)
     end
 
+    test "encode_diff_and_state_vector_v1 matches separate encode calls" do
+      doc = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc, "t")
+      Yex.Text.insert(text, 0, "abc")
+      {:ok, remote_sv} = Yex.encode_state_vector(Yex.Doc.new())
+
+      {:ok, diff, sv} = Yex.encode_diff_and_state_vector_v1(doc, remote_sv)
+      {:ok, diff2} = Yex.encode_state_as_update(doc, remote_sv)
+      {:ok, sv2} = Yex.encode_state_vector(doc)
+
+      assert diff == diff2
+      assert sv == sv2
+    end
+
     test "encode_state_as_update! raise error" do
       doc = Yex.Doc.new()
 

@@ -84,6 +84,16 @@ defmodule Yex do
     end
   end
 
+  @doc false
+  @spec encode_diff_and_state_vector_v1(Yex.Doc.t(), binary()) ::
+          {:ok, binary(), binary()} | {:error, term()}
+  def encode_diff_and_state_vector_v1(%Yex.Doc{} = doc, remote_encoded_state_vector)
+      when is_binary(remote_encoded_state_vector) do
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.encode_diff_and_state_vector_v1(doc, cur_txn(doc), remote_encoded_state_vector)
+    end
+  end
+
   def encode_state_as_update_v2(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
     Yex.Doc.run_in_worker_process doc do
       Yex.Nif.encode_state_as_update_v2(doc, cur_txn(doc), encoded_state_vector)

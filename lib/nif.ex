@@ -189,6 +189,10 @@ defmodule Yex.Nif do
 
   def encode_state_vector_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def encode_state_as_update_v1(_doc, _cur_txn, _diff), do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_diff_and_state_vector_v1(_doc, _cur_txn, _remote_sv),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def apply_update_v1(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
 
   def encode_state_vector_v2(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -197,6 +201,18 @@ defmodule Yex.Nif do
 
   def sync_message_decode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)
   def sync_message_encode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)
+  def sync_messages_encode_v1(_messages), do: :erlang.nif_error(:nif_not_loaded)
+
+  def sync_step1_replies_encode_v1(_diff, _state_vector, _awareness_update),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def awareness_message_encode_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_sync_step1_response_v1(_doc, _current_txn, _sv_payload, _awareness),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_awareness_reply_v1(_awareness), do: :erlang.nif_error(:nif_not_loaded)
+
   def sync_message_decode_v2(_message), do: :erlang.nif_error(:nif_not_loaded)
   def sync_message_encode_v2(_message), do: :erlang.nif_error(:nif_not_loaded)
 

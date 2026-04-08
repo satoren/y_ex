@@ -422,6 +422,28 @@ fn encode_state_as_update_v1<'a>(
         .map(|vec| (atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
 }
 
+/// Single read transaction for sync step1 response: missing diff vs remote SV + local encoded SV.
+#[rustler::nif]
+fn encode_diff_and_state_vector_v1<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    remote_state_vector: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let sv = StateVector::decode_v1(remote_state_vector.as_slice()).map_err(Error::from)?;
+    let (diff, local_sv) = doc.readonly(current_transaction, |txn| {
+        let diff = txn.encode_diff_v1(&sv);
+        let local_sv = txn.state_vector().encode_v1();
+        Ok((diff, local_sv))
+    })?;
+    Ok((
+        atoms::ok(),
+        SliceIntoBinary::new(diff.as_slice()),
+        SliceIntoBinary::new(local_sv.as_slice()),
+    )
+        .encode(env))
+}
+
 #[rustler::nif]
 fn encode_state_vector_v2(
     env: Env<'_>,

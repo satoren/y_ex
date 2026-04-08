@@ -25,7 +25,7 @@ impl rustler::Resource for AwarenessResource {}
 #[derive(NifStruct)]
 #[module = "Yex.Awareness"]
 pub struct NifAwareness {
-    reference: ResourceArc<AwarenessResource>,
+    pub reference: ResourceArc<AwarenessResource>,
     doc: NifDoc,
 }
 
