@@ -3,6 +3,8 @@ defmodule Yex do
   Yex is wrapper library for the Yjs CRDT library.
   """
 
+  require Yex.Doc
+
   @type any_type ::
           binary
           | map
@@ -41,11 +43,15 @@ defmodule Yex do
   end
 
   def encode_state_vector_v1(%Yex.Doc{} = doc) do
-    Yex.Nif.encode_state_vector_v1(doc, cur_txn(doc))
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.encode_state_vector_v1(doc, cur_txn(doc))
+    end
   end
 
   def encode_state_vector_v2(%Yex.Doc{} = doc) do
-    Yex.Nif.encode_state_vector_v2(doc, cur_txn(doc))
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.encode_state_vector_v2(doc, cur_txn(doc))
+    end
   end
 
   @doc """
@@ -73,11 +79,15 @@ defmodule Yex do
   end
 
   def encode_state_as_update_v1(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
-    Yex.Nif.encode_state_as_update_v1(doc, cur_txn(doc), encoded_state_vector)
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.encode_state_as_update_v1(doc, cur_txn(doc), encoded_state_vector)
+    end
   end
 
   def encode_state_as_update_v2(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
-    Yex.Nif.encode_state_as_update_v2(doc, cur_txn(doc), encoded_state_vector)
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.encode_state_as_update_v2(doc, cur_txn(doc), encoded_state_vector)
+    end
   end
 
   @doc """
@@ -100,12 +110,16 @@ defmodule Yex do
 
   @spec apply_update_v1(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v1(%Yex.Doc{} = doc, update) do
-    Yex.Nif.apply_update_v1(doc, cur_txn(doc), update)
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.apply_update_v1(doc, cur_txn(doc), update)
+    end
   end
 
   @spec apply_update_v2(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v2(%Yex.Doc{} = doc, update) do
-    Yex.Nif.apply_update_v2(doc, cur_txn(doc), update)
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.apply_update_v2(doc, cur_txn(doc), update)
+    end
   end
 
   @doc """
