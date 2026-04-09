@@ -194,10 +194,12 @@ defmodule Yex.Nif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   def apply_update_v1(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
+  def merge_updates_v1(_updates), do: :erlang.nif_error(:nif_not_loaded)
 
   def encode_state_vector_v2(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def encode_state_as_update_v2(_doc, _cur_txn, _diff), do: :erlang.nif_error(:nif_not_loaded)
   def apply_update_v2(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
+  def merge_updates_v2(_updates), do: :erlang.nif_error(:nif_not_loaded)
 
   def sync_message_decode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)
   def sync_message_encode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)

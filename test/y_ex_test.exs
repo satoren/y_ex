@@ -35,6 +35,46 @@ defmodule YexTest do
     end
   end
 
+  describe "merge_updates" do
+    test "merge_updates_v1" do
+      doc1 = Yex.Doc.new()
+      text1 = Yex.Doc.get_text(doc1, "text")
+      Yex.Text.insert(text1, 0, "Hello")
+
+      doc2 = Yex.Doc.new()
+      Yex.Doc.get_text(doc2, "text")
+
+      {:ok, state1} = Yex.encode_state_as_update(doc1)
+      {:ok, state2} = Yex.encode_state_as_update(doc2)
+      {:ok, merged} = Yex.merge_updates_v1([state1, state2])
+
+      doc3 = Yex.Doc.new()
+      text3 = Yex.Doc.get_text(doc3, "text")
+      :ok = Yex.apply_update_v1(doc3, merged)
+
+      assert Yex.Text.to_string(text3) == "Hello"
+    end
+
+    test "merge_updates_v2" do
+      doc1 = Yex.Doc.new()
+      text1 = Yex.Doc.get_text(doc1, "text")
+      Yex.Text.insert(text1, 0, "Hello")
+
+      doc2 = Yex.Doc.new()
+      Yex.Doc.get_text(doc2, "text")
+
+      {:ok, state1} = Yex.encode_state_as_update_v2(doc1)
+      {:ok, state2} = Yex.encode_state_as_update_v2(doc2)
+      {:ok, merged} = Yex.merge_updates_v2([state1, state2])
+
+      doc3 = Yex.Doc.new()
+      text3 = Yex.Doc.get_text(doc3, "text")
+      :ok = Yex.apply_update_v2(doc3, merged)
+
+      assert Yex.Text.to_string(text3) == "Hello"
+    end
+  end
+
   describe "encode_state_as_update" do
     test "encode_state_as_update" do
       doc = Yex.Doc.new()
