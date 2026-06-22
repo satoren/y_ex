@@ -213,9 +213,6 @@ defmodule Yex.UndoManagerTest do
       Yex.Map.set(map, "untracked3", "value5")
     end)
 
-    # Let's ensure all transactions are complete before proceeding
-    Process.sleep(10)
-
     # Verify initial state
     expected_initial = %{
       "untracked1" => "value1",
@@ -229,9 +226,6 @@ defmodule Yex.UndoManagerTest do
 
     # After undo, only tracked changes should be removed
     UndoManager.undo(undo_manager)
-
-    # Give time for the undo operation to complete
-    Process.sleep(10)
 
     expected_after_undo = %{
       "untracked1" => "value1",
@@ -537,8 +531,8 @@ defmodule Yex.UndoManagerTest do
 
     Text.insert(text, 0, "a")
 
-    # se are testing Undo manager's ability to batch after timeout, 150ms should create two batches
-    Process.sleep(150)
+    # sleep longer than capture_timeout to ensure two batches are created
+    Process.sleep(500)
     Text.insert(text, 1, "b")
 
     UndoManager.undo(undo_manager)
@@ -561,7 +555,7 @@ defmodule Yex.UndoManagerTest do
     Text.insert(text, 0, "c")
 
     # sleep longer than capture_timeout to ensure two batches are created
-    Process.sleep(150)
+    Process.sleep(500)
     Text.insert(text, 1, "d")
     assert Text.to_string(text) == "cd"
 
@@ -576,9 +570,9 @@ defmodule Yex.UndoManagerTest do
     # Prove option means insufficient timeout will still batch
     Text.insert(text, 0, "e")
 
-    # undo manager has a timeout of 100ms, so this sleep of 50ms should ...
+    # undo manager has a timeout of 100ms, so this sleep of 10ms should ...
     # ... be insufficient and will allow the changes to be in one batch
-    Process.sleep(50)
+    Process.sleep(10)
     Text.insert(text, 1, "f")
     assert Text.to_string(text) == "ef"
 
