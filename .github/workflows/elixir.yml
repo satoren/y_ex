@@ -16,8 +16,23 @@ permissions:
 
 jobs:
   build:
-    name: Build and test
-    runs-on: ubuntu-latest
+    name: Build and test (${{ matrix.os }}, OTP ${{ matrix.pair.otp }}, Elixir ${{ matrix.pair.elixir }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-2022, macos-latest]
+        pair:
+          - { otp: "29", elixir: "1.20", latest: true }
+          - { otp: "28", elixir: "1.20" }
+          - { otp: "27", elixir: "1.20" }
+          - { otp: "28", elixir: "1.19" }
+          - { otp: "27", elixir: "1.19" }
+          - { otp: "26", elixir: "1.19" }
+          - { otp: "27", elixir: "1.17" }
+          - { otp: "26", elixir: "1.17" }
+          - { otp: "25", elixir: "1.17" }
+          - { otp: "26", elixir: "1.16" }
+          - { otp: "25", elixir: "1.16" }
 
     env:
       MIX_ENV: test
@@ -26,20 +41,21 @@ jobs:
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
         with:
-          version-file: '.tool-versions'
-          version-type: 'strict'
+          otp-version: ${{ matrix.pair.otp }}
+          elixir-version: ${{ matrix.pair.elixir }}
+          version-type: ${{ matrix.pair.strict && 'strict' || 'loose' }}
       - name: Restore dependencies cache
         uses: actions/cache@v4
         with:
           path: deps
-          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-
+          key: ${{ runner.os }}-mix-${{ matrix.pair.otp }}-${{ matrix.pair.elixir }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-${{ matrix.pair.otp }}-${{ matrix.pair.elixir }}-
       - name: Install dependencies
         run: mix deps.get
       - name: Run tests
-        run: mix coveralls.github
+        run: ${{ matrix.pair.latest && 'mix coveralls.github' || 'mix test' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ matrix.pair.latest && secrets.GITHUB_TOKEN || '' }}
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -54,8 +70,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: deps
-          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-
+          key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-lint-
       - name: Install dependencies
         run: mix deps.get
       - name: format check
