@@ -1,5 +1,5 @@
 defmodule Yex.TextTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.{Doc, Text, TextPrelim, SharedType}
   doctest Text
   doctest TextPrelim

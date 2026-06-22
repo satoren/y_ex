@@ -1,5 +1,5 @@
 defmodule YexTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   doctest Yex
 
   describe "apply_update" do

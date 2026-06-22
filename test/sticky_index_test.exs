@@ -1,5 +1,5 @@
 defmodule Yex.StickyIndexTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias Yex.{
     StickyIndex,

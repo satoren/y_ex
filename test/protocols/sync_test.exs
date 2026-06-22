@@ -1,5 +1,5 @@
 defmodule Yex.SyncTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.{Doc, Sync, Array}
   doctest Yex.Sync
 

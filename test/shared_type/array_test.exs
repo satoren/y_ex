@@ -1,5 +1,5 @@
 defmodule Yex.ArrayTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.{Doc, Array, ArrayPrelim, SharedType}
   doctest Array
   doctest ArrayPrelim

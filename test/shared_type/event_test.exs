@@ -1,5 +1,5 @@
 defmodule Yex.EventTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.Doc
   alias Yex.{ArrayEvent, MapEvent, TextEvent, XmlEvent, XmlTextEvent}
 

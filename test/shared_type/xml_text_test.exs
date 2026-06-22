@@ -1,5 +1,5 @@
 defmodule YexXmlTextTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.{Doc, XmlFragment, XmlText, XmlTextPrelim, SharedType}
   doctest XmlText
   doctest XmlTextPrelim

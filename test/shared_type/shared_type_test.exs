@@ -1,5 +1,5 @@
 defmodule Yex.SharedTypeTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.{SharedType, Doc, Text, Output}
 
   setup do
