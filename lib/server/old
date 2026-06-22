@@ -1,0 +1,59 @@
+ame                                      ips        average  deviation         median         99th %
+process_message_v1 (sync_step1)       94.92 K       10.54 μs  ±4322.45%        4.58 μs       62.33 μs
+
+Memory usage statistics:
+
+Name                                    average  deviation         median         99th %
+process_message_v1 (sync_step1)         1.15 KB     ±0.28%        1.15 KB        1.15 KB
+
+##### With input array 10_000 cells #####
+Name                                      ips        average  deviation         median         99th %
+process_message_v1 (sync_step1)        7.45 K      134.15 μs  ±1134.35%       62.88 μs      594.47 μs
+
+Memory usage statistics:
+
+Name                               Memory usage
+process_message_v1 (sync_step1)         1.15 KB
+
+**All measurements for memory usage were the same**
+
+##### With input empty server #####
+Name                                      ips        average  deviation         median         99th %
+process_message_v1 (sync_step1)       47.93 K       20.86 μs  ±6116.34%        5.88 μs       89.20 μs
+
+Memory usage statistics:
+
+Name                                    average  deviation         median         99th %
+process_message_v1 (sync_step1)         1.09 KB     ±0.51%        1.09 KB        1.09 KB
+
+=== SharedDoc.process_message_v1/3 — :query_awareness ===
+
+Operating System: macOS
+CPU Information: Apple M4
+Number of Available Cores: 10
+Available memory: 32 GB
+Elixir 1.15.8
+Erlang 26.2.5.16
+JIT enabled: true
+
+Benchmark suite executing with the following configuration:
+warmup: 2 s
+time: 5 s
+memory time: 2 s
+reduction time: 0 ns
+parallel: 1
+inputs: none specified
+Estimated total run time: 9 s
+Excluding outliers: false
+
+Benchmarking process_message_v1 (query_awareness) ...
+Calculating statistics...
+Formatting results...
+
+Name                                           ips        average  deviation         median         99th %
+process_message_v1 (query_awareness)      242.59 K        4.12 μs   ±824.61%        3.13 μs       22.17 μs
+
+Memory usage statistics:
+
+Name                                         average  deviation         median         99th %
+process_message_v1 (query_awareness)        560.00 B     ±0.11%          560 B          560 B

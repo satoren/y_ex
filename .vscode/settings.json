@@ -1,0 +1,8 @@
+{
+  "chat.tools.terminal.autoApprove": {
+    "/^git rev-parse --verify 45d0db991b0c81f87441bba858239c9071b9d06f && git show --no-patch --pretty=fuller 45d0db991b0c81f87441bba858239c9071b9d06f && echo '---' && git rev-parse 45d0db991b0c81f87441bba858239c9071b9d06f\\^$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
+}

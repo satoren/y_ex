@@ -1,0 +1,1 @@
+{"version":3,"file":"traits.cjs","sources":["../traits.js"],"sourcesContent":["export const EqualityTraitSymbol = Symbol('Equality')\n\n/**\n * @typedef {{ [EqualityTraitSymbol]:(other:EqualityTrait)=>boolean }} EqualityTrait\n */\n"],"names":[],"mappings":";;;;AAAY,MAAC,mBAAmB,GAAG,MAAM,CAAC,UAAU,EAAC;AACrD;AACA;AACA;AACA;;;;"}
