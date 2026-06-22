@@ -1,5 +1,5 @@
 defmodule YexXmlFragmentTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   alias Yex.{
     Doc,

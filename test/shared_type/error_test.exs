@@ -1,5 +1,5 @@
 defmodule Yex.DeletedSharedTypeErrorTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.DeletedSharedTypeError
 
   describe "DeletedSharedTypeError" do

@@ -13,7 +13,7 @@ defmodule DocWorker do
 end
 
 defmodule Yex.DocConcurrentTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.{Doc, Text, Map}
 
   setup do

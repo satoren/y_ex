@@ -156,7 +156,7 @@ defmodule DocServerWithCustomHandleUpdateModule do
 end
 
 defmodule Yex.DocServerTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.{Array, Doc, Sync}
   import ExUnit.CaptureLog
   require Logger

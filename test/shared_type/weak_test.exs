@@ -1,5 +1,5 @@
 defmodule Yex.WeakTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.XmlTextPrelim
   alias Yex.WeakLink
   alias Yex.WeakPrelim

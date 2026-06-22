@@ -1,5 +1,5 @@
 defmodule Yex.MapTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.{Doc, Map, MapPrelim, ArrayPrelim}
   doctest Map
   doctest MapPrelim

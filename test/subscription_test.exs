@@ -1,5 +1,5 @@
 defmodule Yex.SubscriptionTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.{Doc, Subscription}
 
   setup do

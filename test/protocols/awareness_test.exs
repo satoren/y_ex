@@ -1,5 +1,5 @@
 defmodule Yex.AwarenessTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   alias Yex.Awareness
   doctest Awareness
 
