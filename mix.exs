@@ -20,8 +20,13 @@ defmodule Yex.MixProject do
       deps: deps(),
       source_url: @repo,
       homepage_url: @repo,
-      test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [
+      test_coverage: [tool: ExCoveralls]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
         coveralls: :test,
         "coveralls.lcov": :test,
         "coveralls.detail": :test,

@@ -976,7 +976,7 @@ defmodule Yex.UndoManagerTest do
     invalid_doc = %{not: "a valid doc"}
 
     assert_raise FunctionClauseError, fn ->
-      UndoManager.new(invalid_doc, text)
+      apply(UndoManager, :new, [invalid_doc, text])
     end
   end
 
@@ -985,7 +985,7 @@ defmodule Yex.UndoManagerTest do
     invalid_scope = %{not: "a valid scope"}
 
     assert_raise FunctionClauseError, fn ->
-      UndoManager.new(doc, invalid_scope)
+      apply(UndoManager, :new, [doc, invalid_scope])
     end
   end
 
@@ -995,7 +995,7 @@ defmodule Yex.UndoManagerTest do
     options = %UndoManager.Options{capture_timeout: 1000}
 
     assert_raise FunctionClauseError, fn ->
-      UndoManager.new_with_options(doc, invalid_scope, options)
+      apply(UndoManager, :new_with_options, [doc, invalid_scope, options])
     end
   end
 
@@ -1003,7 +1003,7 @@ defmodule Yex.UndoManagerTest do
     invalid_options = %{not: "valid options"}
 
     assert_raise FunctionClauseError, fn ->
-      UndoManager.new_with_options(doc, text, invalid_options)
+      apply(UndoManager, :new_with_options, [doc, text, invalid_options])
     end
   end
 
@@ -1053,19 +1053,19 @@ defmodule Yex.UndoManagerTest do
     invalid_scope = %{not: "a valid scope"}
 
     assert_raise FunctionClauseError, fn ->
-      UndoManager.new(doc, invalid_scope)
+      apply(UndoManager, :new, [doc, invalid_scope])
     end
 
     assert_raise FunctionClauseError, fn ->
-      UndoManager.new(doc, nil)
+      apply(UndoManager, :new, [doc, nil])
     end
 
     assert_raise FunctionClauseError, fn ->
-      UndoManager.new(doc, "string")
+      apply(UndoManager, :new, [doc, "string"])
     end
 
     assert_raise FunctionClauseError, fn ->
-      UndoManager.new(doc, 123)
+      apply(UndoManager, :new, [doc, 123])
     end
   end
 

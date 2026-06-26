@@ -126,7 +126,7 @@ defmodule Yex.SyncTest do
 
     test "get_update with invalid input" do
       assert_raise FunctionClauseError, fn ->
-        Sync.get_update(123)
+        apply(Sync, :get_update, [123])
       end
     end
 
