@@ -249,7 +249,7 @@ defmodule Yex.ArrayTest do
       end
 
       assert_raise FunctionClauseError, fn ->
-        Array.slice_take_every(array, 0, 3, 1.5)
+        apply(Array, :slice_take_every, [array, 0, 3, 1.5])
       end
     end
 

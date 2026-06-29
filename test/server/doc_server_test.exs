@@ -1,6 +1,5 @@
 defmodule DocServerTestModule do
   use Yex.DocServer
-  require Logger
   alias Yex.Awareness
   alias Yex.Doc
 
@@ -49,7 +48,6 @@ end
 
 defmodule DocServerHandleTestModule do
   use Yex.DocServer
-  require Logger
   alias Yex.Doc
 
   @impl true
@@ -85,7 +83,6 @@ end
 
 defmodule DocServerWithoutAwarenessModule do
   use Yex.DocServer
-  require Logger
   alias Yex.Doc
 
   @impl true
@@ -120,7 +117,6 @@ end
 
 defmodule DocServerWithCustomHandleUpdateModule do
   use Yex.DocServer
-  require Logger
   alias Yex.{Doc, Awareness}
 
   @impl true
@@ -159,7 +155,6 @@ defmodule Yex.DocServerTest do
   use ExUnit.Case, async: true
   alias Yex.{Array, Doc, Sync}
   import ExUnit.CaptureLog
-  require Logger
 
   test "step1" do
     {:ok, pid} = DocServerTestModule.start_link([])
