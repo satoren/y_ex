@@ -526,13 +526,13 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "capture timeout works as expected", %{doc: doc, text: text} do
-    options = %UndoManager.Options{capture_timeout: 100}
+    options = %UndoManager.Options{capture_timeout: 30}
     {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
 
     Text.insert(text, 0, "a")
 
-    # sleep longer than capture_timeout to ensure two batches are created
-    Process.sleep(500)
+    # Sleep just above capture_timeout to keep the test fast while ensuring split batches.
+    Process.sleep(options.capture_timeout + 10)
     Text.insert(text, 1, "b")
 
     UndoManager.undo(undo_manager)
@@ -541,7 +541,7 @@ defmodule Yex.UndoManagerTest do
   end
 
   test "demonstrates constructor with options", %{doc: doc, text: text} do
-    options = %UndoManager.Options{capture_timeout: 100}
+    options = %UndoManager.Options{capture_timeout: 30}
     {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
     # prove tests are batched
     Text.insert(text, 0, "a")
@@ -554,8 +554,8 @@ defmodule Yex.UndoManagerTest do
     # Prove options are respected
     Text.insert(text, 0, "c")
 
-    # sleep longer than capture_timeout to ensure two batches are created
-    Process.sleep(500)
+    # Sleep just above capture_timeout to keep the test fast while ensuring split batches.
+    Process.sleep(options.capture_timeout + 10)
     Text.insert(text, 1, "d")
     assert Text.to_string(text) == "cd"
 
@@ -570,9 +570,9 @@ defmodule Yex.UndoManagerTest do
     # Prove option means insufficient timeout will still batch
     Text.insert(text, 0, "e")
 
-    # undo manager has a timeout of 100ms, so this sleep of 10ms should ...
+    # undo manager has a timeout of 30ms, so this sleep of 5ms should ...
     # ... be insufficient and will allow the changes to be in one batch
-    Process.sleep(10)
+    Process.sleep(5)
     Text.insert(text, 1, "f")
     assert Text.to_string(text) == "ef"
 

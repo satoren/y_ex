@@ -320,7 +320,8 @@ defmodule Yex.DocServerTest do
                  Sync.message_encode!({:sync, {:sync_step2, <<200, 200, 200>>}})
                )
 
-               Process.sleep(50)
+               # Ensure the async cast has been processed so warning logs are flushed.
+               GenServer.call(pid, :get_doc)
              end) =~ "encoding_exception"
     end
 
@@ -405,7 +406,7 @@ defmodule Yex.DocServerTest do
         "origin"
       )
 
-      refute_receive _message
+      refute_receive _message, 10
     end
   end
 
@@ -426,8 +427,6 @@ defmodule Yex.DocServerTest do
                  Sync.message_encode!({:sync, {:sync_update, update}}),
                  "sync_update_origin"
                )
-
-      Process.sleep(50)
 
       remote_doc = GenServer.call(pid, :get_doc)
       merged_array = Doc.get_array(remote_doc, "array") |> Array.to_json()
@@ -469,7 +468,9 @@ defmodule Yex.DocServerTest do
 
       assert capture_log(fn ->
                DocServerTestModule.process_message_v1(pid, invalid_message, "origin")
-               Process.sleep(50)
+
+               # Ensure the async cast has been processed so warning logs are flushed.
+               GenServer.call(pid, :get_doc)
              end) =~ ~r/encoding_exception|error/i
 
       assert Process.alive?(pid)

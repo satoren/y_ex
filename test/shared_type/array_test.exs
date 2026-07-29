@@ -511,7 +511,7 @@ defmodule Yex.ArrayTest do
           Array.insert(array, 0, "Hello")
         end)
 
-      refute_receive {:observe_event, _, %Yex.ArrayEvent{}, _}
+      refute_receive {:observe_event, _, %Yex.ArrayEvent{}, _}, 10
 
       # noop but return ok
       assert :ok = SharedType.unobserve(make_ref())
@@ -575,7 +575,7 @@ defmodule Yex.ArrayTest do
         Array.insert(array, 0, "Hello")
       end)
 
-    refute_receive {:observe_deep_event, _, %Yex.ArrayEvent{}, _, _}
+    refute_receive {:observe_deep_event, _, %Yex.ArrayEvent{}, _, _}, 10
 
     # noop but return ok
     assert :ok = SharedType.unobserve_deep(make_ref())

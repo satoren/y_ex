@@ -235,7 +235,7 @@ defmodule Yex.TextTest do
           Text.delete(text, 3, 4)
         end)
 
-      refute_receive {:observe_event, ^ref, %Yex.TextEvent{}, _}
+      refute_receive {:observe_event, ^ref, %Yex.TextEvent{}, _}, 10
 
       # noop but return ok
       assert :ok = SharedType.unobserve(make_ref())
@@ -280,7 +280,7 @@ defmodule Yex.TextTest do
         Text.insert(text, 6, " World")
       end)
 
-    refute_receive {:observe_deep_event, _, %Yex.TextEvent{}, _, _}
+    refute_receive {:observe_deep_event, _, %Yex.TextEvent{}, _, _}, 10
 
     # noop but return ok
     assert :ok = SharedType.unobserve_deep(make_ref())
