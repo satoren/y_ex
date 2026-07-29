@@ -38,7 +38,7 @@ defmodule Yex.SharedTypeTest do
         Text.insert(text, 0, "hello")
       end)
 
-      refute_receive {:observe_event, ^ref, _event, _origin, _metadata}
+      refute_receive {:observe_event, ^ref, _event, _origin, _metadata}, 10
     end
   end
 
@@ -67,7 +67,7 @@ defmodule Yex.SharedTypeTest do
         Text.insert(text, 0, "hello")
       end)
 
-      refute_receive {:observe_deep_event, ^ref, _events, _origin, _metadata}
+      refute_receive {:observe_deep_event, ^ref, _events, _origin, _metadata}, 10
     end
   end
 

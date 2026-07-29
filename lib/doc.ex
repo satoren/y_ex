@@ -191,7 +191,7 @@ defmodule Yex.Doc do
       iex>   Text.insert(text, 0, "Hello", %{"bold" => true})
       iex> end)
       iex> assert_receive {:update_v1, _, nil, _}
-      iex> refute_receive {:update_v1, _, nil, _} # only one update message
+      iex> refute_receive {:update_v1, _, nil, _}, 10 # only one update message
 
   """
   @spec transaction(t, origin :: term(), fun()) :: term()

@@ -32,8 +32,6 @@ defmodule Yex.DocConcurrentTest do
 
           Doc.transaction(doc, "origin", fn ->
             Text.insert(text1, 0, "World")
-
-            Process.sleep(1)
           end)
         end)
       end

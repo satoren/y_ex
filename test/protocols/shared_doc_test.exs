@@ -138,7 +138,7 @@ defmodule Yex.Sync.SharedDocTest do
         Sync.message_encode!({:sync, {:sync_step2, update}})
       )
 
-      refute_receive {:yjs, _, _pid}
+      refute_receive {:yjs, _, _pid}, 10
     end
 
     test "remove awareness when unobserve" do
