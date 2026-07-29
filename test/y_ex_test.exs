@@ -74,6 +74,34 @@ defmodule YexTest do
     end
   end
 
+  describe "update_debug" do
+    test "update_debug_v1" do
+      doc = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc, "text")
+      Yex.Text.insert(text, 0, "Hello")
+
+      {:ok, update} = Yex.encode_state_as_update_v1(doc)
+      {:ok, debug} = Yex.update_debug_v1(update)
+
+      assert is_binary(debug)
+      assert String.length(debug) > 0
+      assert {:error, {:encoding_exception, _}} = Yex.update_debug_v1(<<1, 2, 3>>)
+    end
+
+    test "update_debug_v2" do
+      doc = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc, "text")
+      Yex.Text.insert(text, 0, "Hello")
+
+      {:ok, update} = Yex.encode_state_as_update_v2(doc)
+      {:ok, debug} = Yex.update_debug_v2(update)
+
+      assert is_binary(debug)
+      assert String.length(debug) > 0
+      assert {:error, {:encoding_exception, _}} = Yex.update_debug_v2(<<1, 2, 3>>)
+    end
+  end
+
   describe "encode_state_as_update" do
     test "encode_state_as_update" do
       doc = Yex.Doc.new()

@@ -408,6 +408,18 @@ fn merge_updates_v2<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Ter
 }
 
 #[rustler::nif]
+fn update_debug_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
+    let update = Update::decode_v1(update.as_slice()).map_err(Error::from)?;
+    Ok((atoms::ok(), format!("{:#?}", update)).encode(env))
+}
+
+#[rustler::nif]
+fn update_debug_v2<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
+    let update = Update::decode_v2(update.as_slice()).map_err(Error::from)?;
+    Ok((atoms::ok(), format!("{:#?}", update)).encode(env))
+}
+
+#[rustler::nif]
 fn encode_state_vector_v1(
     env: Env<'_>,
     doc: NifDoc,
