@@ -148,6 +148,22 @@ defmodule Yex do
   end
 
   @doc """
+  Parses an update payload encoded in lib0 v1 format and returns a human-readable debug string.
+  """
+  @spec update_debug_v1(binary()) :: {:ok, String.t()} | {:error, term()}
+  def update_debug_v1(update) when is_binary(update) do
+    Yex.Nif.update_debug_v1(update)
+  end
+
+  @doc """
+  Parses an update payload encoded in lib0 v2 format and returns a human-readable debug string.
+  """
+  @spec update_debug_v2(binary()) :: {:ok, String.t()} | {:error, term()}
+  def update_debug_v2(update) when is_binary(update) do
+    Yex.Nif.update_debug_v2(update)
+  end
+
+  @doc """
   Normalize a number to a format that can be used in Yjs.
   """
   def normalize(number) when is_number(number) do
