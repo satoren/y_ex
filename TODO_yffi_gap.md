@@ -12,7 +12,7 @@
 
 - [ ] Add JSONPath query APIs (ytransaction_json_path / yjson_path_iter_next / yjson_path_iter_destroy)
 - [ ] Add branch identification/re-resolution/liveness APIs (ybranch_id / ybranch_get / ybranch_alive / ybranch_json / ytype_get / ytype_kind)
-- [ ] Add StickyIndex serialization APIs (ysticky_index_encode / ysticky_index_decode / ysticky_index_to_json / ysticky_index_from_json / ysticky_index_assoc)
+- [x] Add StickyIndex serialization APIs (ysticky_index_encode / ysticky_index_decode / ysticky_index_to_json / ysticky_index_from_json / ysticky_index_assoc)
 - [ ] Add low-level XML traversal APIs (yxmlelem_tree_walker / yxmlelem_tree_walker_next / yxmlelem_tree_walker_destroy)
 - [ ] Add XML attribute-iterator APIs (yxmlelem_attr_iter / yxmltext_attr_iter / yxmlattr_iter_next / yxmlattr_destroy)
 - [ ] Add direct XmlText attribute APIs (yxmltext_insert_attr / yxmltext_remove_attr / yxmltext_get_attr)

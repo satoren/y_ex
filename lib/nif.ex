@@ -187,6 +187,33 @@ defmodule Yex.Nif do
   def sticky_index_get_offset(_sticky_index, _cur_txn),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def sticky_index_encode(sticky_index),
+    do: sticky_index_encode_v1(sticky_index)
+
+  def sticky_index_decode(doc, binary),
+    do: sticky_index_decode_v1(doc, binary)
+
+  def sticky_index_to_json(_sticky_index),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def sticky_index_from_json(_json, _doc),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def sticky_index_assoc(_sticky_index),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def sticky_index_encode_v1(_sticky_index),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def sticky_index_decode_v1(_doc, _binary),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def sticky_index_encode_v2(_sticky_index),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def sticky_index_decode_v2(_doc, _binary),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def encode_state_vector_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def encode_state_as_update_v1(_doc, _cur_txn, _diff), do: :erlang.nif_error(:nif_not_loaded)
 

@@ -75,7 +75,7 @@ fn array_insert_list(
     array.mutably(env, current_transaction, |txn| {
         let array = array.get_ref(txn)?;
         let index = normalize_index_for_insert(array.len(txn), index);
-        array.insert_range(txn, index, values.into_iter().map(|a| a.0.clone()));
+        array.insert_range(txn, index, values.into_iter().map(|a| a.0));
         Ok(atoms::ok())
     })
 }

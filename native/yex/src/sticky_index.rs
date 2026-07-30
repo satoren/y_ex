@@ -1,12 +1,14 @@
 use rustler::{Atom, Decoder, Encoder, Env, NifResult, NifStruct, NifUnitEnum, ResourceArc, Term};
 use serde::{Deserialize as _, Serialize as _};
+use yrs::updates::decoder::Decode;
+use yrs::updates::encoder::Encode;
 use yrs::{Assoc, IndexedSequence, StickyIndex};
 
+use crate::error::Error;
 use crate::{
     atoms, doc::NifDoc, shared_type::NifSharedType, transaction::TransactionResource,
     utils::normalize_index, wrap::SliceIntoBinary, yinput::NifSharedTypeInput,
 };
-
 pub struct StickyIndexRef(pub StickyIndex);
 impl StickyIndexRef {
     pub fn new(v: StickyIndex) -> Self {
@@ -60,11 +62,6 @@ impl From<&NifAssoc> for Assoc {
             NifAssoc::After => Assoc::After,
             NifAssoc::Before => Assoc::Before,
         }
-    }
-}
-impl From<&NifStickyIndex> for StickyIndex {
-    fn from(val: &NifStickyIndex) -> Self {
-        val.reference.0.clone()
     }
 }
 
@@ -134,10 +131,14 @@ fn sticky_index_get_offset(
     sticky_index: NifStickyIndex,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<(Atom, NifOffset)> {
-    let doc = sticky_index.doc.clone();
+    let NifStickyIndex {
+        doc,
+        reference,
+        assoc: _,
+    } = sticky_index;
 
     doc.readonly(current_transaction, |txn| {
-        let sticky_index = sticky_index.reference.0;
+        let sticky_index = reference.0;
         match sticky_index.get_offset(txn) {
             Some(offset) => Ok((
                 atoms::ok(),
@@ -148,5 +149,88 @@ fn sticky_index_get_offset(
             )),
             None => Err(rustler::Error::Atom("error")),
         }
+    })
+}
+
+#[rustler::nif]
+fn sticky_index_to_json(sticky_index: NifStickyIndex) -> NifResult<String> {
+    serde_json::to_string(&sticky_index.reference.0).map_err(|_| rustler::Error::BadArg)
+}
+
+#[rustler::nif]
+fn sticky_index_from_json<'a>(
+    env: Env<'a>,
+    json: rustler::Binary,
+    doc: NifDoc,
+) -> NifResult<Term<'a>> {
+    match serde_json::from_slice::<StickyIndex>(json.as_slice()) {
+        Ok(pos) => {
+            let assoc = pos.assoc.into();
+            Ok((
+                atoms::ok(),
+                NifStickyIndex {
+                    doc,
+                    reference: StickyIndexRef::new(pos),
+                    assoc,
+                },
+            )
+                .encode(env))
+        }
+        Err(_) => Ok((atoms::error(), atoms::invalid_json()).encode(env)),
+    }
+}
+
+#[rustler::nif]
+fn sticky_index_assoc(sticky_index: NifStickyIndex) -> NifResult<i32> {
+    let assoc_value = match sticky_index.assoc {
+        NifAssoc::Before => -1,
+        NifAssoc::After => 0,
+    };
+    Ok(assoc_value)
+}
+
+// Version 1: Flexbuffer format (default)
+#[rustler::nif]
+fn sticky_index_encode_v1(env: Env<'_>, sticky_index: NifStickyIndex) -> NifResult<Term<'_>> {
+    let binary = sticky_index.reference.0.encode_v1();
+    Ok((atoms::ok(), SliceIntoBinary::new(binary.as_slice())).encode(env))
+}
+
+#[rustler::nif]
+fn sticky_index_decode_v1(
+    env: Env<'_>,
+    doc: NifDoc,
+    binary: rustler::types::Binary<'_>,
+) -> NifResult<NifStickyIndex> {
+    let _ = env;
+    let sticky_index_ref = StickyIndex::decode_v1(binary.as_slice()).map_err(Error::from)?;
+
+    Ok(NifStickyIndex {
+        doc,
+        reference: StickyIndexRef::new(sticky_index_ref),
+        assoc: NifAssoc::After,
+    })
+}
+
+// Version 2: JSON format
+#[rustler::nif]
+fn sticky_index_encode_v2(env: Env<'_>, sticky_index: NifStickyIndex) -> NifResult<Term<'_>> {
+    let binary = sticky_index.reference.0.encode_v2();
+    Ok((atoms::ok(), SliceIntoBinary::new(binary.as_slice())).encode(env))
+}
+
+#[rustler::nif]
+fn sticky_index_decode_v2(
+    env: Env<'_>,
+    doc: NifDoc,
+    binary: rustler::types::Binary<'_>,
+) -> NifResult<NifStickyIndex> {
+    let _ = env;
+    let sticky_index_ref = StickyIndex::decode_v2(binary.as_slice()).map_err(Error::from)?;
+
+    Ok(NifStickyIndex {
+        doc,
+        reference: StickyIndexRef::new(sticky_index_ref),
+        assoc: NifAssoc::After,
     })
 }

@@ -1,6 +1,7 @@
 rustler::atoms! {
     ok,
     error,
+  invalid_json,
     terminated,
     poison_error,
     transaction_acq_error,
