@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::wrap::NifWrap;
+use rustler::dynamic::TermType;
 use rustler::types;
 use rustler::{Decoder, Encoder, Env, Error, ListIterator, MapIterator, NifResult, Term};
 use yrs::any::{F64_MAX_SAFE_INTEGER, F64_MIN_SAFE_INTEGER};
@@ -35,43 +36,55 @@ impl rustler::Encoder for NifAny {
     }
 }
 fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
-    if let Ok(v) = term.decode::<bool>() {
-        return Ok(Any::Bool(v));
-    } else if let Ok(atom) = term.decode::<types::atom::Atom>() {
-        if atom == types::atom::nil() {
-            return Ok(Any::Null);
-        } else if atom == types::atom::undefined() {
-            return Ok(Any::Undefined);
-        }
-        return Err(rustler::Error::BadArg);
-    } else if let Ok(v) = term.decode::<i32>() {
-        return Ok(Any::Number(v.into()));
-    } else if let Ok(v) = term.decode::<i64>() {
-        // Check if the number is within the safe integer range for f64
-        // If it is not, we return it as a BigInt
-        if v > F64_MAX_SAFE_INTEGER as i64 || v < F64_MIN_SAFE_INTEGER as i64 {
-            return Ok(Any::BigInt(v));
-        }
-        return Ok(Any::Number(v as f64));
-    } else if let Ok(v) = term.decode::<f64>() {
-        return Ok(Any::Number(v));
-    } else if let Ok(v) = term.decode::<&str>() {
-        return Ok(Any::String(v.into()));
-    } else if let Ok(v) = term.decode::<Vec<u8>>() {
-        return Ok(Any::Buffer(v.into()));
-    } else if let Ok(v) = term.decode::<ListIterator<'a>>() {
-        let a = v
-            .map(|v| decode(v))
-            .collect::<Result<Vec<yrs::Any>, rustler::Error>>()?;
-        return Ok(Any::from(a));
-    } else if let Ok(v) = term.decode::<MapIterator<'a>>() {
-        let a = v
-            .map(|(k, v)| Ok((k.decode::<String>()?, decode(v)?)))
-            .collect::<Result<HashMap<String, yrs::Any>, rustler::Error>>()?;
-        return Ok(Any::from(a));
-    }
+    match term.get_type() {
+        TermType::Atom => {
+            if let Ok(v) = term.decode::<bool>() {
+                return Ok(Any::Bool(v));
+            }
 
-    Err(rustler::Error::BadArg)
+            let atom = term.decode::<types::atom::Atom>()?;
+            if atom == types::atom::nil() {
+                return Ok(Any::Null);
+            }
+            if atom == types::atom::undefined() {
+                return Ok(Any::Undefined);
+            }
+
+            Err(rustler::Error::BadArg)
+        }
+        TermType::Integer => {
+            let v = term.decode::<i64>()?;
+            // Check if the number is within the safe integer range for f64
+            // If it is not, we return it as a BigInt
+            if v > F64_MAX_SAFE_INTEGER as i64 || v < F64_MIN_SAFE_INTEGER as i64 {
+                return Ok(Any::BigInt(v));
+            }
+            Ok(Any::Number(v as f64))
+        }
+        TermType::Float => term.decode::<f64>().map(Any::Number),
+        TermType::Binary => {
+            if let Ok(v) = term.decode::<&str>() {
+                return Ok(Any::String(v.into()));
+            }
+
+            term.decode::<Vec<u8>>().map(|v| Any::Buffer(v.into()))
+        }
+        TermType::List => {
+            let iter = term.decode::<ListIterator<'a>>()?;
+            let values = iter
+                .map(decode)
+                .collect::<Result<Vec<yrs::Any>, rustler::Error>>()?;
+            Ok(Any::from(values))
+        }
+        TermType::Map => {
+            let iter = term.decode::<MapIterator<'a>>()?;
+            let values = iter
+                .map(|(k, v)| Ok((k.decode::<String>()?, decode(v)?)))
+                .collect::<Result<HashMap<String, yrs::Any>, rustler::Error>>()?;
+            Ok(Any::from(values))
+        }
+        _ => Err(rustler::Error::BadArg),
+    }
 }
 
 pub type NifAny = NifWrap<Any>;
