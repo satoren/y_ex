@@ -1,9 +1,9 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
-use rustler::{Encoder, Env, LocalPid, NifResult, NifStruct, NifUntaggedEnum, ResourceArc, Term};
+use rustler::{Encoder, Env, NifResult, NifStruct, NifUntaggedEnum, ResourceArc, Term};
 use yrs::{
     types::{
         array::ArrayEvent,
@@ -553,18 +553,22 @@ pub struct NifSubdocsEvent {
 }
 
 impl NifSubdocsEvent {
-    pub fn new(event: &yrs::SubdocsEvent, worker_pid: Option<LocalPid>) -> Self {
+    pub fn new(
+        event: &yrs::SubdocsEvent,
+        doc: &NifDoc,
+        active_subdoc_guids: &HashSet<String>,
+    ) -> Self {
         let added = event
             .added()
-            .map(|doc| NifDoc::with_worker_pid(doc.clone(), worker_pid))
+            .map(|subdoc| doc.with_cached_subdoc(subdoc.clone(), Some(active_subdoc_guids)))
             .collect();
         let removed = event
             .removed()
-            .map(|doc| NifDoc::with_worker_pid(doc.clone(), worker_pid))
+            .map(|subdoc| doc.with_subdoc_reference(subdoc.clone(), Some(active_subdoc_guids)))
             .collect();
         let loaded = event
             .loaded()
-            .map(|doc| NifDoc::with_worker_pid(doc.clone(), worker_pid))
+            .map(|subdoc| doc.with_cached_subdoc(subdoc.clone(), Some(active_subdoc_guids)))
             .collect();
 
         NifSubdocsEvent {

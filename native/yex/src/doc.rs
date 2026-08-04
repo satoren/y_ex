@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 // Standard library imports
 use std::ops::Deref;
 use std::sync::{Mutex, RwLock};
@@ -18,12 +19,25 @@ use crate::{
     term_box::TermBox,
     transaction::{ReadTransaction, TransactionResource},
     utils::{origin_to_term, term_to_origin_binary},
-    wrap::{NifWrap, SliceIntoBinary},
+    wrap::SliceIntoBinary,
     xml::NifXmlFragment,
     NifArray, NifMap, NifText, ENV,
 };
 
-pub type DocResource = NifWrap<Doc>;
+pub(crate) struct DocResource {
+    pub(crate) doc: Doc,
+    pub(crate) subdocs: Mutex<HashMap<String, ResourceArc<DocResource>>>,
+}
+
+impl std::ops::Deref for DocResource {
+    type Target = Doc;
+
+    fn deref(&self) -> &Self::Target {
+        &self.doc
+    }
+}
+
+impl std::panic::RefUnwindSafe for DocResource {}
 
 #[rustler::resource_impl]
 impl rustler::Resource for DocResource {}
@@ -113,7 +127,10 @@ pub(crate) struct NifDoc {
 impl Default for NifDoc {
     fn default() -> Self {
         NifDoc {
-            reference: ResourceArc::new(Doc::new().into()),
+            reference: ResourceArc::new(DocResource {
+                doc: Doc::new(),
+                subdocs: Mutex::new(HashMap::new()),
+            }),
             worker_pid: None,
         }
     }
@@ -121,14 +138,75 @@ impl Default for NifDoc {
 impl NifDoc {
     pub fn with_options(option: NifOptions) -> Self {
         NifDoc {
-            reference: ResourceArc::new(Doc::with_options(option.into()).into()),
+            reference: ResourceArc::new(DocResource {
+                doc: Doc::with_options(option.into()),
+                subdocs: Mutex::new(HashMap::new()),
+            }),
             worker_pid: None,
         }
     }
-    pub fn with_worker_pid(doc: Doc, worker_pid: Option<LocalPid>) -> Self {
+
+    fn prune_subdoc_cache(
+        &self,
+        cache: &mut HashMap<String, ResourceArc<DocResource>>,
+        keep_guid: &str,
+        active_subdoc_guids: Option<&HashSet<String>>,
+    ) {
+        if let Some(active_guids) = active_subdoc_guids {
+            cache.retain(|guid, _| guid == keep_guid || active_guids.contains(guid));
+        }
+    }
+
+    fn cached_subdoc_reference(
+        &self,
+        subdoc: Doc,
+        cache_on_miss: bool,
+        active_subdoc_guids: Option<&HashSet<String>>,
+    ) -> ResourceArc<DocResource> {
+        let subdoc_guid = subdoc.guid().to_string();
+
+        if let Ok(mut cache) = self.reference.subdocs.lock() {
+            self.prune_subdoc_cache(&mut cache, &subdoc_guid, active_subdoc_guids);
+
+            if let Some(reference) = cache.get(&subdoc_guid) {
+                return reference.clone();
+            }
+
+            let reference: ResourceArc<DocResource> = ResourceArc::new(DocResource {
+                doc: subdoc,
+                subdocs: Mutex::new(HashMap::new()),
+            });
+            if cache_on_miss {
+                cache.insert(subdoc_guid, reference.clone());
+            }
+            reference
+        } else {
+            ResourceArc::new(DocResource {
+                doc: subdoc,
+                subdocs: Mutex::new(HashMap::new()),
+            })
+        }
+    }
+
+    pub fn with_cached_subdoc(
+        &self,
+        subdoc: Doc,
+        active_subdoc_guids: Option<&HashSet<String>>,
+    ) -> Self {
         NifDoc {
-            reference: ResourceArc::new(doc.into()),
-            worker_pid,
+            reference: self.cached_subdoc_reference(subdoc, true, active_subdoc_guids),
+            worker_pid: self.worker_pid,
+        }
+    }
+
+    pub fn with_subdoc_reference(
+        &self,
+        subdoc: Doc,
+        active_subdoc_guids: Option<&HashSet<String>>,
+    ) -> Self {
+        NifDoc {
+            reference: self.cached_subdoc_reference(subdoc, false, active_subdoc_guids),
+            worker_pid: self.worker_pid,
         }
     }
 
@@ -202,7 +280,7 @@ impl Deref for NifDoc {
     type Target = Doc;
 
     fn deref(&self) -> &Self::Target {
-        &self.reference.0
+        &self.reference.doc
     }
 }
 
@@ -221,7 +299,7 @@ impl DocOperations for NifDoc {
     where
         F: FnOnce(&Transaction) -> NifResult<T>,
     {
-        let txn = yrs::Transact::try_transact(&self.reference.0).map_err(Error::from)?;
+        let txn = yrs::Transact::try_transact(&self.reference.doc).map_err(Error::from)?;
         f(&txn)
     }
 
@@ -229,7 +307,7 @@ impl DocOperations for NifDoc {
     where
         F: FnOnce(&mut TransactionMut) -> NifResult<T>,
     {
-        let mut txn = yrs::Transact::try_transact_mut(&self.reference.0).map_err(Error::from)?;
+        let mut txn = yrs::Transact::try_transact_mut(&self.reference.doc).map_err(Error::from)?;
         f(&mut txn)
     }
 }
@@ -271,14 +349,14 @@ fn doc_begin_transaction(
 ) -> NifResult<ResourceArc<TransactionResource>> {
     if let Some(origin) = term_to_origin_binary(origin) {
         let txn: TransactionMut =
-            yrs::Transact::try_transact_mut_with(&doc.reference.0, origin.as_slice())
+            yrs::Transact::try_transact_mut_with(&doc.reference.doc, origin.as_slice())
                 .map_err(Error::from)?;
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
 
         Ok(TransactionResource(RwLock::new(Some(txn))).into())
     } else {
         let txn: TransactionMut =
-            yrs::Transact::try_transact_mut(&doc.reference.0).map_err(Error::from)?;
+            yrs::Transact::try_transact_mut(&doc.reference.doc).map_err(Error::from)?;
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
         Ok(TransactionResource(RwLock::new(Some(txn))).into())
     }
@@ -536,10 +614,12 @@ fn doc_monitor_subdocs(
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let metadata = TermBox::new(metadata);
-    let worker_pid = doc.worker_pid;
+    let event_doc = doc.clone();
     doc.observe_subdocs(move |txn, event: &SubdocsEvent| {
         ENV.with(|env| {
-            let event = NifSubdocsEvent::new(event, worker_pid);
+            let active_subdoc_guids: HashSet<String> =
+                txn.subdoc_guids().map(|guid| guid.to_string()).collect();
+            let event = NifSubdocsEvent::new(event, &event_doc, &active_subdoc_guids);
             let metadata = metadata.get(*env);
             let _ = env.send(
                 &pid,
