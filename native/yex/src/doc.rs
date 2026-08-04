@@ -500,6 +500,36 @@ fn encode_state_as_update_v2<'a>(
 }
 
 #[rustler::nif]
+fn get_pending_update_v1<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Term<'a>> {
+    doc.readonly(current_transaction, |txn| {
+        let result = txn.store().pending_update().map(|p| {
+            let bytes = p.update.encode_v1();
+            SliceIntoBinary::new(bytes.as_slice()).encode(env)
+        });
+        Ok((atoms::ok(), result).encode(env))
+    })
+}
+
+#[rustler::nif]
+fn get_pending_ds_v1<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Term<'a>> {
+    doc.readonly(current_transaction, |txn| {
+        let result = txn.store().pending_ds().map(|ds| {
+            let bytes = ds.encode_v1();
+            SliceIntoBinary::new(bytes.as_slice()).encode(env)
+        });
+        Ok((atoms::ok(), result).encode(env))
+    })
+}
+
+#[rustler::nif]
 fn doc_monitor_subdocs(
     doc: NifDoc,
     pid: LocalPid,

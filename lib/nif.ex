@@ -230,6 +230,9 @@ defmodule Yex.Nif do
   def merge_updates_v2(_updates), do: :erlang.nif_error(:nif_not_loaded)
   def update_debug_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
 
+  def get_pending_update_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  def get_pending_ds_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
   def sync_message_decode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)
   def sync_message_encode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)
   def sync_messages_encode_v1(_messages), do: :erlang.nif_error(:nif_not_loaded)
