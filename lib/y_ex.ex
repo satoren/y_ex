@@ -192,6 +192,23 @@ defmodule Yex do
   end
 
   @doc """
+  Creates a snapshot of the current document state.
+
+  The returned snapshot can later be used with
+  `Yex.Snapshot.encode_state_v1/1` or `Yex.Snapshot.encode_state_v2/1`
+  to produce a time-travel update for that point-in-time state.
+
+  The source document must have garbage collection disabled
+  (`Yex.Doc.Options.skip_gc == true`) for snapshot-based time-travel encoding.
+  """
+  @spec snapshot(Yex.Doc.t()) :: {:ok, Yex.Snapshot.t()} | {:error, term()}
+  def snapshot(%Yex.Doc{} = doc) do
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.transaction_snapshot(doc, cur_txn(doc))
+    end
+  end
+
+  @doc """
   Normalize a number to a format that can be used in Yjs.
   """
   def normalize(number) when is_number(number) do

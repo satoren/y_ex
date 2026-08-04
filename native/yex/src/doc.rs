@@ -4,9 +4,13 @@ use std::sync::{Mutex, RwLock};
 
 // External crates
 use rustler::{
-    Atom, Binary, Encoder, Env, LocalPid, NifResult, NifStruct, NifUnitEnum, ResourceArc, Term,
+    Atom, Binary, Decoder, Encoder, Env, LocalPid, NifResult, NifStruct, NifUnitEnum, ResourceArc,
+    Term,
 };
-use yrs::updates::{decoder::Decode, encoder::Encode};
+use yrs::updates::{
+    decoder::Decode,
+    encoder::{Encode, Encoder as UpdatesEncoder, EncoderV1, EncoderV2},
+};
 use yrs::*;
 
 use crate::event::NifSubdocsEvent;
@@ -24,6 +28,36 @@ use crate::{
 };
 
 pub type DocResource = NifWrap<Doc>;
+
+pub struct SnapshotRef(pub Snapshot);
+
+impl SnapshotRef {
+    pub fn new(v: Snapshot) -> Self {
+        Self(v)
+    }
+}
+
+impl Encoder for SnapshotRef {
+    fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
+        let encoded = self.0.encode_v1();
+        SliceIntoBinary::new(encoded.as_slice()).encode(env)
+    }
+}
+
+impl<'a> Decoder<'a> for SnapshotRef {
+    fn decode(term: Term<'a>) -> NifResult<Self> {
+        let bin = term.decode_as_binary()?;
+        let snapshot = Snapshot::decode_v1(bin.as_slice()).map_err(Error::from)?;
+        Ok(SnapshotRef::new(snapshot))
+    }
+}
+
+#[derive(NifStruct)]
+#[module = "Yex.Snapshot"]
+pub struct NifSnapshot {
+    pub doc: NifDoc,
+    pub reference: SnapshotRef,
+}
 
 #[rustler::resource_impl]
 impl rustler::Resource for DocResource {}
@@ -527,6 +561,60 @@ fn get_pending_ds_v1<'a>(
         });
         Ok((atoms::ok(), result).encode(env))
     })
+}
+
+#[rustler::nif]
+fn transaction_snapshot<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Term<'a>> {
+    let snapshot = doc.readonly(current_transaction, |txn| Ok(txn.snapshot()))?;
+
+    Ok((
+        atoms::ok(),
+        NifSnapshot {
+            doc,
+            reference: SnapshotRef::new(snapshot),
+        },
+    )
+        .encode(env))
+}
+
+#[rustler::nif]
+fn transaction_encode_state_from_snapshot_v1<'a>(
+    env: Env<'a>,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    snapshot: NifSnapshot,
+) -> NifResult<Term<'a>> {
+    let update: Vec<u8> = snapshot.doc.readonly(current_transaction, |txn| {
+        let mut encoder = EncoderV1::new();
+        txn.encode_state_from_snapshot(&snapshot.reference.0, &mut encoder)
+            .map_err(|e| {
+                rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
+            })?;
+        Ok(encoder.to_vec())
+    })?;
+
+    Ok((atoms::ok(), SliceIntoBinary::new(update.as_slice())).encode(env))
+}
+
+#[rustler::nif]
+fn transaction_encode_state_from_snapshot_v2<'a>(
+    env: Env<'a>,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    snapshot: NifSnapshot,
+) -> NifResult<Term<'a>> {
+    let update: Vec<u8> = snapshot.doc.readonly(current_transaction, |txn| {
+        let mut encoder = EncoderV2::new();
+        txn.encode_state_from_snapshot(&snapshot.reference.0, &mut encoder)
+            .map_err(|e| {
+                rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
+            })?;
+        Ok(encoder.to_vec())
+    })?;
+
+    Ok((atoms::ok(), SliceIntoBinary::new(update.as_slice())).encode(env))
 }
 
 #[rustler::nif]
