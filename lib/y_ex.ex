@@ -164,6 +164,34 @@ defmodule Yex do
   end
 
   @doc """
+  Returns the pending update (v1 encoded) for the document, if any.
+
+  A pending update accumulates operations that arrived out of order and
+  could not yet be applied because their causal predecessors are missing.
+  Returns `{:ok, binary()}` when a pending update exists, `{:ok, nil}` otherwise.
+  """
+  @spec get_pending_update(Yex.Doc.t()) :: {:ok, binary() | nil} | {:error, term()}
+  def get_pending_update(%Yex.Doc{} = doc) do
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.get_pending_update_v1(doc, cur_txn(doc))
+    end
+  end
+
+  @doc """
+  Returns the pending delete set (v1 encoded) for the document, if any.
+
+  A pending delete set holds deletions that arrived out of order and could
+  not yet be applied. Returns `{:ok, binary()}` when a pending delete set
+  exists, `{:ok, nil}` otherwise.
+  """
+  @spec get_pending_ds(Yex.Doc.t()) :: {:ok, binary() | nil} | {:error, term()}
+  def get_pending_ds(%Yex.Doc{} = doc) do
+    Yex.Doc.run_in_worker_process doc do
+      Yex.Nif.get_pending_ds_v1(doc, cur_txn(doc))
+    end
+  end
+
+  @doc """
   Normalize a number to a format that can be used in Yjs.
   """
   def normalize(number) when is_number(number) do
