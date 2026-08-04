@@ -41,7 +41,7 @@ pub struct NifAwarenessUpdateSummary {
 
 #[rustler::nif]
 fn awareness_new(doc: NifDoc) -> NifAwareness {
-    let awareness = Awareness::new(doc.reference.0.clone());
+    let awareness = Awareness::new(doc.reference.doc.clone());
     let resource = AwarenessResource::from(awareness);
     NifAwareness {
         reference: ResourceArc::new(resource),
