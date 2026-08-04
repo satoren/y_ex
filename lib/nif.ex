@@ -240,6 +240,9 @@ defmodule Yex.Nif do
   def transaction_encode_state_from_snapshot_v2(_cur_txn, _snapshot),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def transaction_json_path_all(_doc, _cur_txn, _path),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def sync_message_decode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)
   def sync_message_encode_v1(_message), do: :erlang.nif_error(:nif_not_loaded)
   def sync_messages_encode_v1(_messages), do: :erlang.nif_error(:nif_not_loaded)
