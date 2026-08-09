@@ -572,6 +572,7 @@ defmodule Yex.UndoManagerTest do
       Text.insert(text, 0, "e")
       Text.insert(text, 1, "f")
     end)
+
     assert Text.to_string(text) == "ef"
 
     UndoManager.undo(undo_manager)
