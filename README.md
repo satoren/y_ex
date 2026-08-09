@@ -42,7 +42,7 @@ end
 | Shared collections: recursive nesting   |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Document observers                      |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Transaction: origins                    |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
-| Snapshots                               |                     &#x2705;                      |                  &#x2705;                  |                  &#x274C;                  |
+| Snapshots                               |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Sticky indexes                          |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Undo Manager                            |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Awareness                               |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |

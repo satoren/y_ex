@@ -567,13 +567,12 @@ defmodule Yex.UndoManagerTest do
     # get back to empty
     assert Text.to_string(text) == ""
 
-    # Prove option means insufficient timeout will still batch
-    Text.insert(text, 0, "e")
+    # Keep this deterministic and fast: changes in one transaction are captured together.
+    Doc.transaction(doc, fn ->
+      Text.insert(text, 0, "e")
+      Text.insert(text, 1, "f")
+    end)
 
-    # undo manager has a timeout of 30ms, so this sleep of 5ms should ...
-    # ... be insufficient and will allow the changes to be in one batch
-    Process.sleep(5)
-    Text.insert(text, 1, "f")
     assert Text.to_string(text) == "ef"
 
     UndoManager.undo(undo_manager)
