@@ -214,6 +214,131 @@ defmodule Yex.DocTest do
     Doc.demonitor_update(monitor_ref)
   end
 
+  describe "json_path" do
+    test "returns matched values from nested structures" do
+      doc = Doc.new()
+      users = Doc.get_array(doc, "users")
+
+      Yex.Array.push(users, %{
+        "name" => "Alice",
+        "friends" => [
+          %{"nick" => "boreas"},
+          %{"nick" => "crocodile91"}
+        ]
+      })
+
+      assert {:ok, ["boreas", "crocodile91"]} =
+               Doc.json_path(doc, "$.users..friends.*.nick")
+    end
+
+    test "returns invalid_json_path error for unsupported syntax" do
+      doc = Doc.new()
+
+      assert {:error, {:invalid_json_path, _}} =
+               Doc.json_path(doc, "$[?(@.name == 'Alice')]")
+    end
+  end
+
+  describe "get_pending_update / get_pending_ds" do
+    test "returns nil when no pending update exists" do
+      doc = Doc.new()
+      assert {:ok, nil} = Doc.get_pending_update(doc)
+      assert {:ok, nil} = Doc.get_pending_ds(doc)
+    end
+
+    test "returns nil for a doc that has content but no missing dependencies" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      Text.insert(text, 0, "Hello")
+      assert {:ok, nil} = Doc.get_pending_update(doc)
+      assert {:ok, nil} = Doc.get_pending_ds(doc)
+    end
+
+    test "returns binary pending update when update arrives out of order" do
+      doc1 = Doc.new()
+      text = Doc.get_text(doc1, "text")
+      {:ok, sv_empty} = Yex.encode_state_vector(doc1)
+      Text.insert(text, 0, "Hello")
+      {:ok, update_a} = Yex.encode_state_as_update(doc1, sv_empty)
+      {:ok, sv_a} = Yex.encode_state_vector(doc1)
+      Text.insert(text, 5, " World")
+      {:ok, update_b} = Yex.encode_state_as_update(doc1, sv_a)
+
+      doc2 = Doc.new()
+      :ok = Yex.apply_update(doc2, update_b)
+
+      assert {:ok, pending} = Doc.get_pending_update(doc2)
+      assert is_binary(pending)
+      assert byte_size(pending) > 0
+
+      :ok = Yex.apply_update(doc2, update_a)
+      assert {:ok, nil} = Doc.get_pending_update(doc2)
+    end
+
+    test "pending update is re-encodable as a valid v1 update" do
+      doc1 = Doc.new()
+      text = Doc.get_text(doc1, "text")
+      {:ok, sv_empty} = Yex.encode_state_vector(doc1)
+      Text.insert(text, 0, "Hello")
+      {:ok, _update_a} = Yex.encode_state_as_update(doc1, sv_empty)
+      {:ok, sv_a} = Yex.encode_state_vector(doc1)
+      Text.insert(text, 5, " World")
+      {:ok, update_b} = Yex.encode_state_as_update(doc1, sv_a)
+
+      doc2 = Doc.new()
+      :ok = Yex.apply_update(doc2, update_b)
+
+      {:ok, pending} = Doc.get_pending_update(doc2)
+      assert {:ok, debug} = Yex.update_debug_v1(pending)
+      assert is_binary(debug)
+    end
+
+    test "pending update resolves to the same final state regardless of application order" do
+      doc1 = Doc.new()
+      text = Doc.get_text(doc1, "text")
+      {:ok, sv_empty} = Yex.encode_state_vector(doc1)
+      Text.insert(text, 0, "Hello")
+      {:ok, update_a} = Yex.encode_state_as_update(doc1, sv_empty)
+      {:ok, sv_a} = Yex.encode_state_vector(doc1)
+      Text.insert(text, 5, " World")
+      {:ok, update_b} = Yex.encode_state_as_update(doc1, sv_a)
+
+      doc2 = Doc.new()
+      :ok = Yex.apply_update(doc2, update_a)
+      :ok = Yex.apply_update(doc2, update_b)
+
+      doc3 = Doc.new()
+      :ok = Yex.apply_update(doc3, update_b)
+      :ok = Yex.apply_update(doc3, update_a)
+
+      text2 = Doc.get_text(doc2, "text")
+      text3 = Doc.get_text(doc3, "text")
+      assert Text.to_string(text2) == Text.to_string(text3)
+      assert Text.to_string(text3) == "Hello World"
+    end
+
+    test "pending delete set appears when a deletion refers to unknown items" do
+      doc1 = Doc.new()
+      text = Doc.get_text(doc1, "text")
+      {:ok, sv_empty} = Yex.encode_state_vector(doc1)
+      Text.insert(text, 0, "Hello")
+      {:ok, update_insert} = Yex.encode_state_as_update(doc1, sv_empty)
+      {:ok, sv_after_insert} = Yex.encode_state_vector(doc1)
+      Text.delete(text, 0, 5)
+      {:ok, update_delete} = Yex.encode_state_as_update(doc1, sv_after_insert)
+
+      doc2 = Doc.new()
+      :ok = Yex.apply_update(doc2, update_delete)
+
+      assert {:ok, pending_ds} = Doc.get_pending_ds(doc2)
+      assert is_binary(pending_ds)
+      assert byte_size(pending_ds) > 0
+
+      :ok = Yex.apply_update(doc2, update_insert)
+      assert {:ok, nil} = Doc.get_pending_ds(doc2)
+    end
+  end
+
   # Additional comprehensive tests for better coverage
 
   describe "basic type creation" do

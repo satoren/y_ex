@@ -25,6 +25,7 @@ use crate::{
     utils::{origin_to_term, term_to_origin_binary},
     wrap::SliceIntoBinary,
     xml::NifXmlFragment,
+    youtput::NifYOut,
     NifArray, NifMap, NifText, ENV,
 };
 
@@ -693,6 +694,27 @@ fn transaction_encode_state_from_snapshot_v2<'a>(
     })?;
 
     Ok((atoms::ok(), SliceIntoBinary::new(update.as_slice())).encode(env))
+}
+
+#[rustler::nif]
+fn transaction_json_path_all<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    path: &str,
+) -> NifResult<Term<'a>> {
+    let query = JsonPath::parse(path)
+        .map_err(|e| rustler::Error::Term(Box::new((atoms::invalid_json_path(), e.to_string()))))?;
+
+    let values = doc.readonly(current_transaction, |txn| {
+        let values = txn
+            .json_path(&query)
+            .map(|out| NifYOut::from_native(out, doc.clone()))
+            .collect::<Vec<NifYOut>>();
+        Ok(values)
+    })?;
+
+    Ok((atoms::ok(), values).encode(env))
 }
 
 #[rustler::nif]
