@@ -165,6 +165,36 @@ defmodule Yex.TextTest do
              Text.to_delta(text)
   end
 
+  test "insert_embed" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+
+    Text.insert(text, 0, "abcd")
+    embed = Text.quote(text, 1, 2)
+
+    assert :ok == Text.insert_embed(text, 4, embed)
+
+    assert Enum.any?(Text.to_delta(text), fn
+             %{insert: %Yex.WeakLink{}} -> true
+             _ -> false
+           end)
+  end
+
+  test "insert_embed with attributes" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+
+    Text.insert(text, 0, "abcd")
+    embed = Text.quote(text, 1, 2)
+
+    assert :ok == Text.insert_embed(text, 4, embed, %{"bold" => true})
+
+    assert Enum.any?(Text.to_delta(text), fn
+             %{insert: %Yex.WeakLink{}, attributes: %{"bold" => true}} -> true
+             _ -> false
+           end)
+  end
+
   test "compare" do
     doc = Doc.new()
 

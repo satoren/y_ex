@@ -60,6 +60,39 @@ defmodule Yex.Text do
   end
 
   @doc """
+  Inserts an embed value at the specified index.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `text` - The text object to modify
+    * `index` - The position to insert at (0-based)
+    * `embed` - The embed value to insert (e.g. WeakPrelim, MapPrelim, ArrayPrelim)
+  """
+  @spec insert_embed(t, integer(), Yex.input_type()) :: :ok | :error
+  def insert_embed(%__MODULE__{doc: doc} = text, index, embed) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_insert_embed(text, cur_txn(text), index, embed)
+    )
+  end
+
+  @doc """
+  Inserts an embed value with formatting attributes at the specified index.
+  Returns :ok on success, :error on failure.
+
+  ## Parameters
+    * `text` - The text object to modify
+    * `index` - The position to insert at (0-based)
+    * `embed` - The embed value to insert
+    * `attr` - A map of formatting attributes to apply (e.g. %{"bold" => true})
+  """
+  @spec insert_embed(t, integer(), Yex.input_type(), map()) :: :ok | :error
+  def insert_embed(%__MODULE__{doc: doc} = text, index, embed, attr) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.text_insert_embed_with_attributes(text, cur_txn(text), index, embed, attr)
+    )
+  end
+
+  @doc """
   Deletes text content starting at the specified index.
   Supports negative indices for deletion from the end.
   Returns :ok on success, :error on failure.

@@ -16,7 +16,7 @@
 - [ ] Add low-level XML traversal APIs (yxmlelem_tree_walker / yxmlelem_tree_walker_next / yxmlelem_tree_walker_destroy)
 - [ ] Add XML attribute-iterator APIs (yxmlelem_attr_iter / yxmltext_attr_iter / yxmlattr_iter_next / yxmlattr_destroy)
 - [ ] Add direct XmlText attribute APIs (yxmltext_insert_attr / yxmltext_remove_attr / yxmltext_get_attr)
-- [ ] Add embed-specific APIs for Text/XmlText (ytext_insert_embed / yxmltext_insert_embed)
+- [x] Add embed-specific APIs for Text/XmlText (ytext_insert_embed / yxmltext_insert_embed)
 - [ ] Add detailed WeakLink read APIs (yweak_read / yweak_xml_string)
 
 ## Low Priority

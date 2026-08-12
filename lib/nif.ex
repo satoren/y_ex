@@ -62,6 +62,12 @@ defmodule Yex.Nif do
   def text_insert_with_attributes(_text, _cur_txn, _index, _content, _attr),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def text_insert_embed(_text, _cur_txn, _index, _embed),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def text_insert_embed_with_attributes(_text, _cur_txn, _index, _embed, _attr),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def text_quote(_text, _cur_txn, _index, _len), do: :erlang.nif_error(:nif_not_loaded)
 
   def text_apply_delta(_text, _cur_txn, _delta),
@@ -156,6 +162,12 @@ defmodule Yex.Nif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_text_insert_with_attributes(_xml_text, _cur_txn, _index, _content, _attr),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_insert_embed(_xml_text, _cur_txn, _index, _embed),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_insert_embed_with_attributes(_xml_text, _cur_txn, _index, _embed, _attr),
     do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_text_delete(_xml_text, _cur_txn, _index, _length),

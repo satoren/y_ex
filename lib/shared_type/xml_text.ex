@@ -44,6 +44,35 @@ defmodule Yex.XmlText do
   end
 
   @doc """
+  Inserts an embed value at the specified index.
+  Returns :ok on success, :error on failure.
+  """
+  @spec insert_embed(t, integer(), Yex.input_type()) :: :ok | :error
+  def insert_embed(%__MODULE__{doc: doc} = xml_text, index, embed) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_text_insert_embed(xml_text, cur_txn(xml_text), index, embed)
+    )
+  end
+
+  @doc """
+  Inserts an embed value with attributes at the specified index.
+  Returns :ok on success, :error on failure.
+  """
+  @spec insert_embed(t, integer(), Yex.input_type(), map()) :: :ok | :error
+  def insert_embed(%__MODULE__{doc: doc} = xml_text, index, embed, attr) do
+    Doc.run_in_worker_process(doc,
+      do:
+        Yex.Nif.xml_text_insert_embed_with_attributes(
+          xml_text,
+          cur_txn(xml_text),
+          index,
+          embed,
+          attr
+        )
+    )
+  end
+
+  @doc """
   Deletes text content starting at the specified index.
   Supports negative indices for deletion from the end.
   Returns :ok on success, :error on failure.
