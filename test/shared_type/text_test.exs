@@ -195,6 +195,45 @@ defmodule Yex.TextTest do
            end)
   end
 
+  test "insert_embed with any map value" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+
+    embed = %{"kind" => "mention", "id" => 1}
+    assert :ok == Text.insert_embed(text, 0, embed)
+
+    assert Enum.any?(Text.to_delta(text), fn
+             %{insert: %{"kind" => "mention", "id" => id}} when id in [1, 1.0] -> true
+             _ -> false
+           end)
+  end
+
+  test "insert_embed with map prelim" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+
+    embed = Yex.MapPrelim.from(%{"key" => "value"})
+    assert :ok == Text.insert_embed(text, 0, embed)
+
+    assert Enum.any?(Text.to_delta(text), fn
+             %{insert: %Yex.Map{} = map} -> Yex.Map.get(map, "key") == "value"
+             _ -> false
+           end)
+  end
+
+  test "insert_embed with array prelim" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+
+    embed = Yex.ArrayPrelim.from([1, 2, 3])
+    assert :ok == Text.insert_embed(text, 0, embed)
+
+    assert Enum.any?(Text.to_delta(text), fn
+             %{insert: %Yex.Array{} = array} -> Yex.Array.to_list(array) == [1, 2, 3]
+             _ -> false
+           end)
+  end
+
   test "compare" do
     doc = Doc.new()
 
