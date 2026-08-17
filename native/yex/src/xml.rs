@@ -476,6 +476,49 @@ fn xml_text_insert_with_attributes(
 }
 
 #[rustler::nif]
+fn xml_text_insert_embed(
+    env: Env<'_>,
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: i64,
+    embed: NifYInput,
+) -> NifResult<Atom> {
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        let index = normalize_index_for_insert(xml.len(txn), index);
+        let mut delta = Vec::with_capacity(2);
+        if index > 0 {
+            delta.push(yrs::types::Delta::Retain(index, None));
+        }
+        delta.push(yrs::types::Delta::Inserted(embed, None));
+        xml.apply_delta(txn, delta);
+        Ok(atoms::ok())
+    })
+}
+
+#[rustler::nif]
+fn xml_text_insert_embed_with_attributes(
+    env: Env<'_>,
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: i64,
+    embed: NifYInput,
+    attr: NifAttr,
+) -> NifResult<Atom> {
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        let index = normalize_index_for_insert(xml.len(txn), index);
+        let mut delta = Vec::with_capacity(2);
+        if index > 0 {
+            delta.push(yrs::types::Delta::Retain(index, None));
+        }
+        delta.push(yrs::types::Delta::Inserted(embed, Some(Box::new(attr.0))));
+        xml.apply_delta(txn, delta);
+        Ok(atoms::ok())
+    })
+}
+
+#[rustler::nif]
 fn xml_text_delete(
     env: Env<'_>,
     xml: NifXmlText,

@@ -15,7 +15,7 @@ use crate::{
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
     transaction::TransactionResource,
-    yinput::NifYInputDelta,
+    yinput::{NifYInput, NifYInputDelta},
     youtput::NifYOut,
 };
 
@@ -82,6 +82,49 @@ fn text_insert_with_attributes(
         let text = text.get_ref(txn)?;
         let index = normalize_index_for_insert(text.len(txn), index);
         text.insert_with_attributes(txn, index, chunk, attr.0);
+        Ok(atoms::ok())
+    })
+}
+
+#[rustler::nif]
+fn text_insert_embed(
+    env: Env<'_>,
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: i64,
+    embed: NifYInput,
+) -> NifResult<Atom> {
+    text.mutably(env, current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
+        let index = normalize_index_for_insert(text.len(txn), index);
+        let mut delta = Vec::with_capacity(2);
+        if index > 0 {
+            delta.push(yrs::types::Delta::Retain(index, None));
+        }
+        delta.push(yrs::types::Delta::Inserted(embed, None));
+        text.apply_delta(txn, delta);
+        Ok(atoms::ok())
+    })
+}
+
+#[rustler::nif]
+fn text_insert_embed_with_attributes(
+    env: Env<'_>,
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    index: i64,
+    embed: NifYInput,
+    attr: NifAttr,
+) -> NifResult<Atom> {
+    text.mutably(env, current_transaction, |txn| {
+        let text = text.get_ref(txn)?;
+        let index = normalize_index_for_insert(text.len(txn), index);
+        let mut delta = Vec::with_capacity(2);
+        if index > 0 {
+            delta.push(yrs::types::Delta::Retain(index, None));
+        }
+        delta.push(yrs::types::Delta::Inserted(embed, Some(Box::new(attr.0))));
+        text.apply_delta(txn, delta);
         Ok(atoms::ok())
     })
 }

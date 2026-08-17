@@ -123,6 +123,30 @@ defmodule YexXmlTextTest do
                XmlText.to_delta(text)
     end
 
+    test "insert_embed", %{xml_text: text} do
+      XmlText.insert(text, 0, "abcd")
+      embed = XmlText.quote(text, 1, 2)
+
+      assert :ok == XmlText.insert_embed(text, 4, embed)
+
+      assert Enum.any?(XmlText.to_delta(text), fn
+               %{insert: %Yex.WeakLink{}} -> true
+               _ -> false
+             end)
+    end
+
+    test "insert_embed with attributes", %{xml_text: text} do
+      XmlText.insert(text, 0, "abcd")
+      embed = XmlText.quote(text, 1, 2)
+
+      assert :ok == XmlText.insert_embed(text, 4, embed, %{"bold" => true})
+
+      assert Enum.any?(XmlText.to_delta(text), fn
+               %{insert: %Yex.WeakLink{}, attributes: %{"bold" => true}} -> true
+               _ -> false
+             end)
+    end
+
     test "next_sibling", %{xml_text: text, xml_fragment: xml_fragment} do
       XmlFragment.push(xml_fragment, XmlTextPrelim.from("next_content"))
       XmlFragment.push(xml_fragment, XmlTextPrelim.from("next_next_content"))
