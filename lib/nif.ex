@@ -199,6 +199,9 @@ defmodule Yex.Nif do
   def sticky_index_get_offset(_sticky_index, _cur_txn),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def sticky_index_resolve_text_items(_xml_text, _cur_txn, _runs),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def sticky_index_encode(sticky_index),
     do: sticky_index_encode_v1(sticky_index)
 

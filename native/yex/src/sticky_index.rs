@@ -1,8 +1,105 @@
+use crate::xml::NifXmlText;
 use rustler::{Atom, Decoder, Encoder, Env, NifResult, NifStruct, NifUnitEnum, ResourceArc, Term};
 use serde::{Deserialize as _, Serialize as _};
 use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Assoc, IndexedSequence, StickyIndex};
+
+#[derive(rustler::NifMap)]
+struct TextItemRun {
+    client: u64,
+    clock: u32,
+    count: u32,
+}
+
+#[derive(NifUnitEnum)]
+enum TextItemStatus {
+    Live,
+    Collapsed,
+    Unavailable,
+    WrongType,
+}
+
+#[derive(rustler::NifMap)]
+struct TextItemPosition {
+    status: TextItemStatus,
+    index: Option<u32>,
+}
+
+/// Bounded public-Yrs resolution in one transaction. Never inspect internal items.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn sticky_index_resolve_text_items(
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    runs: Term,
+) -> NifResult<(Atom, Vec<Vec<TextItemPosition>>)> {
+    let mut validated = Vec::new();
+    let mut total = 0u32;
+    let mut remaining = runs;
+    while !remaining.is_empty_list() {
+        if validated.len() >= 4096 {
+            return Err(rustler::Error::Atom("selection_limit"));
+        }
+        let (term, tail) = remaining.list_get_cell()?;
+        remaining = tail;
+        let run: TextItemRun = term.decode()?;
+        if run.count == 0 || run.count > 131_072 {
+            return Err(rustler::Error::BadArg);
+        }
+        total = total.checked_add(run.count).ok_or(rustler::Error::BadArg)?;
+        if total > 131_072 {
+            return Err(rustler::Error::Atom("selection_limit"));
+        }
+        run.clock
+            .checked_add(run.count - 1)
+            .ok_or(rustler::Error::BadArg)?;
+        validated.push(run);
+    }
+    if xml.doc().offset_kind() != yrs::OffsetKind::Utf16 {
+        return Err(rustler::Error::Atom("utf16_required"));
+    }
+    xml.readonly(current_transaction, |txn| {
+        let text = xml.get_ref(txn)?;
+        let branch: &yrs::branch::Branch = text.as_ref();
+        let branch = branch.id();
+        let mut requested = Vec::with_capacity(total as usize * 2);
+        for run in &validated {
+            for clock in run.clock..=run.clock + (run.count - 1) {
+                let id = yrs::ID::new(run.client, clock);
+                requested.push(StickyIndex::from_id(id, Assoc::After));
+                requested.push(StickyIndex::from_id(id, Assoc::Before));
+            }
+        }
+        let mut offsets = StickyIndex::get_offsets_without_redone(txn, &requested, 262_144)
+            .map_err(|_| rustler::Error::Atom("traversal_limit"))?
+            .into_iter();
+        let mut result = Vec::with_capacity(validated.len());
+        for run in validated {
+            let mut positions = Vec::with_capacity(run.count as usize);
+            for _ in 0..run.count {
+                let after = offsets.next().flatten();
+                let before = offsets.next().flatten();
+                let (status, index) = match (after, before) {
+                    (Some(a), Some(b))
+                        if a.branch.as_ref().id() != branch || b.branch.as_ref().id() != branch =>
+                    {
+                        (TextItemStatus::WrongType, None)
+                    }
+                    (Some(a), Some(b)) if a.index == b.index => {
+                        (TextItemStatus::Collapsed, Some(a.index))
+                    }
+                    (Some(a), Some(b)) if a.index.checked_add(1) == Some(b.index) => {
+                        (TextItemStatus::Live, Some(a.index))
+                    }
+                    _ => (TextItemStatus::Unavailable, None),
+                };
+                positions.push(TextItemPosition { status, index });
+            }
+            result.push(positions);
+        }
+        Ok((atoms::ok(), result))
+    })
+}
 
 use crate::error::Error;
 use crate::{
