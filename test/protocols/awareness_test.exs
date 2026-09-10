@@ -79,4 +79,22 @@ defmodule Yex.AwarenessTest do
     assert_receive {:awareness_change, %{removed: [], added: [2_230_489_810], updated: []},
                     "origin", _awareness}
   end
+
+  test "malformed updates return encoding errors without replacing awareness state" do
+    {:ok, awareness} = Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{client_id: 10}))
+    Awareness.set_local_state(awareness, %{"cursor" => 7})
+
+    for update <- [<<>>, <<128>>, <<1>>] do
+      assert {:error, {:encoding_exception, _message}} =
+               Awareness.apply_update(awareness, update, "malformed")
+
+      assert Awareness.get_local_state(awareness) == %{"cursor" => 7}
+      assert Awareness.get_client_ids(awareness) == [10]
+    end
+
+    assert :ok =
+             Awareness.apply_update(awareness, <<1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>)
+
+    assert Enum.sort(Awareness.get_client_ids(awareness)) == [10, 2_230_489_810]
+  end
 end
