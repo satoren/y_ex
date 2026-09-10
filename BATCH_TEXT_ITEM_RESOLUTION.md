@@ -1,9 +1,10 @@
-# Exact text item resolution: local paired contribution
+# Exact text item resolution: paired contribution
 
 This additive prototype adds `Yex.StickyIndex.resolve_text_items/2`. It requires
 the companion Yrs changes adding scalar and cached batch `get_offsets_without_redone`;
-these methods are not in the published Yrs 0.25.0 package. No package release or upstream
-publication is claimed.
+these methods are not in the published Yrs 0.25.0 package. The native dependency
+temporarily pins the public `boldflight/y-crdt` fork at immutable commit
+`36e9df5b1f55657837161312c54a8296aaadb68a`. No package release is claimed.
 
 The API resolves bounded item-ID runs against a supplied XML text in one read
 transaction on a dirty CPU scheduler. It compares the actual containing branch,
@@ -26,12 +27,11 @@ The contribution worktrees start from Yex `v0.11.0` (`b9b06c9`) and Yrs
 `v0.25.0` (`ef0b9bd`). The Yrs implementation stays inside its own library;
 Yex uses only public Yrs methods and does not inspect private item structures.
 
-For local verification, put an uncommitted `[patch.crates-io]` entry for `yrs`
-in a private Cargo configuration, pointing at the companion checkout's `yrs`
-directory. Then use `RUSTLER_PRECOMPILATION_YEX_BUILD=true` for Mix commands.
-Do not commit that machine-local path or a lockfile resolved against it. Before
-upstream integration, release the compatible Yrs addition and update the normal
-Cargo dependency requirement and lockfile accordingly.
+For verification, use `RUSTLER_PRECOMPILATION_YEX_BUILD=true` for Mix commands.
+Cargo.toml and Cargo.lock resolve the companion source directly from the public
+Git commit, with no local path override. Restore a compatible released Yrs
+dependency before a normal package release; the temporary fork pin is an explicit
+integration dependency, not a claim that these APIs shipped in Yrs 0.25.0.
 
 An isolated official Rust 1.98.1 toolchain was used without modifying shell or
 system configuration. The official rustup installer SHA-256 was
