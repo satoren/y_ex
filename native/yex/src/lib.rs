@@ -5,6 +5,7 @@ mod awareness;
 mod doc;
 mod error;
 mod event;
+mod format_event;
 mod map;
 mod shared_type;
 mod sticky_index;
