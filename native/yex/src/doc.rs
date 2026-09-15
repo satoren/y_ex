@@ -656,6 +656,21 @@ fn get_pending_ds_v1<'a>(
 }
 
 #[rustler::nif]
+fn prune_pending_v1<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Term<'a>> {
+    doc.mutably(env, current_transaction, |txn| {
+        let result = txn.prune_pending().map(|update| {
+            let bytes = update.encode_v1();
+            SliceIntoBinary::new(bytes.as_slice()).encode(env)
+        });
+        Ok((atoms::ok(), result).encode(env))
+    })
+}
+
+#[rustler::nif]
 fn transaction_snapshot<'a>(
     env: Env<'a>,
     doc: NifDoc,
