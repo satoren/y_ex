@@ -717,4 +717,45 @@ defmodule Yex.DocTest do
       {:reply, :ok, state}
     end
   end
+
+  describe "root getters inside a transaction" do
+    test "return handles whose writes commit with the transaction" do
+      test_pid = self()
+
+      # Run in a task so a scheduler-parking regression trips the timeout.
+      task =
+        Task.async(fn ->
+          doc = Doc.new()
+          {:ok, _sub} = Doc.monitor_update(doc)
+
+          Doc.transaction(doc, fn ->
+            Text.insert(Doc.get_text(doc, "text"), 0, "hello")
+            Yex.Array.push(Doc.get_array(doc, "array"), 1)
+            Yex.Map.set(Doc.get_map(doc, "map"), "k", "v")
+            Yex.XmlFragment.push(Doc.get_xml_fragment(doc, "xml"), Yex.XmlTextPrelim.from("x"))
+          end)
+
+          updates =
+            Stream.repeatedly(fn ->
+              receive do
+                {:update_v1, _, _, _} = msg -> msg
+              after
+                50 -> nil
+              end
+            end)
+            |> Enum.take_while(& &1)
+
+          send(test_pid, {:update_count, length(updates)})
+          %{doc | worker_pid: test_pid}
+        end)
+
+      assert {:ok, doc} = Task.yield(task, 5_000) || Task.shutdown(task)
+      assert_received {:update_count, 1}
+
+      assert Text.to_string(Doc.get_text(doc, "text")) == "hello"
+      assert Yex.Array.to_list(Doc.get_array(doc, "array")) == [1.0]
+      assert Yex.Map.to_map(Doc.get_map(doc, "map")) == %{"k" => "v"}
+      assert Yex.XmlFragment.to_string(Doc.get_xml_fragment(doc, "xml")) == "x"
+    end
+  end
 end
