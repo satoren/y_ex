@@ -718,7 +718,7 @@ defmodule Yex.DocTest do
     end
   end
 
-  describe "root getters inside a transaction" do
+  describe "root getters and open transactions" do
     test "return handles whose writes commit with the transaction" do
       test_pid = self()
 
@@ -756,6 +756,72 @@ defmodule Yex.DocTest do
       assert Yex.Array.to_list(Doc.get_array(doc, "array")) == [1.0]
       assert Yex.Map.to_map(Doc.get_map(doc, "map")) == %{"k" => "v"}
       assert Yex.XmlFragment.to_string(Doc.get_xml_fragment(doc, "xml")) == "x"
+    end
+
+    test "return the same root on repeated calls inside a transaction" do
+      task =
+        Task.async(fn ->
+          doc = Doc.new()
+
+          Doc.transaction(doc, fn ->
+            Text.insert(Doc.get_text(doc, "text"), 0, "hello")
+            Yex.Array.push(Doc.get_array(doc, "array"), 1)
+            Yex.Map.set(Doc.get_map(doc, "map"), "k", "v")
+            Yex.XmlFragment.push(Doc.get_xml_fragment(doc, "xml"), Yex.XmlTextPrelim.from("x"))
+
+            {Text.to_string(Doc.get_text(doc, "text")),
+             Yex.Array.to_list(Doc.get_array(doc, "array")),
+             Yex.Map.to_map(Doc.get_map(doc, "map")),
+             Yex.XmlFragment.to_string(Doc.get_xml_fragment(doc, "xml"))}
+          end)
+        end)
+
+      assert {:ok, {"hello", [1.0], %{"k" => "v"}, "x"}} =
+               Task.yield(task, 5_000) || Task.shutdown(task)
+    end
+
+    test "report a transaction held by another process" do
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          doc = Doc.new()
+
+          Doc.transaction(doc, fn ->
+            send(test_pid, {:holding, doc})
+
+            receive do
+              :release -> :ok
+            end
+          end)
+
+          send(test_pid, :released)
+        end)
+
+      result =
+        try do
+          assert_receive {:holding, doc}, 5_000
+
+          task =
+            Task.async(fn ->
+              doc = %{doc | worker_pid: self()}
+
+              {Doc.get_text(doc, "text"), Doc.get_array(doc, "array"), Doc.get_map(doc, "map"),
+               Doc.get_xml_fragment(doc, "xml")}
+            end)
+
+          {doc, Task.yield(task, 5_000) || Task.shutdown(task)}
+        after
+          send(holder, :release)
+        end
+
+      assert {doc,
+              {:ok,
+               {:transaction_acq_error, :transaction_acq_error, :transaction_acq_error,
+                :transaction_acq_error}}} = result
+
+      assert_receive :released, 5_000
+      assert %Yex.Map{} = Doc.get_map(%{doc | worker_pid: self()}, "map")
     end
   end
 end

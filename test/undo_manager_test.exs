@@ -1143,7 +1143,7 @@ defmodule Yex.UndoManagerTest do
     end
 
     test "redo inside a transaction returns an error instead of blocking" do
-      assert {{:error, :transaction_acq_error}, {:error, :transaction_acq_error}, ""} =
+      assert {{:error, :transaction_acq_error}, {:error, :transaction_acq_error}, "", "hello"} =
                in_task(fn ->
                  {doc, text, undo_manager} = tracked_doc()
                  {:ok, true} = UndoManager.undo_with_result(undo_manager)
@@ -1153,7 +1153,9 @@ defmodule Yex.UndoManagerTest do
                      {UndoManager.redo(undo_manager), UndoManager.redo_with_result(undo_manager)}
                    end)
 
-                 {plain, with_result, Text.to_string(text)}
+                 inside = Text.to_string(text)
+                 {:ok, true} = UndoManager.redo_with_result(undo_manager)
+                 {plain, with_result, inside, Text.to_string(text)}
                end)
     end
 
@@ -1180,6 +1182,27 @@ defmodule Yex.UndoManagerTest do
                end)
     end
 
+    test "results and stack queries work through a worker process" do
+      {:ok, worker_pid} = GenServer.start_link(__MODULE__.TestWorker, %{})
+      doc = Doc.new(worker_pid)
+      text = Doc.get_text(doc, "text")
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+
+      refute UndoManager.can_undo?(undo_manager)
+      refute UndoManager.can_redo?(undo_manager)
+      assert {:ok, false} = UndoManager.undo_with_result(undo_manager)
+      assert {:ok, false} = UndoManager.redo_with_result(undo_manager)
+
+      Text.insert(text, 0, "hello")
+      assert UndoManager.can_undo?(undo_manager)
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
+      assert UndoManager.can_redo?(undo_manager)
+      assert {:ok, true} = UndoManager.redo_with_result(undo_manager)
+      assert Text.to_string(text) == "hello"
+      refute UndoManager.can_redo?(undo_manager)
+    end
+
     test "clear inside a transaction returns an error instead of blocking" do
       assert {{:error, :transaction_acq_error}, true, false} =
                in_task(fn ->
@@ -1191,6 +1214,16 @@ defmodule Yex.UndoManagerTest do
                  {inside, still_tracked, UndoManager.can_undo?(undo_manager)}
                end)
     end
+  end
+
+  defmodule TestWorker do
+    use GenServer
+
+    @impl true
+    def init(state), do: {:ok, state}
+
+    @impl true
+    def handle_call({Yex.Doc, :run, fun}, _from, state), do: {:reply, fun.(), state}
   end
 
   test "new_with_options handles NIF errors" do
