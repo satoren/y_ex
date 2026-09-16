@@ -523,16 +523,12 @@ defmodule Yex.DocTest do
           send(test_pid, :released)
         end)
 
-      result =
-        try do
-          assert_receive {:holding, doc}, 5_000
-          task = Task.async(fn -> Doc.prune_pending(%{doc | worker_pid: self()}) end)
-          {doc, Task.yield(task, 5_000) || Task.shutdown(task)}
-        after
-          send(holder, :release)
-        end
-
-      assert {doc, {:ok, :transaction_acq_error}} = result
+      assert_receive {:holding, doc}, 5_000
+      # Task with timeout plus early release makes a blocking regression fail, not hang.
+      task = Task.async(fn -> Doc.prune_pending(%{doc | worker_pid: self()}) end)
+      yielded = Task.yield(task, 5_000)
+      send(holder, :release)
+      assert {:ok, {:error, :transaction_acq_error}} = yielded || Task.shutdown(task)
       assert_receive :released, 5_000
 
       doc = %{doc | worker_pid: self()}

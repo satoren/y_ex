@@ -232,7 +232,8 @@ defmodule Yex.Doc do
   missing updates have been fetched.
 
   Works both inside and outside `transaction/3`. Returns `{:ok, nil}` when
-  nothing is pending.
+  nothing is pending. Returns `{:error, :transaction_acq_error}` when a
+  transaction held by another process prevents opening one.
   """
   @spec prune_pending(t) :: {:ok, binary() | nil} | {:error, term()}
   def prune_pending(%__MODULE__{} = doc) do
