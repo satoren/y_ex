@@ -491,6 +491,54 @@ defmodule Yex.DocTest do
       assert {:ok, nil} = Doc.prune_pending(b)
       refute_receive {:update_v1, _, _, _}, 50
     end
+
+    test "works through a worker process" do
+      {:ok, worker_pid} = GenServer.start_link(__MODULE__.TestWorker, %{})
+      {_a, _update_one, gapped} = gapped_update()
+      b = Doc.new(worker_pid)
+      :ok = Yex.apply_update(b, gapped)
+
+      assert {:ok, pruned} = Doc.prune_pending(b)
+      assert is_binary(pruned)
+      assert {:ok, nil} = Doc.get_pending_update(b)
+    end
+
+    test "reports a transaction held by another process" do
+      test_pid = self()
+      {_a, _update_one, gapped} = gapped_update()
+
+      holder =
+        spawn_link(fn ->
+          doc = Doc.new()
+          :ok = Yex.apply_update(doc, gapped)
+
+          Doc.transaction(doc, fn ->
+            send(test_pid, {:holding, doc})
+
+            receive do
+              :release -> :ok
+            end
+          end)
+
+          send(test_pid, :released)
+        end)
+
+      result =
+        try do
+          assert_receive {:holding, doc}, 5_000
+          task = Task.async(fn -> Doc.prune_pending(%{doc | worker_pid: self()}) end)
+          {doc, Task.yield(task, 5_000) || Task.shutdown(task)}
+        after
+          send(holder, :release)
+        end
+
+      assert {doc, {:ok, :transaction_acq_error}} = result
+      assert_receive :released, 5_000
+
+      doc = %{doc | worker_pid: self()}
+      assert {:ok, pending} = Doc.get_pending_update(doc)
+      assert is_binary(pending)
+    end
   end
 
   # Additional comprehensive tests for better coverage
