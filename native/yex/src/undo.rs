@@ -169,6 +169,11 @@ pub fn undo_manager_exclude_origin(
     })
 }
 
+fn ensure_store_available(undo_manager: &NifUndoManager) -> Result<(), Error> {
+    drop(yrs::Transact::try_transact(&undo_manager.doc.reference.doc).map_err(Error::from)?);
+    Ok(())
+}
+
 #[rustler::nif]
 pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> NifResult<(Atom, bool)> {
     ENV.set(&mut env.clone(), || {
@@ -177,6 +182,8 @@ pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> NifResult<(A
             .0
             .write()
             .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+
+        ensure_store_available(&undo_manager)?;
 
         if !wrapper.manager.can_undo() {
             return Ok((atoms::ok(), false));
@@ -206,6 +213,8 @@ pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> NifResult<(A
             .0
             .write()
             .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+
+        ensure_store_available(&undo_manager)?;
 
         if !wrapper.manager.can_redo() {
             return Ok((atoms::ok(), false));
@@ -322,7 +331,7 @@ pub fn undo_manager_clear(env: Env, undo_manager: NifUndoManager) -> NifResult<A
 
         // UndoManager::clear takes a blocking read transaction, so probe with try_transact
         // first to fail instead of waiting when a transaction is open.
-        drop(yrs::Transact::try_transact(&undo_manager.doc.reference.doc).map_err(Error::from)?);
+        ensure_store_available(&undo_manager)?;
         wrapper.manager.clear();
 
         Ok(atoms::ok())

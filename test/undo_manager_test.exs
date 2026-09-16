@@ -1157,6 +1157,29 @@ defmodule Yex.UndoManagerTest do
                end)
     end
 
+    test "undo and redo on empty stacks inside a transaction still report the open transaction" do
+      assert {{:error, :transaction_acq_error}, {:error, :transaction_acq_error},
+              {:error, :transaction_acq_error}, {:error, :transaction_acq_error}, {:ok, false},
+              {:ok, false}} =
+               in_task(fn ->
+                 doc = Doc.new()
+                 text = Doc.get_text(doc, "text")
+                 {:ok, undo_manager} = UndoManager.new(doc, text)
+                 false = UndoManager.can_undo?(undo_manager)
+                 false = UndoManager.can_redo?(undo_manager)
+
+                 {undo, undo_result, redo, redo_result} =
+                   Doc.transaction(doc, fn ->
+                     {UndoManager.undo(undo_manager), UndoManager.undo_with_result(undo_manager),
+                      UndoManager.redo(undo_manager), UndoManager.redo_with_result(undo_manager)}
+                   end)
+
+                 {undo, undo_result, redo, redo_result,
+                  UndoManager.undo_with_result(undo_manager),
+                  UndoManager.redo_with_result(undo_manager)}
+               end)
+    end
+
     test "clear inside a transaction returns an error instead of blocking" do
       assert {{:error, :transaction_acq_error}, true, false} =
                in_task(fn ->

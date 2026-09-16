@@ -107,7 +107,8 @@ defmodule Yex.UndoManager do
   Undoes the last tracked change and reports whether the document changed.
 
   Returns `{:ok, false}` when the undo stack is empty. Returns
-  `{:error, :transaction_acq_error}` under the same condition as `undo/1`.
+  `{:error, :transaction_acq_error}` under the same condition as `undo/1`,
+  whether or not the stack is empty.
   """
   @spec undo_with_result(t) :: {:ok, boolean()} | {:error, term()}
   def undo_with_result(%{doc: doc} = undo_manager) do
@@ -130,7 +131,8 @@ defmodule Yex.UndoManager do
   Redoes the last undone change and reports whether the document changed.
 
   Returns `{:ok, false}` when the redo stack is empty. Returns
-  `{:error, :transaction_acq_error}` when a transaction on the document is open.
+  `{:error, :transaction_acq_error}` when a transaction on the document is open,
+  whether or not the stack is empty.
   """
   @spec redo_with_result(t) :: {:ok, boolean()} | {:error, term()}
   def redo_with_result(%{doc: doc} = undo_manager) do
