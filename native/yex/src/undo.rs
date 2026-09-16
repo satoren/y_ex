@@ -329,9 +329,10 @@ pub fn undo_manager_clear(env: Env, undo_manager: NifUndoManager) -> NifResult<A
             .write()
             .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
 
-        // UndoManager::clear takes a blocking read transaction, so probe with try_transact
-        // first to fail instead of waiting when a transaction is open.
-        ensure_store_available(&undo_manager)?;
+        // UndoManager::clear takes a blocking read transaction, so hold a try_transact
+        // read across it to fail instead of waiting when a transaction is open.
+        let _store =
+            yrs::Transact::try_transact(&undo_manager.doc.reference.doc).map_err(Error::from)?;
         wrapper.manager.clear();
 
         Ok(atoms::ok())

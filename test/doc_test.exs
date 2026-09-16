@@ -798,27 +798,23 @@ defmodule Yex.DocTest do
           send(test_pid, :released)
         end)
 
-      result =
-        try do
-          assert_receive {:holding, doc}, 5_000
+      assert_receive {:holding, doc}, 5_000
 
-          task =
-            Task.async(fn ->
-              doc = %{doc | worker_pid: self()}
+      # Task with timeout plus early release makes a blocking regression fail, not hang.
+      task =
+        Task.async(fn ->
+          doc = %{doc | worker_pid: self()}
 
-              {Doc.get_text(doc, "text"), Doc.get_array(doc, "array"), Doc.get_map(doc, "map"),
-               Doc.get_xml_fragment(doc, "xml")}
-            end)
+          {Doc.get_text(doc, "text"), Doc.get_array(doc, "array"), Doc.get_map(doc, "map"),
+           Doc.get_xml_fragment(doc, "xml")}
+        end)
 
-          {doc, Task.yield(task, 5_000) || Task.shutdown(task)}
-        after
-          send(holder, :release)
-        end
+      yielded = Task.yield(task, 5_000)
+      send(holder, :release)
 
-      assert {doc,
-              {:ok,
-               {:transaction_acq_error, :transaction_acq_error, :transaction_acq_error,
-                :transaction_acq_error}}} = result
+      assert {:ok,
+              {:transaction_acq_error, :transaction_acq_error, :transaction_acq_error,
+               :transaction_acq_error}} = yielded || Task.shutdown(task)
 
       assert_receive :released, 5_000
       assert %Yex.Map{} = Doc.get_map(%{doc | worker_pid: self()}, "map")

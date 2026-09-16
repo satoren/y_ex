@@ -1214,6 +1214,40 @@ defmodule Yex.UndoManagerTest do
                  {inside, still_tracked, UndoManager.can_undo?(undo_manager)}
                end)
     end
+
+    test "clear while another process holds a transaction returns an error instead of blocking" do
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          {doc, _text, undo_manager} = tracked_doc()
+
+          Doc.transaction(doc, fn ->
+            send(test_pid, {:holding, doc, undo_manager})
+
+            receive do
+              :release -> :ok
+            end
+          end)
+
+          send(test_pid, :released)
+        end)
+
+      assert_receive {:holding, doc, undo_manager}, 5_000
+      as_own_worker = fn pid -> %{undo_manager | doc: %{doc | worker_pid: pid}} end
+
+      # Task with timeout plus early release makes a blocking regression fail, not hang.
+      task = Task.async(fn -> UndoManager.clear(as_own_worker.(self())) end)
+      yielded = Task.yield(task, 5_000)
+      send(holder, :release)
+      assert {:ok, {:error, :transaction_acq_error}} = yielded || Task.shutdown(task)
+      assert_receive :released, 5_000
+
+      undo_manager = as_own_worker.(self())
+      assert UndoManager.can_undo?(undo_manager)
+      assert :ok = UndoManager.clear(undo_manager)
+      refute UndoManager.can_undo?(undo_manager)
+    end
   end
 
   defmodule TestWorker do
