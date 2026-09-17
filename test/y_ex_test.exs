@@ -151,4 +151,27 @@ defmodule YexTest do
       {:ok, _binary} = Yex.encode_state_vector_v2(doc)
     end
   end
+
+  describe "get_pending_update / get_pending_ds" do
+    test "report the same pending state as Yex.Doc" do
+      doc1 = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc1, "text")
+      Yex.Text.insert(text, 0, "Hello")
+      {:ok, sv} = Yex.encode_state_vector(doc1)
+      Yex.Text.insert(text, 5, " World")
+      Yex.Text.delete(text, 0, 5)
+      {:ok, gapped} = Yex.encode_state_as_update(doc1, sv)
+
+      doc2 = Yex.Doc.new()
+      :ok = Yex.apply_update(doc2, gapped)
+
+      assert {:ok, update} = Yex.get_pending_update(doc2)
+      assert is_binary(update)
+      assert {:ok, update} == Yex.Doc.get_pending_update(doc2)
+
+      assert {:ok, ds} = Yex.get_pending_ds(doc2)
+      assert is_binary(ds)
+      assert {:ok, ds} == Yex.Doc.get_pending_ds(doc2)
+    end
+  end
 end
