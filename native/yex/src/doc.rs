@@ -339,6 +339,15 @@ fn doc_with_options(option: NifOptions) -> NifDoc {
     NifDoc::with_options(option)
 }
 
+fn raise_on_transaction_acq_error<T>(result: NifResult<T>) -> NifResult<T> {
+    match result {
+        Err(rustler::Error::Atom("transaction_acq_error")) => {
+            Err(rustler::Error::RaiseAtom("transaction_acq_error"))
+        }
+        other => other,
+    }
+}
+
 #[rustler::nif]
 fn doc_get_or_insert_text(
     env: Env<'_>,
@@ -346,9 +355,9 @@ fn doc_get_or_insert_text(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     name: &str,
 ) -> NifResult<NifText> {
-    doc.mutably(env, current_transaction, |txn| {
+    raise_on_transaction_acq_error(doc.mutably(env, current_transaction, |txn| {
         Ok(NifText::new(doc.clone(), txn.get_or_insert_text(name)))
-    })
+    }))
 }
 
 #[rustler::nif]
@@ -358,9 +367,9 @@ fn doc_get_or_insert_array(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     name: &str,
 ) -> NifResult<NifArray> {
-    doc.mutably(env, current_transaction, |txn| {
+    raise_on_transaction_acq_error(doc.mutably(env, current_transaction, |txn| {
         Ok(NifArray::new(doc.clone(), txn.get_or_insert_array(name)))
-    })
+    }))
 }
 
 #[rustler::nif]
@@ -370,9 +379,9 @@ fn doc_get_or_insert_map(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     name: &str,
 ) -> NifResult<NifMap> {
-    doc.mutably(env, current_transaction, |txn| {
+    raise_on_transaction_acq_error(doc.mutably(env, current_transaction, |txn| {
         Ok(NifMap::new(doc.clone(), txn.get_or_insert_map(name)))
-    })
+    }))
 }
 
 #[rustler::nif]
@@ -382,12 +391,12 @@ fn doc_get_or_insert_xml_fragment(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     name: &str,
 ) -> NifResult<NifXmlFragment> {
-    doc.mutably(env, current_transaction, |txn| {
+    raise_on_transaction_acq_error(doc.mutably(env, current_transaction, |txn| {
         Ok(NifXmlFragment::new(
             doc.clone(),
             txn.get_or_insert_xml_fragment(name),
         ))
-    })
+    }))
 }
 
 #[rustler::nif]

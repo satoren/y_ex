@@ -780,7 +780,7 @@ defmodule Yex.DocTest do
                Task.yield(task, 5_000) || Task.shutdown(task)
     end
 
-    test "report a transaction held by another process" do
+    test "raise when another process holds a transaction" do
       test_pid = self()
 
       holder =
@@ -805,16 +805,25 @@ defmodule Yex.DocTest do
         Task.async(fn ->
           doc = %{doc | worker_pid: self()}
 
-          {Doc.get_text(doc, "text"), Doc.get_array(doc, "array"), Doc.get_map(doc, "map"),
-           Doc.get_xml_fragment(doc, "xml")}
+          for getter <- [
+                &Doc.get_text/2,
+                &Doc.get_array/2,
+                &Doc.get_map/2,
+                &Doc.get_xml_fragment/2
+              ] do
+            try do
+              getter.(doc, "root")
+            rescue
+              error in ErlangError -> {:raised, error.original}
+            end
+          end
         end)
 
       yielded = Task.yield(task, 5_000)
       send(holder, :release)
 
-      assert {:ok,
-              {:transaction_acq_error, :transaction_acq_error, :transaction_acq_error,
-               :transaction_acq_error}} = yielded || Task.shutdown(task)
+      assert {:ok, List.duplicate({:raised, :transaction_acq_error}, 4)} ==
+               (yielded || Task.shutdown(task))
 
       assert_receive :released, 5_000
       assert %Yex.Map{} = Doc.get_map(%{doc | worker_pid: self()}, "map")
