@@ -21,10 +21,13 @@ defmodule Yex.Nif do
 
   def doc_new(), do: :erlang.nif_error(:nif_not_loaded)
   def doc_with_options(_option), do: :erlang.nif_error(:nif_not_loaded)
-  def doc_get_or_insert_text(_doc, _name), do: :erlang.nif_error(:nif_not_loaded)
-  def doc_get_or_insert_array(_doc, _name), do: :erlang.nif_error(:nif_not_loaded)
-  def doc_get_or_insert_map(_doc, _name), do: :erlang.nif_error(:nif_not_loaded)
-  def doc_get_or_insert_xml_fragment(_doc, _name), do: :erlang.nif_error(:nif_not_loaded)
+  def doc_get_or_insert_text(_doc, _cur_txn, _name), do: :erlang.nif_error(:nif_not_loaded)
+  def doc_get_or_insert_array(_doc, _cur_txn, _name), do: :erlang.nif_error(:nif_not_loaded)
+  def doc_get_or_insert_map(_doc, _cur_txn, _name), do: :erlang.nif_error(:nif_not_loaded)
+
+  def doc_get_or_insert_xml_fragment(_doc, _cur_txn, _name),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def doc_monitor_update_v1(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
   def doc_monitor_update_v2(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
 
