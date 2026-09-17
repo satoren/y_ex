@@ -19,6 +19,11 @@ defmodule Yex.Nif do
         version: version
       ] ++ force_build
 
+  # Inputs above this take the DirtyCpu twins. Dirty CPU schedulers are a fixed pool
+  # (one per normal scheduler by default) and a call holds a slot for its whole
+  # duration, so keeping small updates off it stops them queueing behind large
+  # applies. 16_384 is the largest power of two below the smallest map update whose
+  # normal-scheduler median passes 1 ms (26.8 KB). See benchmark/dirty_cutoff.exs.
   def dirty_cutoff(), do: 16_384
 
   def doc_new(), do: :erlang.nif_error(:nif_not_loaded)
