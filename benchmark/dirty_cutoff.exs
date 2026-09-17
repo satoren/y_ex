@@ -111,7 +111,6 @@ measure = fn apply_fn ->
   receive do: ({:worst_gap_ms, gap} -> {div(us, 1000), gap})
 end
 
-# pin the caller so the neighbour shares its scheduler for the whole run
 run_pinned = fn apply_fn ->
   parent = self()
   :erlang.spawn_opt(fn -> send(parent, {:result, measure.(apply_fn)}) end, [{:scheduler, 1}])
