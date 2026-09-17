@@ -151,7 +151,7 @@ defmodule Yex.Doc do
   """
   @spec get_text(t, String.t()) :: Yex.Text.t()
   def get_text(%__MODULE__{} = doc, name) do
-    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_text(doc, name))
+    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_text(doc, cur_txn(doc), name))
   end
 
   @doc """
@@ -159,7 +159,7 @@ defmodule Yex.Doc do
   """
   @spec get_array(t, String.t()) :: Yex.Array.t()
   def get_array(%__MODULE__{} = doc, name) do
-    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_array(doc, name))
+    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_array(doc, cur_txn(doc), name))
   end
 
   @doc """
@@ -167,14 +167,16 @@ defmodule Yex.Doc do
   """
   @spec get_map(t, String.t()) :: Yex.Map.t()
   def get_map(%__MODULE__{} = doc, name) do
-    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_map(doc, name))
+    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_map(doc, cur_txn(doc), name))
   end
 
   @doc """
   Get or insert the xml fragment type.
   """
   def get_xml_fragment(%__MODULE__{} = doc, name) do
-    run_in_worker_process(doc, do: Yex.Nif.doc_get_or_insert_xml_fragment(doc, name))
+    run_in_worker_process(doc,
+      do: Yex.Nif.doc_get_or_insert_xml_fragment(doc, cur_txn(doc), name)
+    )
   end
 
   @doc """

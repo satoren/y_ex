@@ -1,6 +1,6 @@
 defmodule Yex.DocTest do
   use ExUnit.Case, async: true
-  alias Yex.{Doc, Text}
+  alias Yex.{Array, Doc, Map, Text, XmlElementPrelim, XmlFragment}
   doctest Doc
 
   test "new" do
@@ -27,6 +27,61 @@ defmodule Yex.DocTest do
         Text.insert(text, 0, "Hello")
         Text.insert(text, 0, "Hello", %{"bold" => true})
       end)
+  end
+
+  test "get_text in transaction" do
+    doc = Doc.new()
+
+    text =
+      in_single_transaction(doc, fn ->
+        text = Doc.get_text(doc, "text")
+        Text.insert(text, 0, "Hello")
+        Text.insert(text, 5, " World")
+        text
+      end)
+
+    assert Text.to_string(text) == "Hello World"
+  end
+
+  test "get_array in transaction" do
+    doc = Doc.new()
+
+    array =
+      in_single_transaction(doc, fn ->
+        array = Doc.get_array(doc, "array")
+        Array.push(array, "a")
+        Array.push(array, "b")
+        array
+      end)
+
+    assert Array.to_json(array) == ["a", "b"]
+  end
+
+  test "get_map in transaction" do
+    doc = Doc.new()
+
+    map =
+      in_single_transaction(doc, fn ->
+        map = Doc.get_map(doc, "map")
+        Map.set(map, "name", "Alice")
+        Map.set(map, "role", "admin")
+        map
+      end)
+
+    assert Map.to_json(map) == %{"name" => "Alice", "role" => "admin"}
+  end
+
+  test "get_xml_fragment in transaction" do
+    doc = Doc.new()
+
+    xml =
+      in_single_transaction(doc, fn ->
+        xml = Doc.get_xml_fragment(doc, "xml")
+        XmlFragment.push(xml, XmlElementPrelim.empty("div"))
+        xml
+      end)
+
+    assert XmlFragment.to_string(xml) == "<div></div>"
   end
 
   test "transaction error" do
@@ -622,6 +677,25 @@ defmodule Yex.DocTest do
       result2 = Doc.demonitor_update_v2(ref2)
       assert result2 == :ok or match?({:error, _}, result2)
     end
+  end
+
+  # Getters and mutations must reuse the transaction opened by `Doc.transaction/3`.
+  # Routing through `try_transact_mut` would either fail while that write lock is
+  # held, or commit independently and emit an update before the callback returns.
+  defp in_single_transaction(doc, fun) do
+    {:ok, monitor_ref} = Doc.monitor_update(doc)
+
+    result =
+      Doc.transaction(doc, fn ->
+        value = fun.()
+        refute_received {:update_v1, _update, _origin, _metadata}
+        value
+      end)
+
+    assert_receive {:update_v1, _update, nil, ^doc}
+    refute_receive {:update_v1, _update, _origin, _metadata}, 10
+    Doc.demonitor_update(monitor_ref)
+    result
   end
 
   # Test worker module for worker process tests
