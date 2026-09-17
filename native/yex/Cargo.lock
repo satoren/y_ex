@@ -133,9 +133,9 @@ dependencies = [
 
 [[package]]
 name = "flexbuffers"
-version = "25.9.23"
+version = "25.12.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e6701cb4a12d88a63f83ac41a11aa61286b5a678445a1a5ab9bc8e38654910a"
+checksum = "8bc752b3d049e0705749b9999d0b130d6cf62935bc7762fd3bdb7636047abe43"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
