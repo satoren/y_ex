@@ -153,7 +153,12 @@ defmodule Yex.DocServer.Worker do
         %{doc: doc} = state
       ) do
     Yex.Doc.transaction(doc, origin, fn ->
-      case Yex.Nif.apply_sync_update_payload_v1(doc, cur_txn(doc), update_payload) do
+      result =
+        if byte_size(update_payload) > Yex.Nif.dirty_cutoff(),
+          do: Yex.Nif.apply_sync_update_payload_v1_dirty(doc, cur_txn(doc), update_payload),
+          else: Yex.Nif.apply_sync_update_payload_v1(doc, cur_txn(doc), update_payload)
+
+      case result do
         :ok ->
           :ok
 

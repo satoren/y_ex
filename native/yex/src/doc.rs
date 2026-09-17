@@ -485,8 +485,7 @@ fn doc_monitor_update_v2(
     .map_err(|e| Error::from(e).into())
 }
 
-#[rustler::nif]
-fn apply_update_v1(
+fn apply_update_v1_impl(
     env: Env<'_>,
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
@@ -502,7 +501,26 @@ fn apply_update_v1(
 }
 
 #[rustler::nif]
-fn apply_update_v2(
+fn apply_update_v1(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    update: Binary,
+) -> NifResult<Atom> {
+    apply_update_v1_impl(env, doc, current_transaction, update)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn apply_update_v1_dirty(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    update: Binary,
+) -> NifResult<Atom> {
+    apply_update_v1_impl(env, doc, current_transaction, update)
+}
+
+fn apply_update_v2_impl(
     env: Env<'_>,
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
@@ -520,17 +538,55 @@ fn apply_update_v2(
 }
 
 #[rustler::nif]
-fn merge_updates_v1<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
+fn apply_update_v2(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    update: Binary,
+) -> NifResult<Atom> {
+    apply_update_v2_impl(env, doc, current_transaction, update)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn apply_update_v2_dirty(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    update: Binary,
+) -> NifResult<Atom> {
+    apply_update_v2_impl(env, doc, current_transaction, update)
+}
+
+fn merge_updates_v1_impl<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
     let merged =
         yrs::merge_updates_v1(updates.iter().map(Binary::as_slice)).map_err(Error::from)?;
     Ok((atoms::ok(), SliceIntoBinary::new(merged.as_slice())).encode(env))
 }
 
 #[rustler::nif]
-fn merge_updates_v2<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
+fn merge_updates_v1<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
+    merge_updates_v1_impl(env, updates)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn merge_updates_v1_dirty<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
+    merge_updates_v1_impl(env, updates)
+}
+
+fn merge_updates_v2_impl<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
     let merged =
         yrs::merge_updates_v2(updates.iter().map(Binary::as_slice)).map_err(Error::from)?;
     Ok((atoms::ok(), SliceIntoBinary::new(merged.as_slice())).encode(env))
+}
+
+#[rustler::nif]
+fn merge_updates_v2<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
+    merge_updates_v2_impl(env, updates)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn merge_updates_v2_dirty<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
+    merge_updates_v2_impl(env, updates)
 }
 
 #[rustler::nif]

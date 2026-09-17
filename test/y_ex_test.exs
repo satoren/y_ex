@@ -32,6 +32,25 @@ defmodule YexTest do
       :ok = Yex.apply_update_v2(doc1, state2)
       :ok = Yex.apply_update_v2(doc2, state1)
     end
+
+    test "apply_update above dirty_cutoff" do
+      doc1 = Yex.Doc.new()
+      map1 = Yex.Doc.get_map(doc1, "m")
+
+      Yex.Doc.transaction(doc1, fn ->
+        for i <- 1..20_000, do: Yex.Map.set(map1, "k#{i}", i)
+      end)
+
+      {:ok, update} = Yex.encode_state_as_update(doc1)
+      assert byte_size(update) > Yex.Nif.dirty_cutoff()
+
+      doc2 = Yex.Doc.new()
+      {:ok, _} = Yex.Doc.monitor_update(doc2)
+      :ok = Yex.apply_update(doc2, update)
+
+      assert map_size(Yex.Map.to_map(Yex.Doc.get_map(doc2, "m"))) == 20_000
+      assert_receive {:update_v1, _, nil, ^doc2}
+    end
   end
 
   describe "merge_updates" do
