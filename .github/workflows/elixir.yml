@@ -53,9 +53,9 @@ jobs:
       - name: Install dependencies
         run: mix deps.get
       - name: Run tests
-        run: ${{ matrix.pair.latest && 'mix coveralls.github' || 'mix test' }}
+        run: ${{ matrix.pair.latest && matrix.os == 'ubuntu-latest' && 'mix coveralls.github' || 'mix test' }}
         env:
-          GITHUB_TOKEN: ${{ matrix.pair.latest && secrets.GITHUB_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ matrix.pair.latest && matrix.os == 'ubuntu-latest' && secrets.GITHUB_TOKEN || '' }}
   lint:
     name: lint
     runs-on: ubuntu-latest
