@@ -53,10 +53,9 @@ jobs:
       - name: Install dependencies
         run: mix deps.get
       - name: Run tests
-        run: mix coveralls.github
+        run: mix coveralls.github --parallel --flagname "${{ matrix.os }}-otp-${{ matrix.pair.otp }}-elixir-${{ matrix.pair.elixir }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COVERALLS_PARALLEL: true
 
   test_finish:
     if: ${{ always() }}
