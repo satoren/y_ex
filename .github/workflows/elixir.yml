@@ -65,7 +65,7 @@ jobs:
       - name: Coveralls Finished
         uses: coverallsapp/github-action@v2
         with:
-          parallel-finished: true # Coverallsに全ビルド完了を通知
+          parallel-finished: true
           github-token: ${{ secrets.GITHUB_TOKEN }}
   lint:
     name: lint
