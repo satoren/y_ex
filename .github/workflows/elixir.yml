@@ -59,6 +59,7 @@ jobs:
           COVERALLS_PARALLEL: true
 
   test_finish:
+    if: ${{ always() }}
     needs: build
     runs-on: ubuntu-latest
     steps:
