@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "yjs": "13.6.32",
+  "coordinateUnits": "utf16",
+  "cases": [
+    {
+      "name": "baseline-utf16-multiple-leaves",
+      "update": "AQVlAAcBB2RlZmF1bHQDCXBhcmFncmFwaAcAZQAGh2UBBgQAZQEKcHJlZml48J+YgAQAZQILQfCfmIBIVU1BTloA",
+      "selection": {
+        "version": 1,
+        "runs": [
+          {
+            "item": {
+              "client": 101,
+              "clock": 12
+            },
+            "type": {
+              "client": 101,
+              "clock": 2
+            },
+            "count": 7
+          }
+        ]
+      },
+      "expected": {
+        "segments": [
+          {
+            "path": [
+              0,
+              1
+            ],
+            "index": 1,
+            "length": 7,
+            "text": "😀HUMAN"
+          }
+        ],
+        "collapsedUnits": 0,
+        "unavailableRuns": []
+      }
+    },
+    {
+      "name": "interior-insertion-excluded",
+      "update": "AgHKAQDEZQ5lDwZSRU1PVEUGZQAHAQdkZWZhdWx0AwlwYXJhZ3JhcGgHAGUABodlAQYEAGUBCnByZWZpePCfmIAEAGUCBkHwn5iASIRlDgVVTUFOWgA=",
+      "selection": {
+        "version": 1,
+        "runs": [
+          {
+            "item": {
+              "client": 101,
+              "clock": 12
+            },
+            "type": {
+              "client": 101,
+              "clock": 2
+            },
+            "count": 7
+          }
+        ]
+      },
+      "expected": {
+        "segments": [
+          {
+            "path": [
+              0,
+              1
+            ],
+            "index": 1,
+            "length": 3,
+            "text": "😀H"
+          },
+          {
+            "path": [
+              0,
+              1
+            ],
+            "index": 10,
+            "length": 4,
+            "text": "UMAN"
+          }
+        ],
+        "collapsedUnits": 0,
+        "unavailableRuns": []
+      }
+    },
+    {
+      "name": "partial-deletion",
+      "update": "AgHKAQDEZQ5lDwZSRU1PVEUHZQAHAQdkZWZhdWx0AwlwYXJhZ3JhcGgHAGUABodlAQYEAGUBCnByZWZpePCfmIAEAGUCBkHwn5iASIFlDgKEZRADQU5aAWUBDwI=",
+      "selection": {
+        "version": 1,
+        "runs": [
+          {
+            "item": {
+              "client": 101,
+              "clock": 12
+            },
+            "type": {
+              "client": 101,
+              "clock": 2
+            },
+            "count": 7
+          }
+        ]
+      },
+      "expected": {
+        "segments": [
+          {
+            "path": [
+              0,
+              1
+            ],
+            "index": 1,
+            "length": 3,
+            "text": "😀H"
+          },
+          {
+            "path": [
+              0,
+              1
+            ],
+            "index": 10,
+            "length": 2,
+            "text": "AN"
+          }
+        ],
+        "collapsedUnits": 2,
+        "unavailableRuns": []
+      }
+    },
+    {
+      "name": "deleted-ancestor-unavailable",
+      "update": "AgHKAQAABgJlAAEBB2RlZmF1bHQBABMCygEBAAZlAQAU",
+      "selection": {
+        "version": 1,
+        "runs": [
+          {
+            "item": {
+              "client": 101,
+              "clock": 12
+            },
+            "type": {
+              "client": 101,
+              "clock": 2
+            },
+            "count": 7
+          }
+        ]
+      },
+      "expected": {
+        "segments": [],
+        "collapsedUnits": 0,
+        "unavailableRuns": [
+          0
+        ]
+      }
+    }
+  ]
+}

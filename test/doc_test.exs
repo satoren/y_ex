@@ -482,6 +482,19 @@ defmodule Yex.DocTest do
       assert Doc.offset_kind(doc1) == :bytes
       assert Doc.offset_kind(doc2) == :utf16
     end
+
+    test "UTF-16 options accept the default absent collection ID" do
+      options = %Doc.Options{offset_kind: :utf16}
+      assert options.collection_id == nil
+      doc = Doc.with_options(options)
+      # The native property accessor represents an absent collection as "".
+      assert Doc.collection_id(doc) == ""
+      text = Doc.get_text(doc, "text")
+      assert :ok = Text.insert(text, 0, "😀x")
+      assert Text.length(text) == 3
+      assert :ok = Text.insert(text, 2, "!")
+      assert Text.to_string(text) == "😀!x"
+    end
   end
 
   describe "get_xml_fragment" do

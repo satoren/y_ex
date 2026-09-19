@@ -15,7 +15,7 @@ rustler = "0.38.0"
 scoped_thread_local = "1.0.0"
 serde = "1.0.210"
 serde_json = "1.0.120"
-yrs = { version = "0.25.0", features=["sync", "weak"] }
+yrs = { git = "https://github.com/boldflight/y-crdt.git", rev = "36e9df5b1f55657837161312c54a8296aaadb68a", features=["sync", "weak"] }
 
 [features]
 default = ["nif_version_2_15"]
