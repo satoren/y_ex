@@ -19,6 +19,13 @@ defmodule Yex.Nif do
         version: version
       ] ++ force_build
 
+  # Inputs above this take the DirtyCpu twins. Dirty CPU schedulers are a fixed pool
+  # (one per normal scheduler by default) and a call holds a slot for its whole
+  # duration, so keeping small updates off it stops them queueing behind large
+  # applies. 16_384 is the largest power of two below the smallest map update whose
+  # normal-scheduler median passes 1 ms (26.8 KB). See benchmark/dirty_cutoff.exs.
+  def dirty_cutoff(), do: 16_384
+
   def doc_new(), do: :erlang.nif_error(:nif_not_loaded)
   def doc_with_options(_option), do: :erlang.nif_error(:nif_not_loaded)
   def doc_get_or_insert_text(_doc, _cur_txn, _name), do: :erlang.nif_error(:nif_not_loaded)
@@ -236,13 +243,17 @@ defmodule Yex.Nif do
     do: :erlang.nif_error(:nif_not_loaded)
 
   def apply_update_v1(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
+  def apply_update_v1_dirty(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
   def merge_updates_v1(_updates), do: :erlang.nif_error(:nif_not_loaded)
+  def merge_updates_v1_dirty(_updates), do: :erlang.nif_error(:nif_not_loaded)
   def update_debug_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
 
   def encode_state_vector_v2(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def encode_state_as_update_v2(_doc, _cur_txn, _diff), do: :erlang.nif_error(:nif_not_loaded)
   def apply_update_v2(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
+  def apply_update_v2_dirty(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
   def merge_updates_v2(_updates), do: :erlang.nif_error(:nif_not_loaded)
+  def merge_updates_v2_dirty(_updates), do: :erlang.nif_error(:nif_not_loaded)
   def update_debug_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
 
   def get_pending_update_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -274,6 +285,9 @@ defmodule Yex.Nif do
   def encode_awareness_reply_v1(_awareness), do: :erlang.nif_error(:nif_not_loaded)
 
   def apply_sync_update_payload_v1(_doc, _cur_txn, _payload),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def apply_sync_update_payload_v1_dirty(_doc, _cur_txn, _payload),
     do: :erlang.nif_error(:nif_not_loaded)
 
   def sync_message_decode_v2(_message), do: :erlang.nif_error(:nif_not_loaded)
