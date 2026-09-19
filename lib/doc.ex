@@ -221,6 +221,28 @@ defmodule Yex.Doc do
   end
 
   @doc """
+  Removes and returns the pending update and pending delete set (v1 encoded,
+  merged into one update) for the document, if any.
+
+  Pending state holds structs and deletions that arrived before their causal
+  predecessors and are waiting on them. After this returns, both
+  `get_pending_update/1` and `get_pending_ds/1` return `{:ok, nil}`, and the
+  pruned content will no longer be integrated when the missing predecessors
+  arrive. The returned binary can be re-applied later, for example once the
+  missing updates have been fetched.
+
+  Works both inside and outside `transaction/3`. Returns `{:ok, nil}` when
+  nothing is pending. Returns `{:error, :transaction_acq_error}` when a
+  transaction held by another process prevents opening one.
+  """
+  @spec prune_pending(t) :: {:ok, binary() | nil} | {:error, term()}
+  def prune_pending(%__MODULE__{} = doc) do
+    run_in_worker_process doc do
+      Yex.Nif.prune_pending_v1(doc, cur_txn(doc))
+    end
+  end
+
+  @doc """
   Start a transaction.
 
   Raises RuntimeError if a transaction is already in progress.

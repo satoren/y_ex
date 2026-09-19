@@ -394,6 +394,149 @@ defmodule Yex.DocTest do
     end
   end
 
+  describe "prune_pending" do
+    defp gapped_update do
+      a = Doc.new()
+      t = Doc.get_text(a, "t")
+      Text.insert(t, 0, "one")
+      update_one = Yex.encode_state_as_update!(a)
+      sv1 = Yex.encode_state_vector!(a)
+      Text.insert(t, 3, "two")
+      {a, update_one, Yex.encode_state_as_update!(a, sv1)}
+    end
+
+    test "returns nil when nothing is pending" do
+      doc = Doc.new()
+      assert {:ok, nil} = Doc.prune_pending(doc)
+    end
+
+    test "removes and returns pending content" do
+      {a, _update_one, gapped} = gapped_update()
+      b = Doc.new()
+      :ok = Yex.apply_update(b, gapped)
+
+      assert {:ok, pending} = Doc.get_pending_update(b)
+      assert is_binary(pending)
+
+      assert {:ok, pruned} = Doc.prune_pending(b)
+      assert is_binary(pruned)
+      assert byte_size(pruned) > 0
+
+      assert {:ok, nil} = Doc.get_pending_update(b)
+      assert {:ok, nil} = Doc.get_pending_ds(b)
+      assert {:ok, nil} = Doc.prune_pending(b)
+
+      :ok = Yex.apply_update(b, Yex.encode_state_as_update!(a))
+      assert Text.to_string(Doc.get_text(b, "t")) == "onetwo"
+    end
+
+    test "removes a pending delete set" do
+      a = Doc.new()
+      t = Doc.get_text(a, "t")
+      Text.insert(t, 0, "Hello")
+      sv = Yex.encode_state_vector!(a)
+      Text.delete(t, 0, 5)
+      delete_only = Yex.encode_state_as_update!(a, sv)
+
+      b = Doc.new()
+      :ok = Yex.apply_update(b, delete_only)
+      assert {:ok, ds} = Doc.get_pending_ds(b)
+      assert is_binary(ds)
+
+      assert {:ok, pruned} = Doc.prune_pending(b)
+      assert is_binary(pruned)
+      assert {:ok, nil} = Doc.get_pending_ds(b)
+    end
+
+    test "pruned bytes can be re-applied once the predecessor is present" do
+      {_a, update_one, gapped} = gapped_update()
+      b = Doc.new()
+      :ok = Yex.apply_update(b, gapped)
+      {:ok, pruned} = Doc.prune_pending(b)
+
+      :ok = Yex.apply_update(b, update_one)
+      assert Text.to_string(Doc.get_text(b, "t")) == "one"
+
+      :ok = Yex.apply_update(b, pruned)
+      assert Text.to_string(Doc.get_text(b, "t")) == "onetwo"
+      assert {:ok, nil} = Doc.get_pending_update(b)
+    end
+
+    test "works inside a transaction" do
+      {_a, _update_one, gapped} = gapped_update()
+      b = Doc.new()
+      :ok = Yex.apply_update(b, gapped)
+
+      result =
+        Doc.transaction(b, fn ->
+          {:ok, pruned} = Doc.prune_pending(b)
+          {pruned, Doc.get_pending_update(b)}
+        end)
+
+      assert {pruned, {:ok, nil}} = result
+      assert is_binary(pruned)
+      assert {:ok, nil} = Doc.get_pending_update(b)
+    end
+
+    test "emits no update message, with or without pending content" do
+      {_a, _update_one, gapped} = gapped_update()
+      b = Doc.new()
+      :ok = Yex.apply_update(b, gapped)
+      {:ok, _sub} = Doc.monitor_update(b)
+
+      assert {:ok, pruned} = Doc.prune_pending(b)
+      assert is_binary(pruned)
+      refute_receive {:update_v1, _, _, _}, 50
+
+      assert {:ok, nil} = Doc.prune_pending(b)
+      refute_receive {:update_v1, _, _, _}, 50
+    end
+
+    test "works through a worker process" do
+      {:ok, worker_pid} = GenServer.start_link(__MODULE__.TestWorker, %{})
+      {_a, _update_one, gapped} = gapped_update()
+      b = Doc.new(worker_pid)
+      :ok = Yex.apply_update(b, gapped)
+
+      assert {:ok, pruned} = Doc.prune_pending(b)
+      assert is_binary(pruned)
+      assert {:ok, nil} = Doc.get_pending_update(b)
+    end
+
+    test "reports a transaction held by another process" do
+      test_pid = self()
+      {_a, _update_one, gapped} = gapped_update()
+
+      holder =
+        spawn_link(fn ->
+          doc = Doc.new()
+          :ok = Yex.apply_update(doc, gapped)
+
+          Doc.transaction(doc, fn ->
+            send(test_pid, {:holding, doc})
+
+            receive do
+              :release -> :ok
+            end
+          end)
+
+          send(test_pid, :released)
+        end)
+
+      assert_receive {:holding, doc}, 5_000
+      # Task with timeout plus early release makes a blocking regression fail, not hang.
+      task = Task.async(fn -> Doc.prune_pending(%{doc | worker_pid: self()}) end)
+      yielded = Task.yield(task, 5_000)
+      send(holder, :release)
+      assert {:ok, {:error, :transaction_acq_error}} = yielded || Task.shutdown(task)
+      assert_receive :released, 5_000
+
+      doc = %{doc | worker_pid: self()}
+      assert {:ok, pending} = Doc.get_pending_update(doc)
+      assert is_binary(pending)
+    end
+  end
+
   # Additional comprehensive tests for better coverage
 
   describe "basic type creation" do

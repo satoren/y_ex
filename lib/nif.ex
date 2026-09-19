@@ -247,6 +247,7 @@ defmodule Yex.Nif do
 
   def get_pending_update_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def get_pending_ds_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  def prune_pending_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def transaction_snapshot(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def transaction_encode_state_from_snapshot_v1(_cur_txn, _snapshot),

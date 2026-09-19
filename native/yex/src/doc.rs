@@ -631,13 +631,13 @@ fn get_pending_update_v1<'a>(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Term<'a>> {
-    doc.readonly(current_transaction, |txn| {
+    transaction_acq_error_tuple(doc.readonly(current_transaction, |txn| {
         let result = txn.store().pending_update().map(|p| {
             let bytes = p.update.encode_v1();
             SliceIntoBinary::new(bytes.as_slice()).encode(env)
         });
         Ok((atoms::ok(), result).encode(env))
-    })
+    }))
 }
 
 #[rustler::nif]
@@ -646,13 +646,37 @@ fn get_pending_ds_v1<'a>(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Term<'a>> {
-    doc.readonly(current_transaction, |txn| {
+    transaction_acq_error_tuple(doc.readonly(current_transaction, |txn| {
         let result = txn.store().pending_ds().map(|ds| {
             let bytes = ds.encode_v1();
             SliceIntoBinary::new(bytes.as_slice()).encode(env)
         });
         Ok((atoms::ok(), result).encode(env))
-    })
+    }))
+}
+
+#[rustler::nif]
+fn prune_pending_v1<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Term<'a>> {
+    transaction_acq_error_tuple(doc.mutably(env, current_transaction, |txn| {
+        let result = txn.prune_pending().map(|update| {
+            let bytes = update.encode_v1();
+            SliceIntoBinary::new(bytes.as_slice()).encode(env)
+        });
+        Ok((atoms::ok(), result).encode(env))
+    }))
+}
+
+fn transaction_acq_error_tuple<T>(result: NifResult<T>) -> NifResult<T> {
+    match result {
+        Err(rustler::Error::Atom("transaction_acq_error")) => Err(rustler::Error::Term(Box::new(
+            atoms::transaction_acq_error(),
+        ))),
+        other => other,
+    }
 }
 
 #[rustler::nif]
