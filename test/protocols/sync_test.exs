@@ -292,6 +292,6 @@ defmodule Yex.SyncTest do
   end
 
   test "get_sync_step2 error" do
-    # Mock test removed - relies on NIF implementation
+    assert {:error, {:encoding_exception, _}} = Sync.get_sync_step2(Doc.new(), <<11>>)
   end
 end

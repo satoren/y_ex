@@ -1084,6 +1084,182 @@ defmodule Yex.UndoManagerTest do
     refute is_valid_scope(123)
   end
 
+  describe "results and open transactions" do
+    test "undo_with_result and redo_with_result report whether the doc changed", %{
+      doc: doc,
+      text: text
+    } do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      refute UndoManager.can_undo?(undo_manager)
+      refute UndoManager.can_redo?(undo_manager)
+      assert {:ok, false} = UndoManager.undo_with_result(undo_manager)
+      assert {:ok, false} = UndoManager.redo_with_result(undo_manager)
+
+      Text.insert(text, 0, "hello")
+      assert UndoManager.can_undo?(undo_manager)
+
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
+      refute UndoManager.can_undo?(undo_manager)
+      assert UndoManager.can_redo?(undo_manager)
+
+      assert {:ok, true} = UndoManager.redo_with_result(undo_manager)
+      assert Text.to_string(text) == "hello"
+      assert :ok = UndoManager.undo(undo_manager)
+      assert :ok = UndoManager.redo(undo_manager)
+    end
+
+    # Run in a task so a scheduler-parking regression fails on the timeout.
+    defp in_task(fun) do
+      task = Task.async(fun)
+      assert {:ok, result} = Task.yield(task, 5_000) || Task.shutdown(task)
+      result
+    end
+
+    defp tracked_doc do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      Text.insert(text, 0, "hello")
+      {doc, text, undo_manager}
+    end
+
+    test "undo inside a transaction returns an error instead of blocking" do
+      assert {{:error, :transaction_acq_error}, {:error, :transaction_acq_error}, "hello!", ""} =
+               in_task(fn ->
+                 {doc, text, undo_manager} = tracked_doc()
+
+                 {plain, with_result} =
+                   Doc.transaction(doc, fn ->
+                     Text.insert(text, 5, "!")
+
+                     {UndoManager.undo(undo_manager), UndoManager.undo_with_result(undo_manager)}
+                   end)
+
+                 inside = Text.to_string(text)
+                 {:ok, true} = UndoManager.undo_with_result(undo_manager)
+                 {plain, with_result, inside, Text.to_string(text)}
+               end)
+    end
+
+    test "redo inside a transaction returns an error instead of blocking" do
+      assert {{:error, :transaction_acq_error}, {:error, :transaction_acq_error}, "", "hello"} =
+               in_task(fn ->
+                 {doc, text, undo_manager} = tracked_doc()
+                 {:ok, true} = UndoManager.undo_with_result(undo_manager)
+
+                 {plain, with_result} =
+                   Doc.transaction(doc, fn ->
+                     {UndoManager.redo(undo_manager), UndoManager.redo_with_result(undo_manager)}
+                   end)
+
+                 inside = Text.to_string(text)
+                 {:ok, true} = UndoManager.redo_with_result(undo_manager)
+                 {plain, with_result, inside, Text.to_string(text)}
+               end)
+    end
+
+    test "undo and redo on empty stacks inside a transaction still report the open transaction" do
+      assert {{:error, :transaction_acq_error}, {:error, :transaction_acq_error},
+              {:error, :transaction_acq_error}, {:error, :transaction_acq_error}, {:ok, false},
+              {:ok, false}} =
+               in_task(fn ->
+                 doc = Doc.new()
+                 text = Doc.get_text(doc, "text")
+                 {:ok, undo_manager} = UndoManager.new(doc, text)
+                 false = UndoManager.can_undo?(undo_manager)
+                 false = UndoManager.can_redo?(undo_manager)
+
+                 {undo, undo_result, redo, redo_result} =
+                   Doc.transaction(doc, fn ->
+                     {UndoManager.undo(undo_manager), UndoManager.undo_with_result(undo_manager),
+                      UndoManager.redo(undo_manager), UndoManager.redo_with_result(undo_manager)}
+                   end)
+
+                 {undo, undo_result, redo, redo_result,
+                  UndoManager.undo_with_result(undo_manager),
+                  UndoManager.redo_with_result(undo_manager)}
+               end)
+    end
+
+    test "results and stack queries work through a worker process" do
+      {:ok, worker_pid} = GenServer.start_link(__MODULE__.TestWorker, %{})
+      doc = Doc.new(worker_pid)
+      text = Doc.get_text(doc, "text")
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+
+      refute UndoManager.can_undo?(undo_manager)
+      refute UndoManager.can_redo?(undo_manager)
+      assert {:ok, false} = UndoManager.undo_with_result(undo_manager)
+      assert {:ok, false} = UndoManager.redo_with_result(undo_manager)
+
+      Text.insert(text, 0, "hello")
+      assert UndoManager.can_undo?(undo_manager)
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
+      assert UndoManager.can_redo?(undo_manager)
+      assert {:ok, true} = UndoManager.redo_with_result(undo_manager)
+      assert Text.to_string(text) == "hello"
+      refute UndoManager.can_redo?(undo_manager)
+    end
+
+    test "clear inside a transaction returns an error instead of blocking" do
+      assert {{:error, :transaction_acq_error}, true, false} =
+               in_task(fn ->
+                 {doc, _text, undo_manager} = tracked_doc()
+
+                 inside = Doc.transaction(doc, fn -> UndoManager.clear(undo_manager) end)
+                 still_tracked = UndoManager.can_undo?(undo_manager)
+                 :ok = UndoManager.clear(undo_manager)
+                 {inside, still_tracked, UndoManager.can_undo?(undo_manager)}
+               end)
+    end
+
+    test "clear while another process holds a transaction returns an error instead of blocking" do
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          {doc, _text, undo_manager} = tracked_doc()
+
+          Doc.transaction(doc, fn ->
+            send(test_pid, {:holding, doc, undo_manager})
+
+            receive do
+              :release -> :ok
+            end
+          end)
+
+          send(test_pid, :released)
+        end)
+
+      assert_receive {:holding, doc, undo_manager}, 5_000
+      as_own_worker = fn pid -> %{undo_manager | doc: %{doc | worker_pid: pid}} end
+
+      # Task with timeout plus early release makes a blocking regression fail, not hang.
+      task = Task.async(fn -> UndoManager.clear(as_own_worker.(self())) end)
+      yielded = Task.yield(task, 5_000)
+      send(holder, :release)
+      assert {:ok, {:error, :transaction_acq_error}} = yielded || Task.shutdown(task)
+      assert_receive :released, 5_000
+
+      undo_manager = as_own_worker.(self())
+      assert UndoManager.can_undo?(undo_manager)
+      assert :ok = UndoManager.clear(undo_manager)
+      refute UndoManager.can_undo?(undo_manager)
+    end
+  end
+
+  defmodule TestWorker do
+    use GenServer
+
+    @impl true
+    def init(state), do: {:ok, state}
+
+    @impl true
+    def handle_call({Yex.Doc, :run, fun}, _from, state), do: {:reply, fun.(), state}
+  end
+
   test "new_with_options handles NIF errors" do
     # Mock test removed - relies on NIF implementation
   end
