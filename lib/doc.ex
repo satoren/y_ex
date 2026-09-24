@@ -353,4 +353,30 @@ defmodule Yex.Doc do
   defp cur_txn(%__MODULE__{reference: ref}) do
     Process.get(ref, nil)
   end
+
+  @doc """
+  Observes one exact format-only v1 update against this settled UTF-16 document,
+  without applying it. Targets are maps containing `root` (string) or `nested`
+  (client/clock map), the other field nil, and `item` (client/clock map).
+
+  Returns inserted/deleted marker IDs and changes with zero-based target indexes,
+  actual values and effective marker IDs. This does not validate authorization or
+  the claimed selection against all document changes. Merged/GC events with lost
+  marker content refuse. Maximum 131072 targets and 4096 markers per side.
+  Update/checkpoint limit is 8 MiB, checked after checkpoint encoding; encoding and
+  scratch replay scale with document size, outside the explicit traversal budget.
+  Callers must bound document size independently. No application capability is
+  enabled by this generic observation API.
+  """
+  def inspect_format_event(
+        %__MODULE__{} = doc,
+        update,
+        attribute,
+        targets,
+        max_steps \\ 1_000_000
+      ) do
+    run_in_worker_process doc do
+      Yex.Nif.inspect_format_event(doc, cur_txn(doc), update, attribute, targets, max_steps)
+    end
+  end
 end

@@ -329,4 +329,7 @@ defmodule Yex.Nif do
 
   def normalize_number(_number),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  def inspect_format_event(_doc, _txn, _update, _attribute, _targets, _max_steps),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
