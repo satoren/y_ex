@@ -45,7 +45,7 @@ jobs:
           elixir-version: ${{ matrix.pair.elixir }}
           version-type: ${{ matrix.pair.strict && 'strict' || 'loose' }}
       - name: Restore dependencies cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ matrix.pair.otp }}-${{ matrix.pair.elixir }}-${{ hashFiles('**/mix.lock') }}
@@ -78,7 +78,7 @@ jobs:
           version-file: '.tool-versions'
           version-type: 'strict'
       - name: Restore dependencies cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: deps
           key: ${{ runner.os }}-mix-lint-${{ hashFiles('**/mix.lock') }}
