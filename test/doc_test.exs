@@ -860,4 +860,116 @@ defmodule Yex.DocTest do
       {:reply, :ok, state}
     end
   end
+
+  describe "root getters and open transactions" do
+    test "return handles whose writes commit with the transaction" do
+      test_pid = self()
+
+      # Run in a task so a scheduler-parking regression trips the timeout.
+      task =
+        Task.async(fn ->
+          doc = Doc.new()
+          {:ok, _sub} = Doc.monitor_update(doc)
+
+          Doc.transaction(doc, fn ->
+            Text.insert(Doc.get_text(doc, "text"), 0, "hello")
+            Yex.Array.push(Doc.get_array(doc, "array"), 1)
+            Yex.Map.set(Doc.get_map(doc, "map"), "k", "v")
+            Yex.XmlFragment.push(Doc.get_xml_fragment(doc, "xml"), Yex.XmlTextPrelim.from("x"))
+          end)
+
+          updates =
+            Stream.repeatedly(fn ->
+              receive do
+                {:update_v1, _, _, _} = msg -> msg
+              after
+                50 -> nil
+              end
+            end)
+            |> Enum.take_while(& &1)
+
+          send(test_pid, {:update_count, length(updates)})
+          %{doc | worker_pid: test_pid}
+        end)
+
+      assert {:ok, doc} = Task.yield(task, 5_000) || Task.shutdown(task)
+      assert_received {:update_count, 1}
+
+      assert Text.to_string(Doc.get_text(doc, "text")) == "hello"
+      assert Yex.Array.to_list(Doc.get_array(doc, "array")) == [1.0]
+      assert Yex.Map.to_map(Doc.get_map(doc, "map")) == %{"k" => "v"}
+      assert Yex.XmlFragment.to_string(Doc.get_xml_fragment(doc, "xml")) == "x"
+    end
+
+    test "return the same root on repeated calls inside a transaction" do
+      task =
+        Task.async(fn ->
+          doc = Doc.new()
+
+          Doc.transaction(doc, fn ->
+            Text.insert(Doc.get_text(doc, "text"), 0, "hello")
+            Yex.Array.push(Doc.get_array(doc, "array"), 1)
+            Yex.Map.set(Doc.get_map(doc, "map"), "k", "v")
+            Yex.XmlFragment.push(Doc.get_xml_fragment(doc, "xml"), Yex.XmlTextPrelim.from("x"))
+
+            {Text.to_string(Doc.get_text(doc, "text")),
+             Yex.Array.to_list(Doc.get_array(doc, "array")),
+             Yex.Map.to_map(Doc.get_map(doc, "map")),
+             Yex.XmlFragment.to_string(Doc.get_xml_fragment(doc, "xml"))}
+          end)
+        end)
+
+      assert {:ok, {"hello", [1.0], %{"k" => "v"}, "x"}} =
+               Task.yield(task, 5_000) || Task.shutdown(task)
+    end
+
+    test "raise when another process holds a transaction" do
+      test_pid = self()
+
+      holder =
+        spawn_link(fn ->
+          doc = Doc.new()
+
+          Doc.transaction(doc, fn ->
+            send(test_pid, {:holding, doc})
+
+            receive do
+              :release -> :ok
+            end
+          end)
+
+          send(test_pid, :released)
+        end)
+
+      assert_receive {:holding, doc}, 5_000
+
+      # Task with timeout plus early release makes a blocking regression fail, not hang.
+      task =
+        Task.async(fn ->
+          doc = %{doc | worker_pid: self()}
+
+          for getter <- [
+                &Doc.get_text/2,
+                &Doc.get_array/2,
+                &Doc.get_map/2,
+                &Doc.get_xml_fragment/2
+              ] do
+            try do
+              getter.(doc, "root")
+            rescue
+              error in ErlangError -> {:raised, error.original}
+            end
+          end
+        end)
+
+      yielded = Task.yield(task, 5_000)
+      send(holder, :release)
+
+      assert {:ok, List.duplicate({:raised, :transaction_acq_error}, 4)} ==
+               (yielded || Task.shutdown(task))
+
+      assert_receive :released, 5_000
+      assert %Yex.Map{} = Doc.get_map(%{doc | worker_pid: self()}, "map")
+    end
+  end
 end

@@ -46,6 +46,7 @@ defmodule YexTest do
       {:ok, state1} = Yex.encode_state_as_update(doc1)
       {:ok, state2} = Yex.encode_state_as_update(doc2)
       {:ok, merged} = Yex.merge_updates_v1([state1, state2])
+      assert {:ok, ^merged} = Yex.merge_updates([state1, state2])
 
       doc3 = Yex.Doc.new()
       text3 = Yex.Doc.get_text(doc3, "text")
