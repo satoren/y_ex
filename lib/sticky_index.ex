@@ -72,6 +72,35 @@ defmodule Yex.StickyIndex do
   end
 
   @doc """
+  Resolves exact UTF-16 item IDs against one XML text in one native transaction.
+
+  Each run is `%{client: non_neg_integer, clock: non_neg_integer, count: pos_integer}`.
+  At most 4,096 runs and 131,072 total units are accepted. Documents must use
+  `offset_kind: :utf16`. Results preserve run/unit order and contain `status` and
+  `index` keys. Status is `:live`, `:collapsed`, `:unavailable`, or `:wrong_type`.
+  Original deleted IDs remain collapsed when undo/redo recreates their content;
+  this operation never follows a replacement item's identity.
+  Traversal of more than 262,144 unique linked items returns `{:error, :traversal_limit}`.
+  This is a recoverable operational budget including formatting and deleted items.
+
+  This checks the actual shared type, including collapsed positions. It does not
+  prove text ownership, human intent, authorization, or that the supplied text is
+  reachable from an application root. Callers must establish those boundaries.
+  Embedded values also occupy sequence units; callers requiring plain text must
+  validate the XML text's delta independently. Malformed runs raise ArgumentError.
+  """
+  @spec resolve_text_items(Yex.XmlText.t(), [map()]) :: {:ok, [[map()]]} | {:error, atom()}
+  def resolve_text_items(%Yex.XmlText{doc: doc} = text, runs) when is_list(runs) do
+    Doc.run_in_worker_process(doc,
+      do:
+        case Yex.Nif.sticky_index_resolve_text_items(text, cur_txn(text), runs) do
+          {:ok, _} = result -> result
+          reason when is_atom(reason) -> {:error, reason}
+        end
+    )
+  end
+
+  @doc """
   Encodes a StickyIndex to binary format using flexbuffer encoding (v1 - default).
 
   This provides a compact binary representation suitable for storage or transmission.
