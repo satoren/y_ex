@@ -1214,17 +1214,39 @@ defmodule Yex.UndoManagerTest do
                end)
     end
 
-    test "garbage collecting an undo manager during a transaction does not abort the VM" do
+    test "dropping an undo manager during an own transaction does not abort the VM" do
       assert {"hello!?", "hello!"} =
                in_task(fn ->
                  doc = Doc.new()
                  text = Doc.get_text(doc, "text")
-                 {:ok, _dropped} = UndoManager.new(doc, text)
                  Text.insert(text, 0, "hello")
+                 parent = self()
+
+                 {pid, ref} =
+                   spawn_monitor(fn ->
+                     {:ok, _dropped} = UndoManager.new(%{doc | worker_pid: self()}, text)
+                     send(parent, :created)
+
+                     receive do
+                       :drop -> :ok
+                     end
+                   end)
+
+                 receive do
+                   :created -> :ok
+                 end
 
                  Doc.transaction(doc, fn ->
                    Text.insert(text, 5, "!")
-                   :erlang.garbage_collect()
+
+                   # The manager's last reference dies with that process while the
+                   # transaction is still open.
+                   send(pid, :drop)
+
+                   receive do
+                     {:DOWN, ^ref, :process, ^pid, :normal} -> :ok
+                   end
+
                    # Resource destructors run asynchronously as scheduler aux work.
                    Process.sleep(100)
                  end)

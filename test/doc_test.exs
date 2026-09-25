@@ -891,7 +891,7 @@ defmodule Yex.DocTest do
       task =
         Task.async(fn ->
           doc = Doc.new()
-          {:ok, _sub} = Doc.monitor_update(doc)
+          {:ok, sub} = Doc.monitor_update(doc)
 
           Doc.transaction(doc, fn ->
             Text.insert(Doc.get_text(doc, "text"), 0, "hello")
@@ -909,6 +909,11 @@ defmodule Yex.DocTest do
               end
             end)
             |> Enum.take_while(& &1)
+
+          # Unsubscribe explicitly: otherwise the subscription is dropped when this
+          # task exits, and that drop briefly locks the doc store, racing with the
+          # test process's reads below.
+          :ok = Yex.Subscription.unsubscribe(sub)
 
           send(test_pid, {:update_count, length(updates)})
           %{doc | worker_pid: test_pid}
