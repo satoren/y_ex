@@ -200,24 +200,6 @@ defmodule Yex.Array do
   end
 
   @doc """
-  Moves element found at `source` index into `target` index position. Both indexes refer to a current state of the document.
-  ## Examples pushes a string then fetches it back
-      iex> doc = Yex.Doc.new()
-      iex> array = Yex.Doc.get_array(doc, "array")
-      iex> Yex.Array.push(array, Yex.ArrayPrelim.from([1, 2]))
-      iex> Yex.Array.push(array, Yex.ArrayPrelim.from([3, 4]))
-      iex> :ok = Yex.Array.move_to(array, 0, 2)
-      iex> Yex.Array.to_json(array)
-      [[3.0, 4.0], [1.0, 2.0]]
-  """
-  @spec move_to(t, integer(), integer()) :: :ok
-  def move_to(%__MODULE__{doc: doc} = array, from, to) when is_integer(from) and is_integer(to) do
-    Doc.run_in_worker_process doc do
-      Yex.Nif.array_move_to(array, cur_txn(array), from, to)
-    end
-  end
-
-  @doc """
   ### ⚠️ Experimental
   Quotes a range of array content, returning it as a new WeakPrelim object.
   """

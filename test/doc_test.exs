@@ -143,6 +143,21 @@ defmodule Yex.DocTest do
     Doc.demonitor_update(monitor_ref)
   end
 
+  test "demonitor_update inside a transaction stops receiving updates" do
+    doc = Doc.new()
+    {:ok, monitor_ref} = Doc.monitor_update(doc)
+    text = Doc.get_text(doc, "text")
+
+    Doc.transaction(doc, fn ->
+      :ok = Doc.demonitor_update(monitor_ref)
+      Text.insert(text, 0, "Hello")
+    end)
+
+    Text.insert(text, 0, "World")
+
+    refute_receive {:update_v1, _update, _origin, _metadata}, 10
+  end
+
   test "monitor_update_v2" do
     doc = Doc.new()
     {:ok, monitor_ref} = Doc.monitor_update_v2(doc)

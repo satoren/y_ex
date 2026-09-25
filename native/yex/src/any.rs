@@ -5,7 +5,6 @@ use crate::wrap::NifWrap;
 use rustler::dynamic::TermType;
 use rustler::types;
 use rustler::{Decoder, Encoder, Env, Error, ListIterator, MapIterator, NifResult, Term};
-use yrs::any::{F64_MAX_SAFE_INTEGER, F64_MIN_SAFE_INTEGER};
 use yrs::*;
 
 fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
@@ -13,8 +12,14 @@ fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
         Any::Null => types::atom::nil().to_term(env),
         Any::Undefined => types::atom::undefined().to_term(env),
         Any::Bool(b) => b.encode(env),
-        Any::Number(num) => num.encode(env),
-        Any::BigInt(n) => n.encode(env),
+        Any::Number(Number::Float(f)) => f.encode(env),
+        // Integers within the safe range are exposed as floats, matching how Yjs treats numbers.
+        Any::Number(Number::Int(n))
+            if (Number::I64_MIN_SAFE_INTEGER..=Number::I64_MAX_SAFE_INTEGER).contains(n) =>
+        {
+            (*n as f64).encode(env)
+        }
+        Any::Number(Number::Int(n)) => n.encode(env),
         Any::String(s) => s.encode(env),
         Any::Buffer(b) => b.encode(env),
         Any::Array(a) => {
@@ -52,16 +57,8 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
 
             Err(rustler::Error::BadArg)
         }
-        TermType::Integer => {
-            let v = term.decode::<i64>()?;
-            // Check if the number is within the safe integer range for f64
-            // If it is not, we return it as a BigInt
-            if v > F64_MAX_SAFE_INTEGER as i64 || v < F64_MIN_SAFE_INTEGER as i64 {
-                return Ok(Any::BigInt(v));
-            }
-            Ok(Any::Number(v as f64))
-        }
-        TermType::Float => term.decode::<f64>().map(Any::Number),
+        TermType::Integer => term.decode::<i64>().map(|v| Any::Number(Number::Int(v))),
+        TermType::Float => term.decode::<f64>().map(|v| Any::Number(Number::Float(v))),
         TermType::Binary => {
             if let Ok(v) = term.decode::<&str>() {
                 return Ok(Any::String(v.into()));

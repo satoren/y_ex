@@ -55,7 +55,7 @@ defmodule Yex.Nif do
   def doc_offset_kind(_doc),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def sub_unsubscribe(_sub), do: :erlang.nif_error(:nif_not_loaded)
+  def sub_unsubscribe(_sub, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def doc_begin_transaction(_doc, _origin), do: :erlang.nif_error(:nif_not_loaded)
   def commit_transaction(_doc), do: :erlang.nif_error(:nif_not_loaded)
@@ -99,8 +99,6 @@ defmodule Yex.Nif do
 
   def array_delete_range(_array, _cur_txn, _index, _length),
     do: :erlang.nif_error(:nif_not_loaded)
-
-  def array_move_to(_array, _cur_txn, _from, _to), do: :erlang.nif_error(:nif_not_loaded)
 
   def array_quote(_array, _cur_txn, _index, _len), do: :erlang.nif_error(:nif_not_loaded)
 

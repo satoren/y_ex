@@ -19,7 +19,7 @@ use crate::event::NifSubdocsEvent;
 use crate::{
     atoms,
     error::Error,
-    subscription::NifSubscription,
+    subscription::{is_active, DocEvent, NifSubscription, SubscriptionKey},
     term_box::TermBox,
     transaction::{ReadTransaction, TransactionResource},
     utils::{origin_to_term, term_to_origin_binary},
@@ -141,13 +141,14 @@ impl From<NifOptions> for Options {
             uuid_v4()
         };
         Options {
-            client_id: w.client_id,
+            client_id: ClientID::new(w.client_id),
             guid,
             collection_id: w.collection_id.map(|s| s.into()),
             offset_kind,
             skip_gc: w.skip_gc,
             auto_load: w.auto_load,
             should_load: w.should_load,
+            cleanup_formatting: true,
         }
     }
 }
@@ -435,8 +436,13 @@ fn doc_monitor_update_v1(
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let metadata = TermBox::new(metadata);
+    let sub_key = SubscriptionKey::new();
+    let active = sub_key.active.clone();
 
-    doc.observe_update_v1(move |txn, event| {
+    doc.observe_update_v1(sub_key.key.clone(), move |txn, event| {
+        if !is_active(&active) {
+            return;
+        }
         ENV.with(|env| {
             let metadata = metadata.get(*env);
             let _ = env.send(
@@ -450,13 +456,13 @@ fn doc_monitor_update_v1(
             );
         })
     })
-    .map(|sub| {
+    .map(|_| {
         (
             atoms::ok(),
-            NifSubscription {
-                reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
-                doc: doc.clone(),
-            },
+            NifSubscription::new(
+                sub_key.doc(doc.reference.doc.clone(), DocEvent::UpdateV1),
+                doc.clone(),
+            ),
         )
     })
     .map_err(|e| Error::from(e).into())
@@ -468,7 +474,13 @@ fn doc_monitor_update_v2(
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let metadata = TermBox::new(metadata);
-    doc.observe_update_v2(move |txn, event| {
+    let sub_key = SubscriptionKey::new();
+    let active = sub_key.active.clone();
+
+    doc.observe_update_v2(sub_key.key.clone(), move |txn, event| {
+        if !is_active(&active) {
+            return;
+        }
         ENV.with(|env| {
             let metadata = metadata.get(*env);
             let _ = env.send(
@@ -482,13 +494,13 @@ fn doc_monitor_update_v2(
             );
         })
     })
-    .map(|sub| {
+    .map(|_| {
         (
             atoms::ok(),
-            NifSubscription {
-                reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
-                doc: doc.clone(),
-            },
+            NifSubscription::new(
+                sub_key.doc(doc.reference.doc.clone(), DocEvent::UpdateV2),
+                doc.clone(),
+            ),
         )
     })
     .map_err(|e| Error::from(e).into())
@@ -771,7 +783,13 @@ fn doc_monitor_subdocs(
 ) -> NifResult<(Atom, NifSubscription)> {
     let metadata = TermBox::new(metadata);
     let event_doc = doc.clone();
-    doc.observe_subdocs(move |txn, event: &SubdocsEvent| {
+    let sub_key = SubscriptionKey::new();
+    let active = sub_key.active.clone();
+
+    doc.observe_subdocs(sub_key.key.clone(), move |txn, event: &SubdocsEvent| {
+        if !is_active(&active) {
+            return;
+        }
         ENV.with(|env| {
             let active_subdoc_guids: HashSet<String> =
                 txn.subdoc_guids().map(|guid| guid.to_string()).collect();
@@ -788,13 +806,13 @@ fn doc_monitor_subdocs(
             );
         })
     })
-    .map(|sub| {
+    .map(|_| {
         (
             atoms::ok(),
-            NifSubscription {
-                reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
-                doc: doc.clone(),
-            },
+            NifSubscription::new(
+                sub_key.doc(doc.reference.doc.clone(), DocEvent::Subdocs),
+                doc.clone(),
+            ),
         )
     })
     .map_err(|e| Error::from(e).into())
@@ -802,7 +820,7 @@ fn doc_monitor_subdocs(
 
 #[rustler::nif]
 fn doc_client_id(doc: NifDoc) -> u64 {
-    doc.client_id()
+    doc.client_id().get()
 }
 
 #[rustler::nif]

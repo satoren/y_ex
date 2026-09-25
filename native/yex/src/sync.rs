@@ -284,7 +284,7 @@ fn sync_step1_replies_encode_v1<'a>(
 
 #[rustler::nif]
 fn encode_awareness_reply_v1<'a>(env: Env<'a>, awareness: NifAwareness) -> NifResult<Term<'a>> {
-    let update = awareness.reference.update().map_err(Error::from)?;
+    let update = awareness.lock().update().map_err(Error::from)?;
     let update_bytes = update.encode_v1();
     Ok((
         atoms::ok(),
@@ -314,7 +314,7 @@ fn encode_sync_step1_response_v1<'a>(
     })?;
 
     let awareness_bytes = if let Some(aw) = awareness {
-        Some(aw.reference.update().map_err(Error::from)?.encode_v1())
+        Some(aw.lock().update().map_err(Error::from)?.encode_v1())
     } else {
         None
     };
