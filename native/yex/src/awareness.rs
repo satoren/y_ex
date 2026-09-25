@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Mutex};
 
 use crate::error::Error;
-use crate::subscription::NifSubscription;
+use crate::subscription::{is_active, AwarenessEvent, NifSubscription, SubscriptionKey};
 use crate::term_box::TermBox;
 use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::{
@@ -132,9 +132,14 @@ fn awareness_monitor_update(
     metadata: Term<'_>,
 ) -> NifSubscription {
     let metadata = TermBox::new(metadata);
-    let sub = awareness
+    let sub_key = SubscriptionKey::new();
+    let active = sub_key.active.clone();
+    awareness
         .lock()
-        .on_update(move |_awareness, event, origin| {
+        .on_update(sub_key.key.clone(), move |_awareness, event, origin| {
+            if !is_active(&active) {
+                return;
+            }
             let summary = NifAwarenessUpdateSummary {
                 added: client_ids_to_u64(event.added()),
                 updated: client_ids_to_u64(event.updated()),
@@ -153,10 +158,10 @@ fn awareness_monitor_update(
                 );
             })
         });
-    NifSubscription {
-        reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
-        doc: awareness.doc.clone(),
-    }
+    NifSubscription::new(
+        sub_key.awareness(awareness.reference.clone(), AwarenessEvent::Update),
+        awareness.doc.clone(),
+    )
 }
 
 #[rustler::nif]
@@ -166,9 +171,14 @@ fn awareness_monitor_change(
     metadata: Term<'_>,
 ) -> NifSubscription {
     let metadata = TermBox::new(metadata);
-    let sub = awareness
+    let sub_key = SubscriptionKey::new();
+    let active = sub_key.active.clone();
+    awareness
         .lock()
-        .on_change(move |_awareness, event, origin| {
+        .on_change(sub_key.key.clone(), move |_awareness, event, origin| {
+            if !is_active(&active) {
+                return;
+            }
             let summary = NifAwarenessUpdateSummary {
                 added: client_ids_to_u64(event.added()),
                 updated: client_ids_to_u64(event.updated()),
@@ -187,10 +197,10 @@ fn awareness_monitor_change(
                 );
             })
         });
-    NifSubscription {
-        reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
-        doc: awareness.doc.clone(),
-    }
+    NifSubscription::new(
+        sub_key.awareness(awareness.reference.clone(), AwarenessEvent::Change),
+        awareness.doc.clone(),
+    )
 }
 
 #[rustler::nif]

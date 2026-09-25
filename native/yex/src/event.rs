@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use rustler::{Encoder, Env, NifResult, NifStruct, NifUntaggedEnum, ResourceArc, Term};
@@ -13,7 +13,7 @@ use yrs::{
         xml::{XmlEvent, XmlTextEvent},
         Change, Delta, EntryChange,
     },
-    DeepObservable, Observable, TransactionMut,
+    DeepObservable, Observable, SharedRef, TransactionMut,
 };
 
 use crate::{
@@ -23,7 +23,7 @@ use crate::{
     doc::NifDoc,
     map::NifMap,
     shared_type::NifSharedType,
-    subscription::{NifSubscription, SubscriptionResource},
+    subscription::{is_active, NifSubscription, SubscriptionKey},
     term_box::TermBox,
     text::NifText,
     transaction::TransactionResource,
@@ -388,7 +388,7 @@ impl NifEvent {
 pub trait NifSharedTypeDeepObservable
 where
     Self: NifSharedType,
-    Self::RefType: DeepObservable,
+    Self::RefType: DeepObservable + Send + Sync + 'static,
 {
     fn observe_deep(
         &self,
@@ -405,8 +405,13 @@ where
         doc.readonly(current_transaction, |txn| {
             let ref_value = self.get_ref(txn)?;
 
+            let sub_key = SubscriptionKey::new();
+            let active = sub_key.active.clone();
             let doc_ref = doc.clone();
-            let sub = ref_value.observe_deep(move |txn, events| {
+            ref_value.observe_deep(sub_key.key.clone(), move |txn, events| {
+                if !is_active(&active) {
+                    return;
+                }
                 ENV.with(|env| {
                     let events: Vec<NifEvent> = events
                         .iter()
@@ -425,10 +430,13 @@ where
                 })
             });
 
-            Ok(NifSubscription {
-                reference: ResourceArc::new(Mutex::new(Some(sub)).into()),
-                doc: doc.clone(),
-            })
+            let hook = ref_value.hook();
+            let sub = sub_key.branch(doc.clone(), move |txn, key| {
+                hook.get(txn)
+                    .map(|shared| shared.unobserve_deep(key.clone()))
+                    .unwrap_or(false)
+            });
+            Ok(NifSubscription::new(sub, doc.clone()))
         })
     }
 }
@@ -436,7 +444,7 @@ where
 pub trait NifSharedTypeObservable
 where
     Self: NifSharedType,
-    Self::RefType: Observable,
+    Self::RefType: Observable + Send + Sync + 'static,
     yrs::types::Event: AsRef<<Self::RefType as yrs::Observable>::Event>,
     Self::Event: NifEventConstructor<<<Self as NifSharedType>::RefType as Observable>::Event>,
 {
@@ -456,8 +464,13 @@ where
         doc.readonly(current_transaction, |txn| {
             let ref_value = self.get_ref(txn)?;
 
+            let sub_key = SubscriptionKey::new();
+            let active = sub_key.active.clone();
             let doc_ref = doc.clone();
-            let sub = ref_value.observe(move |txn, event| {
+            ref_value.observe(sub_key.key.clone(), move |txn, event| {
+                if !is_active(&active) {
+                    return;
+                }
                 ENV.with(|env| {
                     let _ = env.send(
                         &pid,
@@ -472,10 +485,13 @@ where
                 })
             });
 
-            Ok(NifSubscription {
-                reference: SubscriptionResource::arc(sub),
-                doc: doc.clone(),
-            })
+            let hook = ref_value.hook();
+            let sub = sub_key.branch(doc.clone(), move |txn, key| {
+                hook.get(txn)
+                    .map(|shared| shared.unobserve(key.clone()))
+                    .unwrap_or(false)
+            });
+            Ok(NifSubscription::new(sub, doc.clone()))
         })
     }
 }

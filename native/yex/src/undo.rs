@@ -190,7 +190,7 @@ pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> NifResult<(A
             return Ok((atoms::ok(), false));
         }
 
-        let changed = wrapper.manager.try_undo().map_err(Error::from)?;
+        let changed = wrapper.manager.undo_blocking();
         Ok((atoms::ok(), changed))
     })
 }
@@ -221,7 +221,7 @@ pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> NifResult<(A
             return Ok((atoms::ok(), false));
         }
 
-        let changed = wrapper.manager.try_redo().map_err(Error::from)?;
+        let changed = wrapper.manager.redo_blocking();
         Ok((atoms::ok(), changed))
     })
 }
