@@ -141,13 +141,14 @@ impl From<NifOptions> for Options {
             uuid_v4()
         };
         Options {
-            client_id: w.client_id,
+            client_id: ClientID::new(w.client_id),
             guid,
             collection_id: w.collection_id.map(|s| s.into()),
             offset_kind,
             skip_gc: w.skip_gc,
             auto_load: w.auto_load,
             should_load: w.should_load,
+            cleanup_formatting: true,
         }
     }
 }
@@ -802,7 +803,7 @@ fn doc_monitor_subdocs(
 
 #[rustler::nif]
 fn doc_client_id(doc: NifDoc) -> u64 {
-    doc.client_id()
+    doc.client_id().get()
 }
 
 #[rustler::nif]

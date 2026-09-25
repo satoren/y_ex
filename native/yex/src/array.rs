@@ -142,26 +142,6 @@ fn array_delete_range(
         Ok(atoms::ok())
     })
 }
-#[rustler::nif]
-fn array_move_to(
-    env: Env<'_>,
-    array: NifArray,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    from: i64,
-    to: i64,
-) -> NifResult<Atom> {
-    array.mutably(env, current_transaction, |txn| {
-        let array = array.get_ref(txn)?;
-        let len = array.len(txn);
-        let from = normalize_index(len, from);
-        let to = normalize_index(len, to);
-        if from >= len || to > len {
-            return Err(rustler::Error::Atom("error"));
-        }
-        array.move_to(txn, from, to);
-        Ok(atoms::ok())
-    })
-}
 
 #[rustler::nif]
 fn array_quote(

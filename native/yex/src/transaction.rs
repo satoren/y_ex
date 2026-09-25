@@ -6,6 +6,9 @@ pub struct TransactionResource(pub RwLock<Option<TransactionMut<'static>>>);
 #[rustler::resource_impl]
 impl rustler::Resource for TransactionResource {}
 
+unsafe impl Send for TransactionResource {}
+unsafe impl Sync for TransactionResource {}
+
 pub enum ReadTransaction<'a, 'doc> {
     ReadOnly(&'a Transaction<'doc>),
     ReadWrite(&'a TransactionMut<'doc>),

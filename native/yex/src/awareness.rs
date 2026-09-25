@@ -18,7 +18,7 @@ use yrs::{
     updates::{decoder::Decode, encoder::Encode},
 };
 
-pub type AwarenessResource = NifWrap<Awareness>;
+pub type AwarenessResource = NifWrap<Mutex<Awareness>>;
 #[rustler::resource_impl]
 impl rustler::Resource for AwarenessResource {}
 
@@ -29,20 +29,33 @@ pub struct NifAwareness {
     doc: NifDoc,
 }
 
+impl NifAwareness {
+    pub(crate) fn lock(&self) -> std::sync::MutexGuard<'_, Awareness> {
+        self.reference
+            .0
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+    }
+}
+
 #[derive(NifMap)]
 pub struct NifAwarenessUpdateSummary {
     /// New clients added as part of the update.
-    pub added: Vec<ClientID>,
+    pub added: Vec<u64>,
     /// Existing clients that have been changed by the update.
-    pub updated: Vec<ClientID>,
+    pub updated: Vec<u64>,
     /// Existing clients that have been removed by the update.
-    pub removed: Vec<ClientID>,
+    pub removed: Vec<u64>,
+}
+
+fn client_ids_to_u64(ids: &[ClientID]) -> Vec<u64> {
+    ids.iter().map(ClientID::get).collect()
 }
 
 #[rustler::nif]
 fn awareness_new(doc: NifDoc) -> NifAwareness {
     let awareness = Awareness::new(doc.reference.doc.clone());
-    let resource = AwarenessResource::from(awareness);
+    let resource = AwarenessResource::from(Mutex::new(awareness));
     NifAwareness {
         reference: ResourceArc::new(resource),
         doc,
@@ -51,33 +64,31 @@ fn awareness_new(doc: NifDoc) -> NifAwareness {
 
 #[rustler::nif]
 fn awareness_client_id(awareness: NifAwareness) -> u64 {
-    awareness.reference.client_id()
+    awareness.lock().client_id().get()
 }
 #[rustler::nif]
-fn awareness_get_client_ids(awareness: NifAwareness) -> Vec<ClientID> {
+fn awareness_get_client_ids(awareness: NifAwareness) -> Vec<u64> {
     awareness
-        .reference
+        .lock()
         .iter()
-        .filter_map(
-            |(id, state)| {
-                if state.data.is_some() {
-                    Some(id)
-                } else {
-                    None
-                }
-            },
-        )
+        .filter_map(|(id, state)| {
+            if state.data.is_some() {
+                Some(id.get())
+            } else {
+                None
+            }
+        })
         .collect()
 }
 #[rustler::nif]
-fn awareness_get_states(awareness: NifAwareness) -> HashMap<ClientID, NifAny> {
+fn awareness_get_states(awareness: NifAwareness) -> HashMap<u64, NifAny> {
     awareness
-        .reference
+        .lock()
         .iter()
         .filter_map(|(id, state)| {
             if let Some(data) = state.data {
                 match serde_json::from_str::<yrs::Any>(&data) {
-                    Ok(any) => Some((id, any.into())),
+                    Ok(any) => Some((id.get(), any.into())),
                     Err(_) => None,
                 }
             } else {
@@ -89,10 +100,7 @@ fn awareness_get_states(awareness: NifAwareness) -> HashMap<ClientID, NifAny> {
 
 #[rustler::nif]
 fn awareness_get_local_state(awareness: NifAwareness) -> Option<NifAny> {
-    awareness
-        .reference
-        .local_state()
-        .map(|a: yrs::Any| a.into())
+    awareness.lock().local_state().map(|a: yrs::Any| a.into())
 }
 #[rustler::nif]
 fn awareness_set_local_state(
@@ -102,7 +110,7 @@ fn awareness_set_local_state(
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         awareness
-            .reference
+            .lock()
             .set_local_state(json.0)
             .map(|_| atoms::ok())
             .map_err(|e| Error::from(e).into())
@@ -112,7 +120,7 @@ fn awareness_set_local_state(
 #[rustler::nif]
 fn awareness_clean_local_state(env: Env<'_>, awareness: NifAwareness) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        awareness.reference.clean_local_state();
+        awareness.lock().clean_local_state();
         Ok(atoms::ok())
     })
 }
@@ -125,14 +133,12 @@ fn awareness_monitor_update(
 ) -> NifSubscription {
     let metadata = TermBox::new(metadata);
     let sub = awareness
-        .reference
+        .lock()
         .on_update(move |_awareness, event, origin| {
-            let summary = event.summary();
-
             let summary = NifAwarenessUpdateSummary {
-                added: summary.added.clone(),
-                updated: summary.updated.clone(),
-                removed: summary.removed.clone(),
+                added: client_ids_to_u64(event.added()),
+                updated: client_ids_to_u64(event.updated()),
+                removed: client_ids_to_u64(event.removed()),
             };
             ENV.with(|env| {
                 let metadata = metadata.get(*env);
@@ -161,14 +167,12 @@ fn awareness_monitor_change(
 ) -> NifSubscription {
     let metadata = TermBox::new(metadata);
     let sub = awareness
-        .reference
+        .lock()
         .on_change(move |_awareness, event, origin| {
-            let summary = event.summary();
-
             let summary = NifAwarenessUpdateSummary {
-                added: summary.added.clone(),
-                updated: summary.updated.clone(),
-                removed: summary.removed.clone(),
+                added: client_ids_to_u64(event.added()),
+                updated: client_ids_to_u64(event.updated()),
+                removed: client_ids_to_u64(event.removed()),
             };
             ENV.with(|env| {
                 let metadata = metadata.get(*env);
@@ -193,15 +197,16 @@ fn awareness_monitor_change(
 pub fn awareness_encode_update_v1(
     env: Env<'_>,
     awareness: NifAwareness,
-    clients: Option<Vec<ClientID>>,
+    clients: Option<Vec<u64>>,
 ) -> NifResult<Term<'_>> {
+    let awareness = awareness.lock();
     let update = if let Some(clients) = clients {
+        let clients = clients.into_iter().map(ClientID::new);
         awareness
-            .reference
             .update_with_clients(clients)
             .map_err(Error::from)?
     } else {
-        awareness.reference.update().map_err(Error::from)?
+        awareness.update().map_err(Error::from)?
     };
 
     Ok((
@@ -220,15 +225,14 @@ pub fn awareness_apply_update_v1(
     ENV.set(&mut env.clone(), || {
         let update = AwarenessUpdate::decode_v1(update.as_slice()).map_err(Error::from)?;
 
+        let mut awareness = awareness.lock();
         if let Some(origin) = term_to_origin_binary(origin) {
             awareness
-                .reference
                 .apply_update_with(update, origin.as_slice())
                 .map(|_| atoms::ok())
                 .map_err(|e| Error::from(e).into())
         } else {
             awareness
-                .reference
                 .apply_update(update)
                 .map(|_| atoms::ok())
                 .map_err(|e| Error::from(e).into())
@@ -236,10 +240,11 @@ pub fn awareness_apply_update_v1(
     })
 }
 #[rustler::nif]
-pub fn awareness_remove_states(env: Env<'_>, awareness: NifAwareness, clients: Vec<ClientID>) {
+pub fn awareness_remove_states(env: Env<'_>, awareness: NifAwareness, clients: Vec<u64>) {
     ENV.set(&mut env.clone(), || {
+        let mut awareness = awareness.lock();
         for client_id in clients {
-            awareness.reference.remove_state(client_id);
+            awareness.remove_state(ClientID::new(client_id));
         }
     })
 }

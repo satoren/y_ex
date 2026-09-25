@@ -83,7 +83,8 @@ fn create_undo_manager_with_options<T: NifSharedType>(
         ..Default::default()
     };
 
-    let undo_manager = UndoManager::with_scope_and_options(&doc, &branch, undo_options);
+    let mut undo_manager = UndoManager::with_options(undo_options);
+    undo_manager.expand_scope(&doc, &branch);
     let wrapper = UndoManagerWrapper::new(undo_manager);
 
     Ok((
@@ -248,13 +249,13 @@ pub fn undo_manager_expand_scope(
             .0
             .write()
             .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
-
+        let doc = undo_manager.doc;
         match scope {
             NifSharedTypeInput::Text(text) => {
                 let branch = text.readonly(None, |txn| text.get_ref(txn)).map_err(|_| {
                     Error::Message("Failed to get text branch reference".to_string())
                 })?;
-                wrapper.manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::Array(array) => {
                 let branch = array
@@ -262,19 +263,19 @@ pub fn undo_manager_expand_scope(
                     .map_err(|_| {
                         Error::Message("Failed to get array branch reference".to_string())
                     })?;
-                wrapper.manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::Map(map) => {
                 let branch = map.readonly(None, |txn| map.get_ref(txn)).map_err(|_| {
                     Error::Message("Failed to get map branch reference".to_string())
                 })?;
-                wrapper.manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::XmlText(text) => {
                 let branch = text.readonly(None, |txn| text.get_ref(txn)).map_err(|_| {
                     Error::Message("Failed to get xml text branch reference".to_string())
                 })?;
-                wrapper.manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::XmlElement(element) => {
                 let branch = element
@@ -282,7 +283,7 @@ pub fn undo_manager_expand_scope(
                     .map_err(|_| {
                         Error::Message("Failed to get xml element branch reference".to_string())
                     })?;
-                wrapper.manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::XmlFragment(fragment) => {
                 let branch = fragment
@@ -290,7 +291,7 @@ pub fn undo_manager_expand_scope(
                     .map_err(|_| {
                         Error::Message("Failed to get xml fragment branch reference".to_string())
                     })?;
-                wrapper.manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::WeakLink(weak_link) => {
                 let branch = weak_link
@@ -298,7 +299,7 @@ pub fn undo_manager_expand_scope(
                     .map_err(|_| {
                         Error::Message("Failed to get weak link branch reference".to_string())
                     })?;
-                wrapper.manager.expand_scope(&branch);
+                wrapper.manager.expand_scope(doc.deref(), &branch);
             }
         }
 
@@ -329,11 +330,11 @@ pub fn undo_manager_clear(env: Env, undo_manager: NifUndoManager) -> NifResult<A
             .write()
             .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
 
-        // UndoManager::clear takes a blocking read transaction, so hold a try_transact
+        // UndoManager::clear_all takes a blocking read transaction, so hold a try_transact
         // read across it to fail instead of waiting when a transaction is open.
         let _store =
             yrs::Transact::try_transact(&undo_manager.doc.reference.doc).map_err(Error::from)?;
-        wrapper.manager.clear();
+        wrapper.manager.clear_all();
 
         Ok(atoms::ok())
     })
