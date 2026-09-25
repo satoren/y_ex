@@ -82,8 +82,7 @@ defmodule Yex.DocConcurrentTest do
     test "transaction error", %{doc: doc} do
       :ok =
         Doc.transaction(doc, fn ->
-          # nif panic
-          assert_raise RuntimeError, fn ->
+          assert_raise Yex.TransactionAcqError, fn ->
             Doc.transaction(doc, fn ->
               nil
             end)

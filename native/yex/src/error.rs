@@ -1,4 +1,21 @@
+use rustler::NifException;
+
 use crate::atoms;
+
+#[derive(Debug, NifException)]
+#[module = "Yex.TransactionAcqError"]
+pub struct TransactionAcqError {
+    message: String,
+}
+
+impl TransactionAcqError {
+    fn new() -> Self {
+        TransactionAcqError {
+            message: "Failed to acquire transaction: another transaction is in progress"
+                .to_string(),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum Error {
@@ -13,7 +30,7 @@ pub enum Error {
 impl rustler::Encoder for Error {
     fn encode<'a>(&self, env: rustler::Env<'a>) -> rustler::Term<'a> {
         match self {
-            Error::Transaction => atoms::transaction_acq_error().encode(env),
+            Error::Transaction => TransactionAcqError::new().encode(env),
             Error::Encoding(error) => (
                 atoms::error(),
                 (atoms::encoding_exception(), error.to_string()),
@@ -56,7 +73,7 @@ impl From<yrs::TransactionAcqError> for Error {
 impl From<Error> for rustler::Error {
     fn from(error: Error) -> rustler::Error {
         match error {
-            Error::Transaction => rustler::Error::Atom("transaction_acq_error"),
+            Error::Transaction => rustler::Error::RaiseTerm(Box::new(TransactionAcqError::new())),
             Error::Encoding(error) => {
                 rustler::Error::Term(Box::new((atoms::encoding_exception(), error.to_string())))
             }

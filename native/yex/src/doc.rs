@@ -22,6 +22,7 @@ use crate::{
     subscription::{is_active, DocEvent, NifSubscription, SubscriptionKey},
     term_box::TermBox,
     transaction::{ReadTransaction, TransactionResource},
+    undo::release_parked_undo_managers,
     utils::{origin_to_term, term_to_origin_binary},
     wrap::SliceIntoBinary,
     xml::NifXmlFragment,
@@ -317,16 +318,25 @@ impl DocOperations for NifDoc {
     where
         F: FnOnce(&Transaction) -> NifResult<T>,
     {
-        let txn = yrs::Transact::try_transact(&self.reference.doc).map_err(Error::from)?;
-        f(&txn)
+        let result = {
+            let txn = yrs::Transact::try_transact(&self.reference.doc).map_err(Error::from)?;
+            f(&txn)
+        };
+        release_parked_undo_managers();
+        result
     }
 
     fn with_transaction_mut<F, T>(&self, f: F) -> NifResult<T>
     where
         F: FnOnce(&mut TransactionMut) -> NifResult<T>,
     {
-        let mut txn = yrs::Transact::try_transact_mut(&self.reference.doc).map_err(Error::from)?;
-        f(&mut txn)
+        let result = {
+            let mut txn =
+                yrs::Transact::try_transact_mut(&self.reference.doc).map_err(Error::from)?;
+            f(&mut txn)
+        };
+        release_parked_undo_managers();
+        result
     }
 }
 
@@ -340,15 +350,6 @@ fn doc_with_options(option: NifOptions) -> NifDoc {
     NifDoc::with_options(option)
 }
 
-fn raise_on_transaction_acq_error<T>(result: NifResult<T>) -> NifResult<T> {
-    match result {
-        Err(rustler::Error::Atom("transaction_acq_error")) => {
-            Err(rustler::Error::RaiseAtom("transaction_acq_error"))
-        }
-        other => other,
-    }
-}
-
 #[rustler::nif]
 fn doc_get_or_insert_text(
     env: Env<'_>,
@@ -356,9 +357,9 @@ fn doc_get_or_insert_text(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     name: &str,
 ) -> NifResult<NifText> {
-    raise_on_transaction_acq_error(doc.mutably(env, current_transaction, |txn| {
+    doc.mutably(env, current_transaction, |txn| {
         Ok(NifText::new(doc.clone(), txn.get_or_insert_text(name)))
-    }))
+    })
 }
 
 #[rustler::nif]
@@ -368,9 +369,9 @@ fn doc_get_or_insert_array(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     name: &str,
 ) -> NifResult<NifArray> {
-    raise_on_transaction_acq_error(doc.mutably(env, current_transaction, |txn| {
+    doc.mutably(env, current_transaction, |txn| {
         Ok(NifArray::new(doc.clone(), txn.get_or_insert_array(name)))
-    }))
+    })
 }
 
 #[rustler::nif]
@@ -380,9 +381,9 @@ fn doc_get_or_insert_map(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     name: &str,
 ) -> NifResult<NifMap> {
-    raise_on_transaction_acq_error(doc.mutably(env, current_transaction, |txn| {
+    doc.mutably(env, current_transaction, |txn| {
         Ok(NifMap::new(doc.clone(), txn.get_or_insert_map(name)))
-    }))
+    })
 }
 
 #[rustler::nif]
@@ -392,12 +393,12 @@ fn doc_get_or_insert_xml_fragment(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     name: &str,
 ) -> NifResult<NifXmlFragment> {
-    raise_on_transaction_acq_error(doc.mutably(env, current_transaction, |txn| {
+    doc.mutably(env, current_transaction, |txn| {
         Ok(NifXmlFragment::new(
             doc.clone(),
             txn.get_or_insert_xml_fragment(name),
         ))
-    }))
+    })
 }
 
 #[rustler::nif]
@@ -423,9 +424,13 @@ fn doc_begin_transaction(
 #[rustler::nif]
 fn commit_transaction(env: Env<'_>, current_transaction: ResourceArc<TransactionResource>) {
     ENV.set(&mut env.clone(), || {
-        if let Ok(mut txn) = current_transaction.0.write() {
-            *txn = None;
-        }
+        let mut txn = current_transaction
+            .0
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        *txn = None;
+        drop(txn);
+        release_parked_undo_managers();
     })
 }
 
@@ -652,13 +657,13 @@ fn get_pending_update_v1<'a>(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Term<'a>> {
-    transaction_acq_error_tuple(doc.readonly(current_transaction, |txn| {
+    doc.readonly(current_transaction, |txn| {
         let result = txn.store().pending_update().map(|p| {
             let bytes = p.update.encode_v1();
             SliceIntoBinary::new(bytes.as_slice()).encode(env)
         });
         Ok((atoms::ok(), result).encode(env))
-    }))
+    })
 }
 
 #[rustler::nif]
@@ -667,13 +672,13 @@ fn get_pending_ds_v1<'a>(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Term<'a>> {
-    transaction_acq_error_tuple(doc.readonly(current_transaction, |txn| {
+    doc.readonly(current_transaction, |txn| {
         let result = txn.store().pending_ds().map(|ds| {
             let bytes = ds.encode_v1();
             SliceIntoBinary::new(bytes.as_slice()).encode(env)
         });
         Ok((atoms::ok(), result).encode(env))
-    }))
+    })
 }
 
 #[rustler::nif]
@@ -682,22 +687,13 @@ fn prune_pending_v1<'a>(
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Term<'a>> {
-    transaction_acq_error_tuple(doc.mutably(env, current_transaction, |txn| {
+    doc.mutably(env, current_transaction, |txn| {
         let result = txn.prune_pending().map(|update| {
             let bytes = update.encode_v1();
             SliceIntoBinary::new(bytes.as_slice()).encode(env)
         });
         Ok((atoms::ok(), result).encode(env))
-    }))
-}
-
-fn transaction_acq_error_tuple<T>(result: NifResult<T>) -> NifResult<T> {
-    match result {
-        Err(rustler::Error::Atom("transaction_acq_error")) => Err(rustler::Error::Term(Box::new(
-            atoms::transaction_acq_error(),
-        ))),
-        other => other,
-    }
+    })
 }
 
 #[rustler::nif]

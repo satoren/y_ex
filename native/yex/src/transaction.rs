@@ -9,6 +9,16 @@ impl rustler::Resource for TransactionResource {}
 unsafe impl Send for TransactionResource {}
 unsafe impl Sync for TransactionResource {}
 
+// A transaction dropped without commit_transaction (e.g. its owner crashed) must still
+// give undo managers parked behind it a chance to be released.
+impl Drop for TransactionResource {
+    fn drop(&mut self) {
+        let txn = self.0.get_mut().unwrap_or_else(|e| e.into_inner());
+        *txn = None;
+        crate::undo::release_parked_undo_managers();
+    }
+}
+
 pub enum ReadTransaction<'a, 'doc> {
     ReadOnly(&'a Transaction<'doc>),
     ReadWrite(&'a TransactionMut<'doc>),

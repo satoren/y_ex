@@ -1124,8 +1124,15 @@ defmodule Yex.UndoManagerTest do
       {doc, text, undo_manager}
     end
 
-    test "undo inside a transaction returns an error instead of blocking" do
-      assert {{:error, :transaction_acq_error}, {:error, :transaction_acq_error}, "hello!", ""} =
+    defp rescue_acq_error(fun) do
+      fun.()
+    rescue
+      error in Yex.TransactionAcqError -> {:raised, error.__struct__}
+    end
+
+    test "undo inside a transaction raises instead of blocking" do
+      assert {{:raised, Yex.TransactionAcqError}, {:raised, Yex.TransactionAcqError}, "hello!",
+              ""} =
                in_task(fn ->
                  {doc, text, undo_manager} = tracked_doc()
 
@@ -1133,7 +1140,8 @@ defmodule Yex.UndoManagerTest do
                    Doc.transaction(doc, fn ->
                      Text.insert(text, 5, "!")
 
-                     {UndoManager.undo(undo_manager), UndoManager.undo_with_result(undo_manager)}
+                     {rescue_acq_error(fn -> UndoManager.undo(undo_manager) end),
+                      rescue_acq_error(fn -> UndoManager.undo_with_result(undo_manager) end)}
                    end)
 
                  inside = Text.to_string(text)
@@ -1142,15 +1150,16 @@ defmodule Yex.UndoManagerTest do
                end)
     end
 
-    test "redo inside a transaction returns an error instead of blocking" do
-      assert {{:error, :transaction_acq_error}, {:error, :transaction_acq_error}, "", "hello"} =
+    test "redo inside a transaction raises instead of blocking" do
+      assert {{:raised, Yex.TransactionAcqError}, {:raised, Yex.TransactionAcqError}, "", "hello"} =
                in_task(fn ->
                  {doc, text, undo_manager} = tracked_doc()
                  {:ok, true} = UndoManager.undo_with_result(undo_manager)
 
                  {plain, with_result} =
                    Doc.transaction(doc, fn ->
-                     {UndoManager.redo(undo_manager), UndoManager.redo_with_result(undo_manager)}
+                     {rescue_acq_error(fn -> UndoManager.redo(undo_manager) end),
+                      rescue_acq_error(fn -> UndoManager.redo_with_result(undo_manager) end)}
                    end)
 
                  inside = Text.to_string(text)
@@ -1160,9 +1169,9 @@ defmodule Yex.UndoManagerTest do
     end
 
     test "undo and redo on empty stacks inside a transaction still report the open transaction" do
-      assert {{:error, :transaction_acq_error}, {:error, :transaction_acq_error},
-              {:error, :transaction_acq_error}, {:error, :transaction_acq_error}, {:ok, false},
-              {:ok, false}} =
+      assert {{:raised, Yex.TransactionAcqError}, {:raised, Yex.TransactionAcqError},
+              {:raised, Yex.TransactionAcqError}, {:raised, Yex.TransactionAcqError},
+              {:ok, false}, {:ok, false}} =
                in_task(fn ->
                  doc = Doc.new()
                  text = Doc.get_text(doc, "text")
@@ -1172,14 +1181,103 @@ defmodule Yex.UndoManagerTest do
 
                  {undo, undo_result, redo, redo_result} =
                    Doc.transaction(doc, fn ->
-                     {UndoManager.undo(undo_manager), UndoManager.undo_with_result(undo_manager),
-                      UndoManager.redo(undo_manager), UndoManager.redo_with_result(undo_manager)}
+                     {rescue_acq_error(fn -> UndoManager.undo(undo_manager) end),
+                      rescue_acq_error(fn -> UndoManager.undo_with_result(undo_manager) end),
+                      rescue_acq_error(fn -> UndoManager.redo(undo_manager) end),
+                      rescue_acq_error(fn -> UndoManager.redo_with_result(undo_manager) end)}
                    end)
 
                  {undo, undo_result, redo, redo_result,
                   UndoManager.undo_with_result(undo_manager),
                   UndoManager.redo_with_result(undo_manager)}
                end)
+    end
+
+    test "new and expand_scope inside a transaction raise instead of misreporting" do
+      assert {{:raised, Yex.TransactionAcqError}, {:raised, Yex.TransactionAcqError}, "hello"} =
+               in_task(fn ->
+                 {doc, text, undo_manager} = tracked_doc()
+                 other = Doc.get_text(doc, "other")
+
+                 {new_result, expand_result} =
+                   Doc.transaction(doc, fn ->
+                     {rescue_acq_error(fn -> UndoManager.new(doc, text) end),
+                      rescue_acq_error(fn -> UndoManager.expand_scope(undo_manager, other) end)}
+                   end)
+
+                 :ok = UndoManager.expand_scope(undo_manager, other)
+                 :ok = UndoManager.stop_capturing(undo_manager)
+                 Text.insert(other, 0, "x")
+                 {:ok, true} = UndoManager.undo_with_result(undo_manager)
+                 "" = Text.to_string(other)
+                 {new_result, expand_result, Text.to_string(text)}
+               end)
+    end
+
+    test "garbage collecting an undo manager during a transaction does not abort the VM" do
+      assert {"hello!?", "hello!"} =
+               in_task(fn ->
+                 doc = Doc.new()
+                 text = Doc.get_text(doc, "text")
+                 {:ok, _dropped} = UndoManager.new(doc, text)
+                 Text.insert(text, 0, "hello")
+
+                 Doc.transaction(doc, fn ->
+                   Text.insert(text, 5, "!")
+                   :erlang.garbage_collect()
+                   # Resource destructors run asynchronously as scheduler aux work.
+                   Process.sleep(100)
+                 end)
+
+                 {:ok, undo_manager} = UndoManager.new(doc, text)
+                 Text.insert(text, 6, "?")
+                 after_insert = Text.to_string(text)
+                 :ok = UndoManager.undo(undo_manager)
+                 {after_insert, Text.to_string(text)}
+               end)
+    end
+
+    test "dropping an undo manager while another process holds a transaction does not abort the VM" do
+      test_pid = self()
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+
+      {dropper, dropper_ref} =
+        spawn_monitor(fn ->
+          {:ok, _dropped} = UndoManager.new(%{doc | worker_pid: self()}, text)
+          send(test_pid, :created)
+
+          receive do
+            :drop -> :ok
+          end
+        end)
+
+      assert_receive :created, 5_000
+
+      holder =
+        spawn_link(fn ->
+          Doc.transaction(%{doc | worker_pid: self()}, fn ->
+            send(test_pid, :holding)
+
+            receive do
+              :release -> :ok
+            end
+          end)
+
+          send(test_pid, :released)
+        end)
+
+      assert_receive :holding, 5_000
+      send(dropper, :drop)
+      assert_receive {:DOWN, ^dropper_ref, :process, ^dropper, :normal}, 5_000
+      Process.sleep(100)
+      send(holder, :release)
+      assert_receive :released, 5_000
+
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      Text.insert(text, 0, "hello")
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
     end
 
     test "results and stack queries work through a worker process" do
@@ -1203,19 +1301,23 @@ defmodule Yex.UndoManagerTest do
       refute UndoManager.can_redo?(undo_manager)
     end
 
-    test "clear inside a transaction returns an error instead of blocking" do
-      assert {{:error, :transaction_acq_error}, true, false} =
+    test "clear inside a transaction raises instead of blocking" do
+      assert {{:raised, Yex.TransactionAcqError}, true, false} =
                in_task(fn ->
                  {doc, _text, undo_manager} = tracked_doc()
 
-                 inside = Doc.transaction(doc, fn -> UndoManager.clear(undo_manager) end)
+                 inside =
+                   Doc.transaction(doc, fn ->
+                     rescue_acq_error(fn -> UndoManager.clear(undo_manager) end)
+                   end)
+
                  still_tracked = UndoManager.can_undo?(undo_manager)
                  :ok = UndoManager.clear(undo_manager)
                  {inside, still_tracked, UndoManager.can_undo?(undo_manager)}
                end)
     end
 
-    test "clear while another process holds a transaction returns an error instead of blocking" do
+    test "clear while another process holds a transaction raises instead of blocking" do
       test_pid = self()
 
       holder =
@@ -1237,10 +1339,14 @@ defmodule Yex.UndoManagerTest do
       as_own_worker = fn pid -> %{undo_manager | doc: %{doc | worker_pid: pid}} end
 
       # Task with timeout plus early release makes a blocking regression fail, not hang.
-      task = Task.async(fn -> UndoManager.clear(as_own_worker.(self())) end)
+      task =
+        Task.async(fn ->
+          rescue_acq_error(fn -> UndoManager.clear(as_own_worker.(self())) end)
+        end)
+
       yielded = Task.yield(task, 5_000)
       send(holder, :release)
-      assert {:ok, {:error, :transaction_acq_error}} = yielded || Task.shutdown(task)
+      assert {:ok, {:raised, Yex.TransactionAcqError}} = yielded || Task.shutdown(task)
       assert_receive :released, 5_000
 
       undo_manager = as_own_worker.(self())

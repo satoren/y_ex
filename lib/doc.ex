@@ -232,7 +232,7 @@ defmodule Yex.Doc do
   missing updates have been fetched.
 
   Works both inside and outside `transaction/3`. Returns `{:ok, nil}` when
-  nothing is pending. Returns `{:error, :transaction_acq_error}` when a
+  nothing is pending. Raises `Yex.TransactionAcqError` when a
   transaction held by another process prevents opening one.
   """
   @spec prune_pending(t) :: {:ok, binary() | nil} | {:error, term()}
@@ -245,7 +245,7 @@ defmodule Yex.Doc do
   @doc """
   Start a transaction.
 
-  Raises RuntimeError if a transaction is already in progress.
+  Raises `Yex.TransactionAcqError` if a transaction is already in progress.
 
   ## Examples
       iex> doc = Doc.new()
@@ -263,7 +263,7 @@ defmodule Yex.Doc do
   def transaction(%__MODULE__{reference: ref} = doc, origin \\ nil, exec) do
     run_in_worker_process doc do
       if cur_txn(doc) do
-        raise RuntimeError, "Transaction already in progress"
+        raise Yex.TransactionAcqError
       end
 
       txn = Yex.Nif.doc_begin_transaction(doc, origin)
