@@ -59,6 +59,8 @@ defmodule Yex.UndoManager do
 
   ## Errors
   - Returns `{:error, "NIF error: <message>"}` if underlying NIF returns an error
+  - Raises `Yex.TransactionAcqError` when a transaction on the document is open,
+    for example inside `Yex.Doc.transaction/3`
   """
   @spec new_with_options(Yex.Doc.t(), struct(), Options.t()) ::
           {:ok, Yex.UndoManager.t()} | {:error, term()}
@@ -67,6 +69,8 @@ defmodule Yex.UndoManager do
              is_valid_scope(scope) and
              is_struct(options, Options) do
     Doc.run_in_worker_process doc do
+      ensure_no_transaction!(doc)
+
       case Yex.Nif.undo_manager_new_with_options(doc, scope, options) do
         {:ok, manager} -> {:ok, manager}
         {:error, message} -> {:error, "NIF error: #{message}"}
@@ -96,7 +100,7 @@ defmodule Yex.UndoManager do
   Undoes the last tracked change.
 
   Returns `:ok` whether or not anything was undone; use `undo_with_result/1`
-  to learn which. Returns `{:error, :transaction_acq_error}` when a transaction
+  to learn which. Raises `Yex.TransactionAcqError` when a transaction
   on the document is open (for example when called inside
   `Yex.Doc.transaction/3`), because undo commits a transaction of its own.
   """
@@ -106,22 +110,23 @@ defmodule Yex.UndoManager do
   @doc """
   Undoes the last tracked change and reports whether the document changed.
 
-  Returns `{:ok, false}` when the undo stack is empty. Returns
-  `{:error, :transaction_acq_error}` under the same condition as `undo/1`,
+  Returns `{:ok, false}` when the undo stack is empty. Raises
+  `Yex.TransactionAcqError` under the same condition as `undo/1`,
   whether or not the stack is empty.
   """
   @spec undo_with_result(t) :: {:ok, boolean()} | {:error, term()}
   def undo_with_result(%{doc: doc} = undo_manager) do
-    Doc.run_in_worker_process(doc,
-      do: normalize_error(Yex.Nif.undo_manager_undo(undo_manager))
-    )
+    Doc.run_in_worker_process doc do
+      ensure_no_transaction!(doc)
+      Yex.Nif.undo_manager_undo(undo_manager)
+    end
   end
 
   @doc """
   Redoes the last undone change.
 
   Returns `:ok` whether or not anything was redone; use `redo_with_result/1`
-  to learn which. Returns `{:error, :transaction_acq_error}` when a transaction
+  to learn which. Raises `Yex.TransactionAcqError` when a transaction
   on the document is open.
   """
   @spec redo(t) :: :ok | {:error, term()}
@@ -130,15 +135,16 @@ defmodule Yex.UndoManager do
   @doc """
   Redoes the last undone change and reports whether the document changed.
 
-  Returns `{:ok, false}` when the redo stack is empty. Returns
-  `{:error, :transaction_acq_error}` when a transaction on the document is open,
+  Returns `{:ok, false}` when the redo stack is empty. Raises
+  `Yex.TransactionAcqError` when a transaction on the document is open,
   whether or not the stack is empty.
   """
   @spec redo_with_result(t) :: {:ok, boolean()} | {:error, term()}
   def redo_with_result(%{doc: doc} = undo_manager) do
-    Doc.run_in_worker_process(doc,
-      do: normalize_error(Yex.Nif.undo_manager_redo(undo_manager))
-    )
+    Doc.run_in_worker_process doc do
+      ensure_no_transaction!(doc)
+      Yex.Nif.undo_manager_redo(undo_manager)
+    end
   end
 
   @doc """
@@ -160,17 +166,17 @@ defmodule Yex.UndoManager do
   defp discard_result({:ok, _changed}), do: :ok
   defp discard_result(error), do: error
 
-  defp normalize_error(:transaction_acq_error), do: {:error, :transaction_acq_error}
-  defp normalize_error(result), do: result
-
   @doc """
   Expands the scope of the UndoManager to include additional shared types.
   The scope can be a Text, Array, or Map type.
+
+  Raises `Yex.TransactionAcqError` when a transaction on the document is open.
   """
   def expand_scope(%{doc: doc} = undo_manager, scope) do
-    Doc.run_in_worker_process(doc,
-      do: Yex.Nif.undo_manager_expand_scope(undo_manager, scope)
-    )
+    Doc.run_in_worker_process doc do
+      ensure_no_transaction!(doc)
+      Yex.Nif.undo_manager_expand_scope(undo_manager, scope)
+    end
   end
 
   @doc """
@@ -206,14 +212,22 @@ defmodule Yex.UndoManager do
       UndoManager.clear(undo_manager)
       # All undo/redo history is now cleared
 
-  Returns `{:error, :transaction_acq_error}` instead of blocking when a write
+  Raises `Yex.TransactionAcqError` instead of blocking when a write
   transaction on the document is open, for example inside
   `Yex.Doc.transaction/3`.
   """
   @spec clear(t) :: :ok | {:error, term()}
   def clear(%{doc: doc} = undo_manager) do
-    Doc.run_in_worker_process(doc,
-      do: normalize_error(Yex.Nif.undo_manager_clear(undo_manager))
-    )
+    Doc.run_in_worker_process doc do
+      ensure_no_transaction!(doc)
+      Yex.Nif.undo_manager_clear(undo_manager)
+    end
+  end
+
+  # Must be called inside `Doc.run_in_worker_process/2`: the open transaction is
+  # stored in the worker process's dictionary by `Yex.Doc.transaction/3`.
+  defp ensure_no_transaction!(%Doc{reference: ref}) do
+    if Process.get(ref), do: raise(Yex.TransactionAcqError)
+    :ok
   end
 end

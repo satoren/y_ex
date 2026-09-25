@@ -91,8 +91,7 @@ defmodule Yex.DocTest do
 
     :ok =
       Doc.transaction(doc, fn ->
-        # nif panic
-        assert_raise RuntimeError, fn ->
+        assert_raise Yex.TransactionAcqError, fn ->
           Doc.transaction(doc, fn ->
             nil
           end)
@@ -540,10 +539,18 @@ defmodule Yex.DocTest do
 
       assert_receive {:holding, doc}, 5_000
       # Task with timeout plus early release makes a blocking regression fail, not hang.
-      task = Task.async(fn -> Doc.prune_pending(%{doc | worker_pid: self()}) end)
+      task =
+        Task.async(fn ->
+          try do
+            Doc.prune_pending(%{doc | worker_pid: self()})
+          rescue
+            error in Yex.TransactionAcqError -> {:raised, error}
+          end
+        end)
+
       yielded = Task.yield(task, 5_000)
       send(holder, :release)
-      assert {:ok, {:error, :transaction_acq_error}} = yielded || Task.shutdown(task)
+      assert {:ok, {:raised, %Yex.TransactionAcqError{}}} = yielded || Task.shutdown(task)
       assert_receive :released, 5_000
 
       doc = %{doc | worker_pid: self()}
@@ -765,7 +772,7 @@ defmodule Yex.DocTest do
     test "nested transaction raises error" do
       doc = Doc.new()
 
-      assert_raise RuntimeError, "Transaction already in progress", fn ->
+      assert_raise Yex.TransactionAcqError, fn ->
         Doc.transaction(doc, fn ->
           Doc.transaction(doc, fn ->
             :nested
@@ -972,7 +979,7 @@ defmodule Yex.DocTest do
             try do
               getter.(doc, "root")
             rescue
-              error in ErlangError -> {:raised, error.original}
+              error in Yex.TransactionAcqError -> {:raised, error.__struct__}
             end
           end
         end)
@@ -980,7 +987,7 @@ defmodule Yex.DocTest do
       yielded = Task.yield(task, 5_000)
       send(holder, :release)
 
-      assert {:ok, List.duplicate({:raised, :transaction_acq_error}, 4)} ==
+      assert {:ok, List.duplicate({:raised, Yex.TransactionAcqError}, 4)} ==
                (yielded || Task.shutdown(task))
 
       assert_receive :released, 5_000

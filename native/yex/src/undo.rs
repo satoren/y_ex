@@ -4,8 +4,11 @@ use crate::{
 };
 
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc, Term};
+use std::mem::ManuallyDrop;
 use std::ops::Deref;
-use std::sync::RwLock;
+use std::panic::AssertUnwindSafe;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, RwLock};
 use yrs::{undo::Options as UndoOptions, UndoManager};
 
 #[derive(NifStruct)]
@@ -16,12 +19,86 @@ pub struct NifUndoManager {
 }
 
 pub struct UndoManagerWrapper {
-    manager: UndoManager,
+    manager: ManuallyDrop<UndoManager>,
 }
 
 impl UndoManagerWrapper {
     pub fn new(manager: UndoManager) -> Self {
-        Self { manager }
+        Self {
+            manager: ManuallyDrop::new(manager),
+        }
+    }
+}
+
+// yrs' `UndoManager::drop` unwraps `unobserve_*` calls that need exclusive access to the
+// document store, so dropping it while a transaction is open panics, and a panic in a
+// resource destructor aborts the VM. Its observers also hold raw pointers to the manager,
+// so it can't simply be freed without detaching them first.
+impl Drop for UndoManagerWrapper {
+    fn drop(&mut self) {
+        // SAFETY: `manager` is not accessed again after being taken here.
+        let manager = unsafe { ManuallyDrop::take(&mut self.manager) };
+        if let Err(manager) = try_release(manager) {
+            let mut parked = lock_parked();
+            parked.push(manager);
+            HAS_PARKED.store(true, Ordering::Release);
+        }
+    }
+}
+
+/// Managers whose document store was busy when they were dropped. Their observers stay
+/// registered (and keep recording into them) until they are released.
+static PARKED: Mutex<Vec<UndoManager>> = Mutex::new(Vec::new());
+/// Lock-free fast path for `release_parked_undo_managers`; only written under `PARKED`.
+static HAS_PARKED: AtomicBool = AtomicBool::new(false);
+
+fn lock_parked() -> std::sync::MutexGuard<'static, Vec<UndoManager>> {
+    PARKED
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Detaches `manager` from its documents and frees it, or hands it back if a store is busy.
+fn try_release(manager: UndoManager) -> Result<(), UndoManager> {
+    let origin = manager.as_origin();
+    let mut detached = true;
+    for doc in manager.docs() {
+        match yrs::Transact::try_transact_mut(doc) {
+            Ok(txn) => {
+                txn.unobserve_destroy(origin.clone());
+                txn.unobserve_after_transaction(origin.clone());
+            }
+            Err(_) => detached = false,
+        }
+    }
+    if !detached {
+        return Err(manager);
+    }
+    // yrs' Drop repeats the (now no-op) unobserve calls, which still need the store. If
+    // another transaction wins the race for it, the panic is contained here, and freeing the
+    // manager is sound because no observer points at it anymore.
+    let _ = std::panic::catch_unwind(AssertUnwindSafe(|| drop(manager)));
+    Ok(())
+}
+
+/// Retries releasing parked managers. Call once a transaction has been closed.
+pub(crate) fn release_parked_undo_managers() {
+    if !HAS_PARKED.load(Ordering::Acquire) {
+        return;
+    }
+    let parked = {
+        let mut parked = lock_parked();
+        HAS_PARKED.store(false, Ordering::Release);
+        std::mem::take(&mut *parked)
+    };
+    let still_busy: Vec<UndoManager> = parked
+        .into_iter()
+        .filter_map(|manager| try_release(manager).err())
+        .collect();
+    if !still_busy.is_empty() {
+        let mut parked = lock_parked();
+        parked.extend(still_busy);
+        HAS_PARKED.store(true, Ordering::Release);
     }
 }
 
@@ -68,15 +145,22 @@ fn create_undo_manager<T: NifSharedType>(
     )
 }
 
+// Raises TransactionAcqError when a transaction is open, instead of folding it
+// into the generic lookup failure message.
+fn branch_ref<T: NifSharedType>(scope: &T, message: &str) -> NifResult<T::RefType> {
+    let txn = yrs::Transact::try_transact(&scope.doc().reference.doc).map_err(Error::from)?;
+    scope
+        .get_ref(&txn)
+        .map_err(|_| Error::Message(message.to_string()).into())
+}
+
 fn create_undo_manager_with_options<T: NifSharedType>(
     _env: Env<'_>,
     doc: NifDoc,
     scope: T,
     options: NifUndoOptions,
 ) -> NifResult<(Atom, NifUndoManager)> {
-    let branch = scope
-        .readonly(None, |txn| scope.get_ref(txn))
-        .map_err(|_| Error::Message("Failed to get branch reference".to_string()))?;
+    let branch = branch_ref(&scope, "Failed to get branch reference")?;
 
     let undo_options = UndoOptions {
         capture_timeout_millis: options.capture_timeout,
@@ -252,53 +336,31 @@ pub fn undo_manager_expand_scope(
         let doc = undo_manager.doc;
         match scope {
             NifSharedTypeInput::Text(text) => {
-                let branch = text.readonly(None, |txn| text.get_ref(txn)).map_err(|_| {
-                    Error::Message("Failed to get text branch reference".to_string())
-                })?;
+                let branch = branch_ref(&text, "Failed to get text branch reference")?;
                 wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::Array(array) => {
-                let branch = array
-                    .readonly(None, |txn| array.get_ref(txn))
-                    .map_err(|_| {
-                        Error::Message("Failed to get array branch reference".to_string())
-                    })?;
+                let branch = branch_ref(&array, "Failed to get array branch reference")?;
                 wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::Map(map) => {
-                let branch = map.readonly(None, |txn| map.get_ref(txn)).map_err(|_| {
-                    Error::Message("Failed to get map branch reference".to_string())
-                })?;
+                let branch = branch_ref(&map, "Failed to get map branch reference")?;
                 wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::XmlText(text) => {
-                let branch = text.readonly(None, |txn| text.get_ref(txn)).map_err(|_| {
-                    Error::Message("Failed to get xml text branch reference".to_string())
-                })?;
+                let branch = branch_ref(&text, "Failed to get xml text branch reference")?;
                 wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::XmlElement(element) => {
-                let branch = element
-                    .readonly(None, |txn| element.get_ref(txn))
-                    .map_err(|_| {
-                        Error::Message("Failed to get xml element branch reference".to_string())
-                    })?;
+                let branch = branch_ref(&element, "Failed to get xml element branch reference")?;
                 wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::XmlFragment(fragment) => {
-                let branch = fragment
-                    .readonly(None, |txn| fragment.get_ref(txn))
-                    .map_err(|_| {
-                        Error::Message("Failed to get xml fragment branch reference".to_string())
-                    })?;
+                let branch = branch_ref(&fragment, "Failed to get xml fragment branch reference")?;
                 wrapper.manager.expand_scope(doc.deref(), &branch);
             }
             NifSharedTypeInput::WeakLink(weak_link) => {
-                let branch = weak_link
-                    .readonly(None, |txn| weak_link.get_ref(txn))
-                    .map_err(|_| {
-                        Error::Message("Failed to get weak link branch reference".to_string())
-                    })?;
+                let branch = branch_ref(&weak_link, "Failed to get weak link branch reference")?;
                 wrapper.manager.expand_scope(doc.deref(), &branch);
             }
         }
