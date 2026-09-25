@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Mutex};
 
 use crate::error::Error;
-use crate::subscription::{is_active, AwarenessEvent, NifSubscription, SubscriptionKey};
+use crate::subscription::{AwarenessEvent, NifSubscription, SubscriptionKey};
 use crate::term_box::TermBox;
 use crate::utils::{origin_to_term, term_to_origin_binary};
 use crate::{
@@ -131,15 +131,14 @@ fn awareness_monitor_update(
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifSubscription {
-    let metadata = TermBox::new(metadata);
-    let sub_key = SubscriptionKey::new();
-    let active = sub_key.active.clone();
+    let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
     awareness
         .lock()
         .on_update(sub_key.key.clone(), move |_awareness, event, origin| {
-            if !is_active(&active) {
+            let Some(state) = state.get() else {
                 return;
-            }
+            };
+            let (pid, metadata) = &*state;
             let summary = NifAwarenessUpdateSummary {
                 added: client_ids_to_u64(event.added()),
                 updated: client_ids_to_u64(event.updated()),
@@ -148,7 +147,7 @@ fn awareness_monitor_update(
             ENV.with(|env| {
                 let metadata = metadata.get(*env);
                 let _ = env.send(
-                    &pid,
+                    pid,
                     (
                         atoms::awareness_update(),
                         summary,
@@ -170,15 +169,14 @@ fn awareness_monitor_change(
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifSubscription {
-    let metadata = TermBox::new(metadata);
-    let sub_key = SubscriptionKey::new();
-    let active = sub_key.active.clone();
+    let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
     awareness
         .lock()
         .on_change(sub_key.key.clone(), move |_awareness, event, origin| {
-            if !is_active(&active) {
+            let Some(state) = state.get() else {
                 return;
-            }
+            };
+            let (pid, metadata) = &*state;
             let summary = NifAwarenessUpdateSummary {
                 added: client_ids_to_u64(event.added()),
                 updated: client_ids_to_u64(event.updated()),
@@ -187,7 +185,7 @@ fn awareness_monitor_change(
             ENV.with(|env| {
                 let metadata = metadata.get(*env);
                 let _ = env.send(
-                    &pid,
+                    pid,
                     (
                         atoms::awareness_change(),
                         summary,
