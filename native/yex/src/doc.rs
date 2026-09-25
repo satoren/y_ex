@@ -424,9 +424,12 @@ fn doc_begin_transaction(
 #[rustler::nif]
 fn commit_transaction(env: Env<'_>, current_transaction: ResourceArc<TransactionResource>) {
     ENV.set(&mut env.clone(), || {
-        if let Ok(mut txn) = current_transaction.0.write() {
-            *txn = None;
-        }
+        let mut txn = current_transaction
+            .0
+            .write()
+            .unwrap_or_else(|e| e.into_inner());
+        *txn = None;
+        drop(txn);
         release_parked_undo_managers();
     })
 }

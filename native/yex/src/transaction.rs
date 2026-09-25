@@ -13,9 +13,8 @@ unsafe impl Sync for TransactionResource {}
 // give undo managers parked behind it a chance to be released.
 impl Drop for TransactionResource {
     fn drop(&mut self) {
-        if let Ok(txn) = self.0.get_mut() {
-            *txn = None;
-        }
+        let txn = self.0.get_mut().unwrap_or_else(|e| e.into_inner());
+        *txn = None;
         crate::undo::release_parked_undo_managers();
     }
 }
