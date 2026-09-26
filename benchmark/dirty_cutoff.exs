@@ -91,7 +91,9 @@ measure = fn apply_fn ->
       fn ->
         tick = fn tick, worst, last ->
           receive do
-            :stop -> send(parent, {:worst_gap_ms, worst})
+            :stop ->
+              now = System.monotonic_time(:millisecond)
+              send(parent, {:worst_gap_ms, max(worst, now - last)})
           after
             10 ->
               now = System.monotonic_time(:millisecond)
