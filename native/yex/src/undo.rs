@@ -109,8 +109,9 @@ impl rustler::Resource for UndoManagerResource {}
 
 #[derive(NifStruct)]
 #[module = "Yex.UndoManager.Options"]
-pub struct NifUndoOptions {
+pub struct NifUndoOptions<'a> {
     pub capture_timeout: u64,
+    pub tracked_origins: Option<Vec<Term<'a>>>,
 }
 
 #[rustler::nif]
@@ -141,6 +142,7 @@ fn create_undo_manager<T: NifSharedType>(
         scope,
         NifUndoOptions {
             capture_timeout: 500,
+            tracked_origins: None,
         },
     )
 }
@@ -158,14 +160,21 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     _env: Env<'_>,
     doc: NifDoc,
     scope: T,
-    options: NifUndoOptions,
+    options: NifUndoOptions<'_>,
 ) -> NifResult<(Atom, NifUndoManager)> {
     let branch = branch_ref(&scope, "Failed to get branch reference")?;
 
-    let undo_options = UndoOptions {
+    let mut undo_options = UndoOptions {
         capture_timeout_millis: options.capture_timeout,
         ..Default::default()
     };
+    for origin_term in options.tracked_origins.unwrap_or_default() {
+        let origin = term_to_origin_binary(origin_term)
+            .ok_or_else(|| Error::Message("Invalid origin term".to_string()))?;
+        undo_options
+            .tracked_origins
+            .insert(origin.as_slice().into());
+    }
 
     let mut undo_manager = UndoManager::with_options(undo_options);
     undo_manager.expand_scope(&doc, &branch);
@@ -185,7 +194,7 @@ pub fn undo_manager_new_with_options(
     env: Env<'_>,
     doc: NifDoc,
     scope: NifSharedTypeInput,
-    options: NifUndoOptions,
+    options: NifUndoOptions<'_>,
 ) -> NifResult<(Atom, NifUndoManager)> {
     // Check if the document reference is valid by attempting to access its inner doc
     // will return an error tuple if it is not
