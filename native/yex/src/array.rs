@@ -1,4 +1,4 @@
-use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
+use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
 use yrs::types::ToJson;
 use yrs::*;
 
@@ -201,13 +201,37 @@ fn array_slice(
     })
 }
 
-#[rustler::nif]
-fn array_to_json(
+fn array_to_json_impl(
+    env: Env<'_>,
     array: NifArray,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<NifAny> {
+    item_limit: Option<u64>,
+) -> NifResult<Term<'_>> {
     array.readonly(current_transaction, |txn| {
+        if txn.exceeds_item_limit(item_limit) {
+            return Ok(atoms::dirty().encode(env));
+        }
         let array = array.get_ref(txn)?;
-        Ok(array.to_json(txn).into())
+        Ok(NifAny::from(array.to_json(txn)).encode(env))
     })
+}
+
+/// Returns `:dirty` without converting when the doc holds more than `item_limit` items.
+#[rustler::nif]
+fn array_to_json(
+    env: Env<'_>,
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    item_limit: Option<u64>,
+) -> NifResult<Term<'_>> {
+    array_to_json_impl(env, array, current_transaction, item_limit)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn array_to_json_dirty(
+    env: Env<'_>,
+    array: NifArray,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Term<'_>> {
+    array_to_json_impl(env, array, current_transaction, None)
 }

@@ -639,12 +639,12 @@ fn encode_state_vector_v1(
     })
 }
 
-#[rustler::nif]
-fn encode_state_as_update_v1<'a>(
+fn encode_state_as_update_v1_impl<'a>(
     env: Env<'a>,
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     state_vector: Option<Binary>,
+    item_limit: Option<u64>,
 ) -> NifResult<Term<'a>> {
     let sv = if let Some(vector) = state_vector {
         StateVector::decode_v1(vector.as_slice()).map_err(Error::from)?
@@ -652,30 +652,87 @@ fn encode_state_as_update_v1<'a>(
         StateVector::default()
     };
 
-    doc.readonly(current_transaction, |txn| Ok(txn.encode_diff_v1(&sv)))
-        .map(|vec| (atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
+    doc.readonly(current_transaction, |txn| {
+        if txn.exceeds_item_limit(item_limit) {
+            return Ok(atoms::dirty().encode(env));
+        }
+        let vec = txn.encode_diff_v1(&sv);
+        Ok((atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
+    })
+}
+
+/// Returns `:dirty` without encoding when the doc holds more than `item_limit` items.
+#[rustler::nif]
+fn encode_state_as_update_v1<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    state_vector: Option<Binary>,
+    item_limit: Option<u64>,
+) -> NifResult<Term<'a>> {
+    encode_state_as_update_v1_impl(env, doc, current_transaction, state_vector, item_limit)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn encode_state_as_update_v1_dirty<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    state_vector: Option<Binary>,
+) -> NifResult<Term<'a>> {
+    encode_state_as_update_v1_impl(env, doc, current_transaction, state_vector, None)
+}
+
+fn encode_diff_and_state_vector_v1_impl<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    remote_state_vector: Binary<'a>,
+    item_limit: Option<u64>,
+) -> NifResult<Term<'a>> {
+    let sv = StateVector::decode_v1(remote_state_vector.as_slice()).map_err(Error::from)?;
+    doc.readonly(current_transaction, |txn| {
+        if txn.exceeds_item_limit(item_limit) {
+            return Ok(atoms::dirty().encode(env));
+        }
+        let diff = txn.encode_diff_v1(&sv);
+        let local_sv = txn.state_vector().encode_v1();
+        Ok((
+            atoms::ok(),
+            SliceIntoBinary::new(diff.as_slice()),
+            SliceIntoBinary::new(local_sv.as_slice()),
+        )
+            .encode(env))
+    })
 }
 
 /// Single read transaction for sync step1 response: missing diff vs remote SV + local encoded SV.
+/// Returns `:dirty` without encoding when the doc holds more than `item_limit` items.
 #[rustler::nif]
 fn encode_diff_and_state_vector_v1<'a>(
     env: Env<'a>,
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     remote_state_vector: Binary<'a>,
+    item_limit: Option<u64>,
 ) -> NifResult<Term<'a>> {
-    let sv = StateVector::decode_v1(remote_state_vector.as_slice()).map_err(Error::from)?;
-    let (diff, local_sv) = doc.readonly(current_transaction, |txn| {
-        let diff = txn.encode_diff_v1(&sv);
-        let local_sv = txn.state_vector().encode_v1();
-        Ok((diff, local_sv))
-    })?;
-    Ok((
-        atoms::ok(),
-        SliceIntoBinary::new(diff.as_slice()),
-        SliceIntoBinary::new(local_sv.as_slice()),
+    encode_diff_and_state_vector_v1_impl(
+        env,
+        doc,
+        current_transaction,
+        remote_state_vector,
+        item_limit,
     )
-        .encode(env))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn encode_diff_and_state_vector_v1_dirty<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    remote_state_vector: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    encode_diff_and_state_vector_v1_impl(env, doc, current_transaction, remote_state_vector, None)
 }
 
 #[rustler::nif]
@@ -689,12 +746,12 @@ fn encode_state_vector_v2(
     })?;
     Ok((atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
 }
-#[rustler::nif]
-fn encode_state_as_update_v2<'a>(
+fn encode_state_as_update_v2_impl<'a>(
     env: Env<'a>,
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
     state_vector: Option<Binary>,
+    item_limit: Option<u64>,
 ) -> NifResult<Term<'a>> {
     let sv = if let Some(vector) = state_vector {
         StateVector::decode_v2(vector.as_slice()).map_err(Error::from)?
@@ -702,9 +759,35 @@ fn encode_state_as_update_v2<'a>(
         StateVector::default()
     };
 
-    let vec = doc.readonly(current_transaction, |txn| Ok(txn.encode_diff_v2(&sv)))?;
+    doc.readonly(current_transaction, |txn| {
+        if txn.exceeds_item_limit(item_limit) {
+            return Ok(atoms::dirty().encode(env));
+        }
+        let vec = txn.encode_diff_v2(&sv);
+        Ok((atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
+    })
+}
 
-    Ok((atoms::ok(), SliceIntoBinary::new(vec.as_slice())).encode(env))
+/// Returns `:dirty` without encoding when the doc holds more than `item_limit` items.
+#[rustler::nif]
+fn encode_state_as_update_v2<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    state_vector: Option<Binary>,
+    item_limit: Option<u64>,
+) -> NifResult<Term<'a>> {
+    encode_state_as_update_v2_impl(env, doc, current_transaction, state_vector, item_limit)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn encode_state_as_update_v2_dirty<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    state_vector: Option<Binary>,
+) -> NifResult<Term<'a>> {
+    encode_state_as_update_v2_impl(env, doc, current_transaction, state_vector, None)
 }
 
 #[rustler::nif]

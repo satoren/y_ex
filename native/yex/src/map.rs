@@ -6,7 +6,7 @@ use crate::shared_type::SharedTypeId;
 use crate::transaction::TransactionResource;
 use crate::yinput::NifWeakPrelim;
 use crate::{yinput::NifYInput, youtput::NifYOut, NifAny};
-use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
+use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
 use std::collections::HashMap;
 use yrs::types::ToJson;
 use yrs::*;
@@ -121,15 +121,39 @@ fn map_to_map(
             .collect())
     })
 }
-#[rustler::nif]
-fn map_to_json(
+fn map_to_json_impl(
+    env: Env<'_>,
     map: NifMap,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<NifAny> {
+    item_limit: Option<u64>,
+) -> NifResult<Term<'_>> {
     map.readonly(current_transaction, |txn| {
+        if txn.exceeds_item_limit(item_limit) {
+            return Ok(atoms::dirty().encode(env));
+        }
         let map = map.get_ref(txn)?;
-        Ok(map.to_json(txn).into())
+        Ok(NifAny::from(map.to_json(txn)).encode(env))
     })
+}
+
+/// Returns `:dirty` without converting when the doc holds more than `item_limit` items.
+#[rustler::nif]
+fn map_to_json(
+    env: Env<'_>,
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    item_limit: Option<u64>,
+) -> NifResult<Term<'_>> {
+    map_to_json_impl(env, map, current_transaction, item_limit)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn map_to_json_dirty(
+    env: Env<'_>,
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Term<'_>> {
+    map_to_json_impl(env, map, current_transaction, None)
 }
 #[rustler::nif]
 fn map_keys(
