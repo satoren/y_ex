@@ -52,6 +52,17 @@ defmodule Yex.UndoManager do
   `tracked_origins` in `Yex.UndoManager.Options` instead of calling
   `include_origin/2` afterwards; otherwise a `nil`-origin change made in between
   is captured.
+
+  ## Undo and redo origins
+
+  Undo and redo commit a transaction whose origin is the manager itself. Update
+  subscribers (`Yex.Doc.monitor_update/2`) and observers (`Yex.SharedType.observe/2`)
+  receive that `%Yex.UndoManager{}` as the origin, so it can be matched against the
+  manager in use:
+
+      receive do
+        {:update_v1, _update, ^undo_manager, _doc} -> :undo_or_redo
+      end
   """
   defstruct [:reference, :doc]
 

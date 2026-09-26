@@ -1499,6 +1499,40 @@ defmodule Yex.UndoManagerTest do
     end
   end
 
+  describe "undo and redo origins" do
+    test "monitor_update reports the undo manager as the origin", %{doc: doc, text: text} do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      {:ok, other_manager} = UndoManager.new(doc, text)
+      {:ok, monitor_ref} = Doc.monitor_update(doc)
+
+      Text.insert(text, 0, "a")
+      assert_receive {:update_v1, _update, nil, ^doc}
+
+      UndoManager.undo(undo_manager)
+      assert_receive {:update_v1, _update, origin, ^doc}
+      assert origin == undo_manager
+      refute origin == other_manager
+
+      UndoManager.redo(undo_manager)
+      assert_receive {:update_v1, _update, ^undo_manager, ^doc}
+
+      Doc.transaction(doc, "tagged", fn -> Text.insert(text, 0, "b") end)
+      assert_receive {:update_v1, _update, "tagged", ^doc}
+
+      Doc.demonitor_update(monitor_ref)
+    end
+
+    test "observers receive the undo manager as the origin", %{doc: doc, text: text} do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      Text.insert(text, 0, "a")
+
+      ref = Yex.SharedType.observe(text)
+      UndoManager.undo(undo_manager)
+      assert_receive {:observe_event, ^ref, _event, ^undo_manager, _metadata}
+      Yex.SharedType.unobserve(ref)
+    end
+  end
+
   test "new_with_options handles NIF errors" do
     # Mock test removed - relies on NIF implementation
   end

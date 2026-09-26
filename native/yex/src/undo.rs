@@ -3,18 +3,32 @@ use crate::{
     wrap::NifWrap, yinput::NifSharedTypeInput, Error, NifDoc, ENV,
 };
 
-use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc, Term};
+use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
+use scoped_thread_local::scoped_thread_local;
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::panic::AssertUnwindSafe;
 use std::sync::RwLock;
 use yrs::{undo::Options as UndoOptions, UndoManager};
 
-#[derive(NifStruct)]
+#[derive(NifStruct, Clone)]
 #[module = "Yex.UndoManager"]
 pub struct NifUndoManager {
     reference: ResourceArc<UndoManagerResource>,
     doc: NifDoc,
+}
+
+// The manager whose undo or redo is running on this thread, with its origin. yrs tags
+// those transactions with the manager's address, so `crate::utils::origin_to_term`
+// uses this to report the origin as the manager itself.
+scoped_thread_local!(static ACTIVE: (yrs::Origin, NifUndoManager));
+
+/// The manager running an undo or redo with `origin` on this thread, encoded in `env`.
+pub(crate) fn active_manager_term<'a>(env: Env<'a>, origin: &yrs::Origin) -> Option<Term<'a>> {
+    if !ACTIVE.is_set() {
+        return None;
+    }
+    ACTIVE.with(|(active, manager)| (active == origin).then(|| manager.encode(env)))
 }
 
 pub struct UndoManagerWrapper {
@@ -249,7 +263,8 @@ pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> NifResult<(A
             return Ok((atoms::ok(), false));
         }
 
-        let changed = wrapper.manager.undo_blocking();
+        let mut active = (wrapper.manager.as_origin(), undo_manager.clone());
+        let changed = ACTIVE.set(&mut active, || wrapper.manager.undo_blocking());
         Ok((atoms::ok(), changed))
     })
 }
@@ -280,7 +295,8 @@ pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> NifResult<(A
             return Ok((atoms::ok(), false));
         }
 
-        let changed = wrapper.manager.redo_blocking();
+        let mut active = (wrapper.manager.as_origin(), undo_manager.clone());
+        let changed = ACTIVE.set(&mut active, || wrapper.manager.redo_blocking());
         Ok((atoms::ok(), changed))
     })
 }
