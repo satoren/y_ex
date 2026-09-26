@@ -408,6 +408,218 @@ defmodule Yex.DocTest do
     end
   end
 
+  describe "update_gaps" do
+    # Client 1 sets k (clock 0), x (clock 1) and y (clock 2) on a map. Map entries have
+    # no same-client origin, so y integrates behind a skip on a doc that lacks x.
+    defp map_updates do
+      src = Doc.with_options(%Doc.Options{client_id: 1})
+      map = Doc.get_map(src, "m")
+      Yex.Map.set(map, "k", 1)
+      base = Yex.encode_state_as_update!(src)
+      sv_base = Yex.encode_state_vector!(src)
+      Yex.Map.set(map, "x", 2)
+      x = Yex.encode_state_as_update!(src, sv_base)
+      sv_x = Yex.encode_state_vector!(src)
+      Yex.Map.set(map, "y", 3)
+      y = Yex.encode_state_as_update!(src, sv_x)
+      %{base: base, x: x, y: y, x_and_y: Yex.encode_state_as_update!(src, sv_base)}
+    end
+
+    defp doc_with(updates) do
+      doc = Doc.new()
+      for update <- updates, do: :ok = Yex.apply_update(doc, update)
+      doc
+    end
+
+    test "reports the withheld clock, and nothing once it is applied" do
+      %{base: base, x: x, y: y} = map_updates()
+      doc = doc_with([base])
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(doc, y)
+
+      :ok = Yex.apply_update(doc, x)
+      assert {:ok, gaps} = Doc.update_gaps(doc, y)
+      assert gaps == %{}
+    end
+
+    test "the reported case is the one yrs integrates behind a skip" do
+      %{base: base, y: y} = map_updates()
+      doc = doc_with([base])
+      {:ok, _} = Doc.monitor_update(doc)
+
+      :ok = Yex.apply_update(doc, y)
+
+      assert {:ok, 3.0} = Yex.Map.fetch(Doc.get_map(doc, "m"), "y")
+      assert {:ok, nil} = Doc.get_pending_update(doc)
+      assert_receive {:update_v1, <<0, 0>>, nil, ^doc}
+
+      # A peer that already holds base asks for a diff from the skip start: y is missing.
+      peer = doc_with([base])
+      diff = Yex.encode_state_as_update!(doc, Yex.encode_state_vector!(peer))
+      :ok = Yex.apply_update(peer, diff)
+      assert :error = Yex.Map.fetch(Doc.get_map(peer, "m"), "y")
+    end
+
+    test "contiguous and already known updates report nothing" do
+      %{base: base, x_and_y: x_and_y} = map_updates()
+
+      assert {:ok, gaps} = Doc.update_gaps(doc_with([base]), x_and_y)
+      assert gaps == %{}
+      assert {:ok, gaps} = Doc.update_gaps(Doc.new(), base)
+      assert gaps == %{}
+      assert {:ok, gaps} = Doc.update_gaps(doc_with([base, x_and_y]), base)
+      assert gaps == %{}
+    end
+
+    test "reports only the client with a hole" do
+      %{base: base, y: y} = map_updates()
+
+      other = Doc.with_options(%Doc.Options{client_id: 2})
+      Yex.Map.set(Doc.get_map(other, "m"), "z", 4)
+      {:ok, update} = Yex.merge_updates([y, Yex.encode_state_as_update!(other)])
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(doc_with([base]), update)
+    end
+
+    test "reports a hole inside a merged update" do
+      %{base: base, y: y} = map_updates()
+      {:ok, merged} = Yex.merge_updates([base, y])
+      assert {:ok, debug} = Yex.Nif.update_debug_v1(merged)
+      assert debug =~ "skip("
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(Doc.new(), merged)
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(doc_with([base]), merged)
+    end
+
+    test "works inside a transaction" do
+      %{base: base, x: x, y: y} = map_updates()
+      doc = doc_with([base])
+
+      Doc.transaction(doc, fn ->
+        assert {:ok, %{1 => 1}} = Doc.update_gaps(doc, y)
+        :ok = Yex.apply_update(doc, x)
+        assert {:ok, gaps} = Doc.update_gaps(doc, y)
+        assert gaps == %{}
+      end)
+    end
+
+    test "returns an error for bytes that are not an update" do
+      assert {:error, _} = Doc.update_gaps(Doc.new(), <<255, 255, 255>>)
+    end
+
+    test "update_gaps_v2 returns an error for bytes that are not a v2 update" do
+      # A length varint truncated at the end of the input makes yrs index past it.
+      assert {:error, {:encoding_exception, _}} = Doc.update_gaps_v2(Doc.new(), <<0, 128>>)
+      assert {:error, {:encoding_exception, _}} = Doc.update_gaps_v2(Doc.new(), <<255, 255, 255>>)
+
+      # Above Yex.Nif.dirty_cutoff(): a valid 16_390 byte first column, then the same.
+      big = <<0, 134, 128, 1>> <> :binary.copy(<<0>>, 16_390) <> <<128>>
+      assert byte_size(big) > Yex.Nif.dirty_cutoff()
+      assert {:error, {:encoding_exception, _}} = Doc.update_gaps_v2(Doc.new(), big)
+    end
+
+    test "ignores deleted and garbage-collected structs" do
+      src = Doc.with_options(%Doc.Options{client_id: 1})
+      map = Doc.get_map(src, "m")
+      text = Doc.get_text(src, "t")
+
+      Yex.Map.set(map, "a", 1)
+      Yex.Map.set(map, "b", 2)
+      Yex.Map.set(map, "c", 3)
+      Yex.Map.delete(map, "b")
+
+      Yex.Text.insert(text, 0, "hello")
+      Yex.Text.delete(text, 1, 3)
+
+      full = Yex.encode_state_as_update!(src)
+
+      assert Doc.update_gaps(Doc.new(), full) == {:ok, %{}}
+    end
+
+    test "a delete-only update reports nothing" do
+      src = Doc.with_options(%Doc.Options{client_id: 1})
+      map = Doc.get_map(src, "m")
+      Yex.Map.set(map, "a", 1)
+      pre_delete = Yex.encode_state_as_update!(src)
+      sv = Yex.encode_state_vector!(src)
+
+      Yex.Map.delete(map, "a")
+      delete_only = Yex.encode_state_as_update!(src, sv)
+
+      assert Doc.update_gaps(doc_with([pre_delete]), delete_only) == {:ok, %{}}
+    end
+
+    test "a document that already has a hole reports it for later updates" do
+      %{base: base, y: y} = map_updates()
+      doc = doc_with([base])
+
+      :ok = Yex.apply_update(doc, y)
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(doc, y)
+    end
+
+    test "update_gaps_v2 reads v2 updates" do
+      src = Doc.with_options(%Doc.Options{client_id: 1})
+      map = Doc.get_map(src, "m")
+      Yex.Map.set(map, "k", 1)
+      {:ok, base} = Yex.encode_state_as_update_v2(src)
+      {:ok, sv_base} = Yex.encode_state_vector_v2(src)
+      Yex.Map.set(map, "x", 2)
+      {:ok, sv_x} = Yex.encode_state_vector_v2(src)
+      Yex.Map.set(map, "y", 3)
+      {:ok, y} = Yex.encode_state_as_update_v2(src, sv_x)
+      {:ok, x_and_y} = Yex.encode_state_as_update_v2(src, sv_base)
+
+      doc = Doc.new()
+      :ok = Yex.apply_update_v2(doc, base)
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps_v2(doc, y)
+      assert Doc.update_gaps_v2(doc, x_and_y) == {:ok, %{}}
+    end
+
+    test "pending structs do not fill a hole" do
+      # Client 1's text insert (clock 0) has its origin on client 2, which the doc lacks,
+      # so it goes to pending. Client 1's map set (clock 1) has no such dependency.
+      c2 = Doc.with_options(%Doc.Options{client_id: 2})
+      Yex.Text.insert(Doc.get_text(c2, "t"), 0, "a")
+      c2_update = Yex.encode_state_as_update!(c2)
+
+      src = Doc.with_options(%Doc.Options{client_id: 1})
+      :ok = Yex.apply_update(src, c2_update)
+      Yex.Text.insert(Doc.get_text(src, "t"), 1, "b")
+      text_insert = Yex.encode_state_as_update!(src, Yex.encode_state_vector!(c2))
+      sv = Yex.encode_state_vector!(src)
+      Yex.Map.set(Doc.get_map(src, "m"), "k", 1)
+      map_set = Yex.encode_state_as_update!(src, sv)
+
+      doc = doc_with([text_insert])
+      assert {:ok, pending} = Doc.get_pending_update(doc)
+      assert is_binary(pending)
+
+      assert {:ok, %{1 => 0}} = Doc.update_gaps(doc, map_set)
+      assert Doc.update_gaps(doc, text_insert) == {:ok, %{}}
+    end
+
+    test "large updates report the same gaps" do
+      %{base: base} = map_updates()
+      src = Doc.with_options(%Doc.Options{client_id: 1})
+      :ok = Yex.apply_update(src, base)
+      Yex.Map.set(Doc.get_map(src, "m"), "x", 2)
+      sv = Yex.encode_state_vector!(src)
+      Yex.Map.set(Doc.get_map(src, "m"), "big", String.duplicate("a", Yex.Nif.dirty_cutoff()))
+      big = Yex.encode_state_as_update!(src, sv)
+      assert byte_size(big) > Yex.Nif.dirty_cutoff()
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(doc_with([base]), big)
+
+      doc = doc_with([base])
+
+      Doc.transaction(doc, fn ->
+        assert {:ok, %{1 => 1}} = Doc.update_gaps(doc, big)
+      end)
+    end
+  end
+
   describe "prune_pending" do
     defp gapped_update do
       a = Doc.new()

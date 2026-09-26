@@ -836,6 +836,78 @@ fn prune_pending_v1<'a>(
     })
 }
 
+/// For each client in `update`, the first clock the doc lacks when integrating the update
+/// would leave a hole in that client's clock range. See `Yex.Doc.update_gaps/2`.
+fn update_gaps_impl<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    update: Update,
+) -> NifResult<Term<'a>> {
+    let local_sv = doc.readonly(current_transaction, |txn| Ok(txn.state_vector()))?;
+    // Skip blocks are left out, so a hole inside the update shows as a gap between runs.
+    let insertions = update.insertions(true);
+    let mut gaps = HashMap::new();
+    for (client, ranges) in insertions.iter() {
+        let mut clock = local_sv.get(client);
+        for range in ranges.iter() {
+            if range.end <= clock {
+                continue;
+            }
+            if range.start > clock {
+                gaps.insert(client.get(), clock);
+                break;
+            }
+            clock = range.end;
+        }
+    }
+    Ok((atoms::ok(), gaps).encode(env))
+}
+
+#[rustler::nif]
+fn update_gaps_v1<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let update = Update::decode_v1(update.as_slice()).map_err(Error::from)?;
+    update_gaps_impl(env, doc, current_transaction, update)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn update_gaps_v1_dirty<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let update = Update::decode_v1(update.as_slice()).map_err(Error::from)?;
+    update_gaps_impl(env, doc, current_transaction, update)
+}
+
+#[rustler::nif]
+fn update_gaps_v2<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let update = decode_update_v2(update.as_slice())?;
+    update_gaps_impl(env, doc, current_transaction, update)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn update_gaps_v2_dirty<'a>(
+    env: Env<'a>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let update = decode_update_v2(update.as_slice())?;
+    update_gaps_impl(env, doc, current_transaction, update)
+}
+
 #[rustler::nif]
 fn transaction_snapshot<'a>(
     env: Env<'a>,
