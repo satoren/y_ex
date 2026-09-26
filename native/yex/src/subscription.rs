@@ -1,13 +1,14 @@
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use yrs::{Doc, Origin, TransactionMut};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
+use yrs::{Origin, TransactionMut};
 
 use crate::{
     atoms,
     awareness::AwarenessResource,
-    doc::NifDoc,
-    transaction::{ReadTransaction, TransactionResource},
+    deferred::Unobserve,
+    doc::{DocOperations, NifDoc},
+    transaction::TransactionResource,
     wrap::NifWrap,
     ENV,
 };
@@ -23,63 +24,105 @@ pub enum AwarenessEvent {
     Change,
 }
 
-type UnobserveBranchFn = Box<dyn Fn(&ReadTransaction) -> bool + Send + Sync>;
-
 enum Target {
+    /// Doc and branch observers live in the document store. `None` once removed.
     Doc {
-        doc: Doc,
-        event: DocEvent,
-    },
-    Branch {
         doc: NifDoc,
-        unobserve: UnobserveBranchFn,
+        unobserve: Option<Unobserve>,
     },
+    /// `None` once removed.
     Awareness {
         awareness: ResourceArc<AwarenessResource>,
-        event: AwarenessEvent,
+        event: Option<AwarenessEvent>,
     },
 }
 
-/// Observers in yrs are registered under a key and removed via `unobserve(key)`.
-/// Removing a doc/branch observer needs access to the document store, which may be
-/// unavailable while another transaction is open. The `active` flag guarantees that
-/// callbacks stop immediately on unsubscribe even if the removal has to be retried later
-/// (on drop).
+/// Observers in yrs are registered under a key and removed via `unobserve(key)`, which
+/// needs the document store. A dropped subscription must not take the store itself (see
+/// `crate::deferred`), so unsubscribing happens in two steps: the callback state is
+/// released right away, which silences the callback and frees the terms it captured (they
+/// may reference the document itself), and the observer entry is removed with the next
+/// transaction on the document.
 pub struct Subscription {
     key: Origin,
-    active: Arc<AtomicBool>,
+    callback: Arc<dyn ReleaseCallback>,
     target: Target,
-    removed: bool,
 }
 
-/// Key and activity flag handed to an observer callback before it's registered.
+/// State an observer callback needs, released when its subscription is unsubscribed or
+/// dropped. The callback does nothing once it has been released.
+pub struct CallbackState<T>(Arc<Mutex<Option<Arc<T>>>>);
+
+impl<T> CallbackState<T> {
+    pub fn get(&self) -> Option<Arc<T>> {
+        lock(&self.0).clone()
+    }
+}
+
+trait ReleaseCallback: Send + Sync {
+    fn release(&self);
+}
+
+impl<T: Send + Sync> ReleaseCallback for Mutex<Option<Arc<T>>> {
+    fn release(&self) {
+        // Drop the state outside the lock: freeing it may drop other resources.
+        let state = lock(self).take();
+        drop(state);
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Key and callback state handed to an observer callback before it's registered.
 pub struct SubscriptionKey {
     pub key: Origin,
-    pub active: Arc<AtomicBool>,
+    callback: Arc<dyn ReleaseCallback>,
 }
 
 impl SubscriptionKey {
-    pub fn new() -> Self {
+    pub fn new<T: Send + Sync + 'static>(state: T) -> (Self, CallbackState<T>) {
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        SubscriptionKey {
-            key: Origin::from(format!("yex-subscription-{id}").as_str()),
-            active: Arc::new(AtomicBool::new(true)),
-        }
+        let state = Arc::new(Mutex::new(Some(Arc::new(state))));
+        (
+            SubscriptionKey {
+                key: Origin::from(format!("yex-subscription-{id}").as_str()),
+                callback: state.clone(),
+            },
+            CallbackState(state),
+        )
     }
 
-    pub fn doc(self, doc: Doc, event: DocEvent) -> Subscription {
-        self.into_subscription(Target::Doc { doc, event })
+    pub fn doc(self, doc: NifDoc, event: DocEvent) -> Subscription {
+        let key = self.key.clone();
+        let unobserve: Unobserve = Box::new(move |txn: &TransactionMut| {
+            match event {
+                DocEvent::UpdateV1 => txn.unobserve_update_v1(key),
+                DocEvent::UpdateV2 => txn.unobserve_update_v2(key),
+                DocEvent::Subdocs => txn.unobserve_subdocs(key),
+            };
+        });
+        self.into_subscription(Target::Doc {
+            doc,
+            unobserve: Some(unobserve),
+        })
     }
 
+    /// `unobserve` has to resolve the branch through the transaction, since it may have been
+    /// deleted (and garbage collected) in the meantime.
     pub fn branch<F>(self, doc: NifDoc, unobserve: F) -> Subscription
     where
-        F: Fn(&ReadTransaction, &Origin) -> bool + Send + Sync + 'static,
+        F: FnOnce(&TransactionMut, &Origin) + Send + 'static,
     {
         let key = self.key.clone();
-        self.into_subscription(Target::Branch {
+        let unobserve: Unobserve = Box::new(move |txn: &TransactionMut| unobserve(txn, &key));
+        self.into_subscription(Target::Doc {
             doc,
-            unobserve: Box::new(move |txn| unobserve(txn, &key)),
+            unobserve: Some(unobserve),
         })
     }
 
@@ -88,77 +131,78 @@ impl SubscriptionKey {
         awareness: ResourceArc<AwarenessResource>,
         event: AwarenessEvent,
     ) -> Subscription {
-        self.into_subscription(Target::Awareness { awareness, event })
+        self.into_subscription(Target::Awareness {
+            awareness,
+            event: Some(event),
+        })
     }
 
     fn into_subscription(self, target: Target) -> Subscription {
         Subscription {
             key: self.key,
-            active: self.active,
+            callback: self.callback,
             target,
-            removed: false,
         }
     }
 }
 
-pub fn is_active(active: &AtomicBool) -> bool {
-    active.load(Ordering::Acquire)
-}
-
 impl Subscription {
+    /// Explicit unsubscribe, run by the document's worker. Removes the observer with
+    /// `current_transaction` when one is open, otherwise with a transaction of its own. If
+    /// the store is held elsewhere, removal is left to the document's next transaction.
     fn unsubscribe(&mut self, current_transaction: Option<&TransactionMut>) {
-        self.active.store(false, Ordering::Release);
-        if self.removed {
-            return;
-        }
-        self.removed = match &self.target {
-            Target::Doc { doc, event } => {
-                let key = self.key.clone();
-                match current_transaction {
-                    Some(txn) => {
-                        match event {
-                            DocEvent::UpdateV1 => txn.unobserve_update_v1(key),
-                            DocEvent::UpdateV2 => txn.unobserve_update_v2(key),
-                            DocEvent::Subdocs => txn.unobserve_subdocs(key),
-                        };
-                        true
-                    }
-                    None => match event {
-                        DocEvent::UpdateV1 => doc.unobserve_update_v1(key).is_ok(),
-                        DocEvent::UpdateV2 => doc.unobserve_update_v2(key).is_ok(),
-                        DocEvent::Subdocs => doc.unobserve_subdocs(key).is_ok(),
-                    },
-                }
-            }
-            // The branch may have been deleted (and garbage collected), so it has to be
-            // resolved through a transaction before its observer can be removed.
-            Target::Branch { doc, unobserve } => match current_transaction {
-                Some(txn) => {
-                    unobserve(&ReadTransaction::ReadWrite(txn));
-                    true
-                }
-                None => doc
-                    .readonly(None, |txn| {
-                        unobserve(txn);
-                        Ok(())
-                    })
-                    .is_ok(),
-            },
-            Target::Awareness { awareness, event } => {
-                let mut awareness = awareness.0.lock().unwrap_or_else(|err| err.into_inner());
-                match event {
-                    AwarenessEvent::Update => awareness.unobserve_update(self.key.clone()),
-                    AwarenessEvent::Change => awareness.unobserve_change(self.key.clone()),
+        self.callback.release();
+        match &mut self.target {
+            Target::Doc { doc, unobserve } => {
+                let Some(unobserve) = unobserve.take() else {
+                    return;
                 };
-                true
+                match current_transaction {
+                    Some(txn) => unobserve(txn),
+                    None => {
+                        let mut unobserve = Some(unobserve);
+                        let _ = doc.with_transaction_mut(|txn| {
+                            if let Some(unobserve) = unobserve.take() {
+                                unobserve(txn);
+                            }
+                            Ok(())
+                        });
+                        if let Some(unobserve) = unobserve {
+                            doc.reference.deferred.defer_unobserve(unobserve);
+                        }
+                    }
+                }
             }
-        };
+            Target::Awareness { .. } => self.remove_awareness_observer(),
+        }
+    }
+
+    fn remove_awareness_observer(&mut self) {
+        if let Target::Awareness { awareness, event } = &mut self.target {
+            let Some(event) = event.take() else {
+                return;
+            };
+            let mut awareness = awareness.0.lock().unwrap_or_else(|err| err.into_inner());
+            match event {
+                AwarenessEvent::Update => awareness.unobserve_update(self.key.clone()),
+                AwarenessEvent::Change => awareness.unobserve_change(self.key.clone()),
+            };
+        }
     }
 }
 
 impl Drop for Subscription {
     fn drop(&mut self) {
-        self.unsubscribe(None);
+        self.callback.release();
+        match &mut self.target {
+            Target::Doc { doc, unobserve } => {
+                if let Some(unobserve) = unobserve.take() {
+                    doc.reference.deferred.defer_unobserve(unobserve);
+                }
+            }
+            // The awareness lock never fails; at worst it waits for an awareness operation.
+            Target::Awareness { .. } => self.remove_awareness_observer(),
+        }
     }
 }
 

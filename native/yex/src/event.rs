@@ -23,7 +23,7 @@ use crate::{
     doc::NifDoc,
     map::NifMap,
     shared_type::NifSharedType,
-    subscription::{is_active, NifSubscription, SubscriptionKey},
+    subscription::{NifSubscription, SubscriptionKey},
     term_box::TermBox,
     text::NifText,
     transaction::TransactionResource,
@@ -405,20 +405,19 @@ where
         doc.readonly(current_transaction, |txn| {
             let ref_value = self.get_ref(txn)?;
 
-            let sub_key = SubscriptionKey::new();
-            let active = sub_key.active.clone();
-            let doc_ref = doc.clone();
+            let (sub_key, state) = SubscriptionKey::new((pid, ref_box, metadata_box, doc.clone()));
             ref_value.observe_deep(sub_key.key.clone(), move |txn, events| {
-                if !is_active(&active) {
+                let Some(state) = state.get() else {
                     return;
-                }
+                };
+                let (pid, ref_box, metadata_box, doc_ref) = &*state;
                 ENV.with(|env| {
                     let events: Vec<NifEvent> = events
                         .iter()
-                        .map(|event| NifEvent::new(&doc_ref, event, txn))
+                        .map(|event| NifEvent::new(doc_ref, event, txn))
                         .collect();
                     let _ = env.send(
-                        &pid,
+                        pid,
                         (
                             atoms::observe_deep_event(),
                             ref_box.get(*env),
@@ -432,9 +431,9 @@ where
 
             let hook = ref_value.hook();
             let sub = sub_key.branch(doc.clone(), move |txn, key| {
-                hook.get(txn)
-                    .map(|shared| shared.unobserve_deep(key.clone()))
-                    .unwrap_or(false)
+                if let Some(shared) = hook.get(txn) {
+                    shared.unobserve_deep(key.clone());
+                }
             });
             Ok(NifSubscription::new(sub, doc.clone()))
         })
@@ -464,20 +463,19 @@ where
         doc.readonly(current_transaction, |txn| {
             let ref_value = self.get_ref(txn)?;
 
-            let sub_key = SubscriptionKey::new();
-            let active = sub_key.active.clone();
-            let doc_ref = doc.clone();
+            let (sub_key, state) = SubscriptionKey::new((pid, ref_box, metadata_box, doc.clone()));
             ref_value.observe(sub_key.key.clone(), move |txn, event| {
-                if !is_active(&active) {
+                let Some(state) = state.get() else {
                     return;
-                }
+                };
+                let (pid, ref_box, metadata_box, doc_ref) = &*state;
                 ENV.with(|env| {
                     let _ = env.send(
-                        &pid,
+                        pid,
                         (
                             atoms::observe_event(),
                             ref_box.get(*env),
-                            Self::Event::new(&doc_ref, event, txn),
+                            Self::Event::new(doc_ref, event, txn),
                             origin_to_term(env, txn.origin()),
                             metadata_box.get(*env),
                         ),
@@ -487,9 +485,9 @@ where
 
             let hook = ref_value.hook();
             let sub = sub_key.branch(doc.clone(), move |txn, key| {
-                hook.get(txn)
-                    .map(|shared| shared.unobserve(key.clone()))
-                    .unwrap_or(false)
+                if let Some(shared) = hook.get(txn) {
+                    shared.unobserve(key.clone());
+                }
             });
             Ok(NifSubscription::new(sub, doc.clone()))
         })
