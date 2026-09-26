@@ -1388,6 +1388,117 @@ defmodule Yex.UndoManagerTest do
     def handle_call({Yex.Doc, :run, fun}, _from, state), do: {:reply, fun.(), state}
   end
 
+  describe "tracked origins" do
+    test "with no tracked origins only nil-origin transactions are captured", %{
+      doc: doc,
+      text: text
+    } do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+
+      Doc.transaction(doc, "remote", fn -> Text.insert(text, 0, "remote ") end)
+      refute UndoManager.can_undo?(undo_manager)
+
+      Text.insert(text, 7, "local")
+      assert UndoManager.can_undo?(undo_manager)
+
+      UndoManager.undo(undo_manager)
+      assert Text.to_string(text) == "remote "
+    end
+
+    test "after include_origin nil-origin transactions are no longer captured", %{
+      doc: doc,
+      text: text
+    } do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      UndoManager.include_origin(undo_manager, "tracked")
+
+      Text.insert(text, 0, "nil ")
+      refute UndoManager.can_undo?(undo_manager)
+
+      Doc.transaction(doc, "tracked", fn -> Text.insert(text, 4, "tracked") end)
+      assert UndoManager.can_undo?(undo_manager)
+    end
+
+    test "nil-origin changes made before include_origin are captured", %{
+      doc: doc,
+      text: text
+    } do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      Text.insert(text, 0, "early")
+      UndoManager.include_origin(undo_manager, "tracked")
+
+      assert UndoManager.can_undo?(undo_manager)
+      UndoManager.undo(undo_manager)
+      assert Text.to_string(text) == ""
+    end
+
+    test "tracked_origins applies from construction", %{doc: doc, text: text} do
+      options = %UndoManager.Options{tracked_origins: ["tracked", 42]}
+      {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
+
+      Text.insert(text, 0, "nil ")
+      refute UndoManager.can_undo?(undo_manager)
+
+      Doc.transaction(doc, "other", fn -> Text.insert(text, 4, "other ") end)
+      refute UndoManager.can_undo?(undo_manager)
+
+      Doc.transaction(doc, 42, fn -> Text.insert(text, 10, "42") end)
+      assert UndoManager.can_undo?(undo_manager)
+
+      UndoManager.undo(undo_manager)
+      assert Text.to_string(text) == "nil other "
+
+      UndoManager.redo(undo_manager)
+      assert Text.to_string(text) == "nil other 42"
+    end
+
+    test "tracked_origins nil or empty keeps the default", %{doc: doc, text: text} do
+      for tracked_origins <- [nil, []] do
+        options = %UndoManager.Options{tracked_origins: tracked_origins}
+        {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
+
+        Text.insert(text, 0, "x")
+        assert UndoManager.can_undo?(undo_manager)
+      end
+    end
+
+    test "tracked_origins rejects nil", %{doc: doc, text: text} do
+      options = %UndoManager.Options{tracked_origins: [nil]}
+
+      assert {:error, "NIF error: Invalid origin term"} =
+               UndoManager.new_with_options(doc, text, options)
+    end
+
+    test "excluding the last tracked origin captures nil-origin transactions again", %{
+      doc: doc,
+      text: text
+    } do
+      options = %UndoManager.Options{tracked_origins: ["tracked"]}
+      {:ok, undo_manager} = UndoManager.new_with_options(doc, text, options)
+      UndoManager.exclude_origin(undo_manager, "tracked")
+
+      Doc.transaction(doc, "tracked", fn -> Text.insert(text, 0, "tracked ") end)
+      refute UndoManager.can_undo?(undo_manager)
+
+      Text.insert(text, 8, "nil")
+      assert UndoManager.can_undo?(undo_manager)
+    end
+
+    test "excluding an origin that was never included has no effect", %{
+      doc: doc,
+      text: text
+    } do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      UndoManager.exclude_origin(undo_manager, "never-included")
+
+      Doc.transaction(doc, "never-included", fn -> Text.insert(text, 0, "a") end)
+      refute UndoManager.can_undo?(undo_manager)
+
+      Text.insert(text, 1, "b")
+      assert UndoManager.can_undo?(undo_manager)
+    end
+  end
+
   test "new_with_options handles NIF errors" do
     # Mock test removed - relies on NIF implementation
   end
