@@ -68,7 +68,8 @@ defmodule Yex.DocServer do
   ## Parameters
   - doc: Current document state
   - update: Binary encoded update from Yjs
-  - origin: Source of the update (can be nil for local updates)
+  - origin: Source of the update (can be nil for local updates). An undo or
+    redo arrives as `{:undo_manager, binary}`.
   - state: Current server state
 
   ## Returns

@@ -15,7 +15,8 @@ defmodule Yex.SharedType do
   where:
     * `ref` is a monitor reference returned by this function;
     * `event` is a struct that describes the change;
-    * `origin` is the origin passed to the `Yex.Doc.transaction()` function.
+    * `origin` is the origin passed to the `Yex.Doc.transaction()` function, `nil` when
+      none was given, or `{:undo_manager, binary}` for an undo or redo.
     * `metadata` is the metadata passed to the `observe` function.
 
   ## Options
@@ -75,7 +76,8 @@ defmodule Yex.SharedType do
   where:
     * `ref` is a monitor reference returned by this function;
     * `events` is a list of structs that describes the changes;
-    * `origin` is the origin passed to the `Yex.Doc.transaction()` function.
+    * `origin` is the origin passed to the `Yex.Doc.transaction()` function, `nil` when
+      none was given, or `{:undo_manager, binary}` for an undo or redo.
     * `metadata` is the metadata passed to the `observe_deep` function.
 
   ## Options

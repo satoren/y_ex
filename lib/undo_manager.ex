@@ -27,6 +27,11 @@ defmodule Yex.UndoManager do
 
   @moduledoc """
   Represents a Y.UndoManager instance.
+
+  Undo and redo commit a transaction whose origin is the manager itself. Update
+  subscribers (`Yex.Doc.monitor_update/2`) and observers (`Yex.SharedType.observe/2`)
+  receive it as `{:undo_manager, binary}`, where the binary identifies the manager,
+  so an undo or redo can be told apart from an edit made without an origin.
   """
   defstruct [:reference, :doc]
 
