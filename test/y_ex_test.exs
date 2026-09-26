@@ -53,6 +53,77 @@ defmodule YexTest do
     end
   end
 
+  describe "doc-sized calls above the dirty item limits" do
+    setup do
+      doc = Yex.Doc.new()
+      map = Yex.Doc.get_map(doc, "m")
+      array = Yex.Doc.get_array(doc, "a")
+      items = Yex.Nif.dirty_encode_items() + 1
+
+      Yex.Doc.transaction(doc, fn ->
+        for i <- 1..items, do: Yex.Map.set(map, "k#{i}", i)
+      end)
+
+      # The item count is doc-wide: the map entries alone put the doc over both limits,
+      # so the array declines too.
+      Yex.Array.insert_list(array, 0, Enum.to_list(1..Yex.Nif.dirty_json_items()))
+      %{doc: doc, map: map, array: array}
+    end
+
+    test "normal NIFs decline and the public functions use the dirty twins", %{
+      doc: doc,
+      map: map,
+      array: array
+    } do
+      sv = <<0>>
+
+      assert :dirty =
+               Yex.Nif.encode_state_as_update_v1(doc, nil, nil, Yex.Nif.dirty_encode_items())
+
+      assert :dirty =
+               Yex.Nif.encode_state_as_update_v2(doc, nil, nil, Yex.Nif.dirty_encode_items())
+
+      assert :dirty =
+               Yex.Nif.encode_diff_and_state_vector_v1(doc, nil, sv, Yex.Nif.dirty_encode_items())
+
+      assert :dirty =
+               Yex.Nif.encode_sync_step1_response_v1(
+                 doc,
+                 nil,
+                 <<1, 0>>,
+                 nil,
+                 Yex.Nif.dirty_encode_items()
+               )
+
+      assert :dirty = Yex.Nif.map_to_json(map, nil, Yex.Nif.dirty_json_items())
+      assert :dirty = Yex.Nif.array_to_json(array, nil, Yex.Nif.dirty_json_items())
+
+      assert Yex.encode_state_as_update_v1(doc) ==
+               Yex.Nif.encode_state_as_update_v1(doc, nil, nil, nil)
+
+      assert Yex.encode_state_as_update_v2(doc) ==
+               Yex.Nif.encode_state_as_update_v2(doc, nil, nil, nil)
+
+      assert Yex.encode_diff_and_state_vector_v1(doc, sv) ==
+               Yex.Nif.encode_diff_and_state_vector_v1(doc, nil, sv, nil)
+
+      assert Yex.Map.to_json(map) == Yex.Nif.map_to_json(map, nil, nil)
+      assert Yex.Array.to_json(array) == Yex.Nif.array_to_json(array, nil, nil)
+    end
+
+    test "the dirty twins read the open transaction", %{doc: doc, map: map} do
+      Yex.Doc.transaction(doc, fn ->
+        Yex.Map.set(map, "inside", true)
+        assert %{"inside" => true} = Yex.Map.to_json(map)
+
+        {:ok, update} = Yex.encode_state_as_update_v1(doc)
+        other = Yex.Doc.new()
+        :ok = Yex.apply_update_v1(other, update)
+        assert {:ok, true} = Yex.Map.fetch(Yex.Doc.get_map(other, "m"), "inside")
+      end)
+    end
+  end
+
   describe "merge_updates" do
     test "merge_updates_v1" do
       doc1 = Yex.Doc.new()

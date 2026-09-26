@@ -361,7 +361,12 @@ defmodule Yex.Array do
   @spec to_json(t) :: term()
   def to_json(%__MODULE__{doc: doc} = array) do
     Doc.run_in_worker_process doc do
-      Yex.Nif.array_to_json(array, cur_txn(array))
+      txn = cur_txn(array)
+
+      case Yex.Nif.array_to_json(array, txn, Yex.Nif.dirty_json_items()) do
+        :dirty -> Yex.Nif.array_to_json_dirty(array, txn)
+        result -> result
+      end
     end
   end
 

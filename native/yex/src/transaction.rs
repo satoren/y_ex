@@ -24,6 +24,22 @@ pub enum ReadTransaction<'a, 'doc> {
     ReadWrite(&'a TransactionMut<'doc>),
 }
 
+impl ReadTransaction<'_, '_> {
+    /// Whether the doc holds more than `limit` items, counting every item ever inserted
+    /// (the sum of its state vector). O(clients), so a normal-scheduler NIF can check it
+    /// before doing work whose cost tracks the document. `None` means no limit.
+    pub fn exceeds_item_limit(&self, limit: Option<u64>) -> bool {
+        limit.is_some_and(|limit| {
+            let items: u64 = self
+                .state_vector()
+                .iter()
+                .map(|(_, clock)| u64::from(*clock))
+                .sum();
+            items > limit
+        })
+    }
+}
+
 impl ReadTxn for ReadTransaction<'_, '_> {
     fn store(&self) -> &Store {
         match &self {
