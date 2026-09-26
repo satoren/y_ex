@@ -221,8 +221,7 @@ fn sync_message_decode_v1<'a>(env: Env<'a>, msg: Binary<'a>) -> NifResult<(Atom,
         .map_err(|e| e.into())
 }
 
-#[rustler::nif]
-fn apply_sync_update_payload_v1(
+fn apply_sync_update_payload_v1_impl(
     env: Env<'_>,
     doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
@@ -237,6 +236,26 @@ fn apply_sync_update_payload_v1(
             .map(|_| atoms::ok())
             .map_err(|e| Error::from(e).into())
     })
+}
+
+#[rustler::nif]
+fn apply_sync_update_payload_v1(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    payload: Binary,
+) -> NifResult<Atom> {
+    apply_sync_update_payload_v1_impl(env, doc, current_transaction, payload)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn apply_sync_update_payload_v1_dirty(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    payload: Binary,
+) -> NifResult<Atom> {
+    apply_sync_update_payload_v1_impl(env, doc, current_transaction, payload)
 }
 
 #[rustler::nif]

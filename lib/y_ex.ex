@@ -121,14 +121,18 @@ defmodule Yex do
   @spec apply_update_v1(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v1(%Yex.Doc{} = doc, update) do
     Yex.Doc.run_in_worker_process doc do
-      Yex.Nif.apply_update_v1(doc, cur_txn(doc), update)
+      if byte_size(update) > Yex.Nif.dirty_cutoff(),
+        do: Yex.Nif.apply_update_v1_dirty(doc, cur_txn(doc), update),
+        else: Yex.Nif.apply_update_v1(doc, cur_txn(doc), update)
     end
   end
 
   @spec apply_update_v2(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v2(%Yex.Doc{} = doc, update) do
     Yex.Doc.run_in_worker_process doc do
-      Yex.Nif.apply_update_v2(doc, cur_txn(doc), update)
+      if byte_size(update) > Yex.Nif.dirty_cutoff(),
+        do: Yex.Nif.apply_update_v2_dirty(doc, cur_txn(doc), update),
+        else: Yex.Nif.apply_update_v2(doc, cur_txn(doc), update)
     end
   end
 
@@ -139,12 +143,16 @@ defmodule Yex do
 
   @spec merge_updates_v1([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v1(updates) when is_list(updates) do
-    Yex.Nif.merge_updates_v1(updates)
+    if IO.iodata_length(updates) > Yex.Nif.dirty_cutoff(),
+      do: Yex.Nif.merge_updates_v1_dirty(updates),
+      else: Yex.Nif.merge_updates_v1(updates)
   end
 
   @spec merge_updates_v2([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v2(updates) when is_list(updates) do
-    Yex.Nif.merge_updates_v2(updates)
+    if IO.iodata_length(updates) > Yex.Nif.dirty_cutoff(),
+      do: Yex.Nif.merge_updates_v2_dirty(updates),
+      else: Yex.Nif.merge_updates_v2(updates)
   end
 
   @doc """
