@@ -1,16 +1,25 @@
+use crate::{atoms, wrap::SliceIntoBinary};
 use rustler::{types::atom::nil, Encoder, Env, OwnedBinary, Term};
 
+/// Converts a transaction origin to an Erlang term.
+///
+/// Origins set from Elixir are external term format and decode back to the original
+/// term. Any other origin comes from yrs itself, where only the undo manager sets one
+/// (on its undo and redo transactions), so it is returned as `{:undo_manager, bytes}`.
+/// A transaction without an origin gives `nil`. A decode must consume the whole origin,
+/// because `binary_to_term` tolerates trailing bytes (on 32-bit targets an undo manager
+/// pointer starting with byte 131 would otherwise decode as a term).
 pub fn origin_to_term<'a>(
     env: &mut Env<'a>,
     origin: std::option::Option<&yrs::Origin>,
 ) -> Term<'a> {
-    origin.map_or_else(
-        || nil().encode(*env),
-        |origin| {
-            env.binary_to_term(origin.as_ref())
-                .map_or_else(|| nil().encode(*env), |(term, _size)| term)
+    match origin {
+        None => nil().encode(*env),
+        Some(origin) => match env.binary_to_term(origin.as_ref()) {
+            Some((term, size)) if size == origin.as_ref().len() => term,
+            _ => (atoms::undo_manager(), SliceIntoBinary::new(origin.as_ref())).encode(*env),
         },
-    )
+    }
 }
 /// Converts an Erlang term to an Origin binary.
 ///

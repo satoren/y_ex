@@ -1388,6 +1388,42 @@ defmodule Yex.UndoManagerTest do
     def handle_call({Yex.Doc, :run, fun}, _from, state), do: {:reply, fun.(), state}
   end
 
+  describe "undo and redo origins" do
+    test "monitor_update reports undo and redo with an undo_manager origin", %{
+      doc: doc,
+      text: text
+    } do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      {:ok, monitor_ref} = Doc.monitor_update(doc)
+
+      Text.insert(text, 0, "a")
+      assert_receive {:update_v1, _update, nil, ^doc}
+
+      UndoManager.undo(undo_manager)
+      assert_receive {:update_v1, _update, {:undo_manager, undo_origin}, ^doc}
+      assert is_binary(undo_origin)
+
+      UndoManager.redo(undo_manager)
+      assert_receive {:update_v1, _update, {:undo_manager, ^undo_origin}, ^doc}
+
+      Doc.transaction(doc, "tagged", fn -> Text.insert(text, 0, "b") end)
+      assert_receive {:update_v1, _update, "tagged", ^doc}
+
+      Doc.demonitor_update(monitor_ref)
+    end
+
+    test "observers receive the same undo_manager origin", %{doc: doc, text: text} do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      Text.insert(text, 0, "a")
+
+      ref = Yex.SharedType.observe(text)
+      UndoManager.undo(undo_manager)
+      assert_receive {:observe_event, ^ref, _event, {:undo_manager, origin}, _metadata}
+      assert is_binary(origin)
+      Yex.SharedType.unobserve(ref)
+    end
+  end
+
   test "new_with_options handles NIF errors" do
     # Mock test removed - relies on NIF implementation
   end

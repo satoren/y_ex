@@ -286,6 +286,10 @@ defmodule Yex.Doc do
   @doc """
   Monitor document updates.
    You can pass metadata as an option. This value is passed as the fourth element of the message.If omitted, it will be passed as a structure of Doc itself.
+
+  The third element is the transaction's origin: the term passed to `transaction/3`,
+  `nil` when none was given, or `{:undo_manager, binary}` for a transaction committed
+  by `Yex.UndoManager.undo/1` or `Yex.UndoManager.redo/1`.
   """
   @spec monitor_update(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_update(%__MODULE__{} = doc, opt \\ []) do
