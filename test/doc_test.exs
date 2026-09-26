@@ -408,6 +408,146 @@ defmodule Yex.DocTest do
     end
   end
 
+  describe "update_gaps" do
+    # Client 1 sets k (clock 0), x (clock 1) and y (clock 2) on a map. Map entries have
+    # no same-client origin, so y integrates behind a skip on a doc that lacks x.
+    defp map_updates do
+      src = Doc.with_options(%Doc.Options{client_id: 1})
+      map = Doc.get_map(src, "m")
+      Yex.Map.set(map, "k", 1)
+      base = Yex.encode_state_as_update!(src)
+      sv_base = Yex.encode_state_vector!(src)
+      Yex.Map.set(map, "x", 2)
+      x = Yex.encode_state_as_update!(src, sv_base)
+      sv_x = Yex.encode_state_vector!(src)
+      Yex.Map.set(map, "y", 3)
+      y = Yex.encode_state_as_update!(src, sv_x)
+      %{base: base, x: x, y: y, x_and_y: Yex.encode_state_as_update!(src, sv_base)}
+    end
+
+    defp doc_with(updates) do
+      doc = Doc.new()
+      for update <- updates, do: :ok = Yex.apply_update(doc, update)
+      doc
+    end
+
+    test "reports the withheld clock, and nothing once it is applied" do
+      %{base: base, x: x, y: y} = map_updates()
+      doc = doc_with([base])
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(doc, y)
+
+      :ok = Yex.apply_update(doc, x)
+      assert {:ok, gaps} = Doc.update_gaps(doc, y)
+      assert gaps == %{}
+    end
+
+    test "the reported case is the one yrs integrates behind a skip" do
+      %{base: base, y: y} = map_updates()
+      doc = doc_with([base])
+      {:ok, _} = Doc.monitor_update(doc)
+
+      :ok = Yex.apply_update(doc, y)
+
+      assert {:ok, 3.0} = Yex.Map.fetch(Doc.get_map(doc, "m"), "y")
+      assert {:ok, nil} = Doc.get_pending_update(doc)
+      assert_receive {:update_v1, <<0, 0>>, nil, ^doc}
+
+      # A peer that already holds base asks for a diff from the skip start: y is missing.
+      peer = doc_with([base])
+      diff = Yex.encode_state_as_update!(doc, Yex.encode_state_vector!(peer))
+      :ok = Yex.apply_update(peer, diff)
+      assert :error = Yex.Map.fetch(Doc.get_map(peer, "m"), "y")
+    end
+
+    test "contiguous and already known updates report nothing" do
+      %{base: base, x_and_y: x_and_y} = map_updates()
+
+      assert {:ok, gaps} = Doc.update_gaps(doc_with([base]), x_and_y)
+      assert gaps == %{}
+      assert {:ok, gaps} = Doc.update_gaps(Doc.new(), base)
+      assert gaps == %{}
+      assert {:ok, gaps} = Doc.update_gaps(doc_with([base, x_and_y]), base)
+      assert gaps == %{}
+    end
+
+    test "reports only the client with a hole" do
+      %{base: base, y: y} = map_updates()
+
+      other = Doc.with_options(%Doc.Options{client_id: 2})
+      Yex.Map.set(Doc.get_map(other, "m"), "z", 4)
+      {:ok, update} = Yex.merge_updates([y, Yex.encode_state_as_update!(other)])
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(doc_with([base]), update)
+    end
+
+    test "reports a hole inside a merged update" do
+      %{base: base, y: y} = map_updates()
+      {:ok, merged} = Yex.merge_updates([base, y])
+      assert {:ok, debug} = Yex.Nif.update_debug_v1(merged)
+      assert debug =~ "skip("
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(Doc.new(), merged)
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(doc_with([base]), merged)
+    end
+
+    test "works inside a transaction" do
+      %{base: base, x: x, y: y} = map_updates()
+      doc = doc_with([base])
+
+      Doc.transaction(doc, fn ->
+        assert {:ok, %{1 => 1}} = Doc.update_gaps(doc, y)
+        :ok = Yex.apply_update(doc, x)
+        assert {:ok, gaps} = Doc.update_gaps(doc, y)
+        assert gaps == %{}
+      end)
+    end
+
+    test "returns an error for bytes that are not an update" do
+      assert {:error, _} = Doc.update_gaps(Doc.new(), <<255, 255, 255>>)
+    end
+
+    test "ignores deleted and garbage-collected structs" do
+      src = Doc.with_options(%Doc.Options{client_id: 1})
+      map = Doc.get_map(src, "m")
+      text = Doc.get_text(src, "t")
+
+      Yex.Map.set(map, "a", 1)
+      Yex.Map.set(map, "b", 2)
+      Yex.Map.set(map, "c", 3)
+      Yex.Map.delete(map, "b")
+
+      Yex.Text.insert(text, 0, "hello")
+      Yex.Text.delete(text, 1, 3)
+
+      full = Yex.encode_state_as_update!(src)
+
+      assert Doc.update_gaps(Doc.new(), full) == {:ok, %{}}
+    end
+
+    test "a delete-only update reports nothing" do
+      src = Doc.with_options(%Doc.Options{client_id: 1})
+      map = Doc.get_map(src, "m")
+      Yex.Map.set(map, "a", 1)
+      pre_delete = Yex.encode_state_as_update!(src)
+      sv = Yex.encode_state_vector!(src)
+
+      Yex.Map.delete(map, "a")
+      delete_only = Yex.encode_state_as_update!(src, sv)
+
+      assert Doc.update_gaps(doc_with([pre_delete]), delete_only) == {:ok, %{}}
+    end
+
+    test "a document that already has a hole reports it for later updates" do
+      %{base: base, y: y} = map_updates()
+      doc = doc_with([base])
+
+      :ok = Yex.apply_update(doc, y)
+
+      assert {:ok, %{1 => 1}} = Doc.update_gaps(doc, y)
+    end
+  end
+
   describe "prune_pending" do
     defp gapped_update do
       a = Doc.new()

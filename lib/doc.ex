@@ -243,6 +243,40 @@ defmodule Yex.Doc do
   end
 
   @doc """
+  Reports where applying the v1 `update` would leave a hole in a client's clock range.
+
+  Returns `{:ok, gaps}`, where `gaps` maps each affected client id to the first clock
+  the document is missing for that client. A client is reported when the update's
+  structs for it start above the document's clock for it, or leave out clocks the
+  document does not have either (for example a `Yex.merge_updates/1` result built from
+  non-adjacent updates). Structs the document already has are ignored. A document that
+  already has a hole reports the hole's first clock for every update at or past it,
+  including one that re-sends the struct integrated behind it. An empty map means
+  applying the update cannot leave such a hole.
+
+  Since yrs 0.27, a struct whose same-client predecessors are missing, but whose origin,
+  right origin and parent are all present, is integrated behind a skip instead of being
+  held as pending. It becomes readable, but it is not in `get_pending_update/1`, not in
+  the update delivered to `monitor_update/2` subscribers, and not in a diff encoded for
+  a peer whose state vector already reaches the hole. Call this before
+  `Yex.apply_update/2` to fetch the missing range first. A reported client whose origin
+  is also missing still goes to pending as before.
+
+  Not covered: dependencies on other clients' structs and delete ranges. Those stay on
+  the pending path; see `get_pending_update/1`, `get_pending_ds/1` and
+  `prune_pending/1`.
+
+  Works both inside and outside `transaction/3`. Returns `{:error, term()}` when the
+  update cannot be decoded.
+  """
+  @spec update_gaps(t, binary()) :: {:ok, %{integer() => integer()}} | {:error, term()}
+  def update_gaps(%__MODULE__{} = doc, update) when is_binary(update) do
+    run_in_worker_process doc do
+      Yex.Nif.update_gaps_v1(doc, cur_txn(doc), update)
+    end
+  end
+
+  @doc """
   Start a transaction.
 
   Raises `Yex.TransactionAcqError` if a transaction is already in progress.
