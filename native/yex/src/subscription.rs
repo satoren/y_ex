@@ -7,7 +7,7 @@ use crate::{
     atoms,
     awareness::AwarenessResource,
     deferred::Unobserve,
-    doc::{DocOperations, NifDoc},
+    doc::{DocOperations, DocResource, NifDoc},
     transaction::TransactionResource,
     wrap::NifWrap,
     ENV,
@@ -147,6 +147,15 @@ impl SubscriptionKey {
 }
 
 impl Subscription {
+    /// Whether a transaction on `doc` can remove this subscription's observer. Awareness
+    /// observers don't use the transaction at all.
+    fn observes_store_of(&self, doc: &DocResource) -> bool {
+        match &self.target {
+            Target::Doc { doc: own, .. } => std::ptr::eq(&*own.reference, doc),
+            Target::Awareness { .. } => true,
+        }
+    }
+
     /// Explicit unsubscribe, run by the document's worker. Removes the observer with
     /// `current_transaction` when one is open, otherwise with a transaction of its own. If
     /// the store is held elsewhere, removal is left to the document's next transaction.
@@ -239,6 +248,9 @@ fn sub_unsubscribe(
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let txn_guard = current_transaction
             .as_ref()
+            // A transaction on another document can't remove this observer; fall back to
+            // the subscription's own document instead of consuming it.
+            .filter(|txn| inner.observes_store_of(&txn.1))
             .and_then(|txn| txn.0.read().ok());
         inner.unsubscribe(txn_guard.as_ref().and_then(|guard| guard.as_ref()));
         Ok(atoms::ok())
