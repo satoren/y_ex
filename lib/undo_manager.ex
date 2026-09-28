@@ -3,12 +3,16 @@ defmodule Yex.UndoManager.Options do
   Options for creating an UndoManager.
 
   * `:capture_timeout` - Time in milliseconds to wait before creating a new capture group
+  * `:tracked_origins` - Origins to track from the start, as if each had been passed to
+    `Yex.UndoManager.include_origin/2`. `nil` (the default) tracks only transactions
+    without an origin. See "Tracked origins" in `Yex.UndoManager`.
   """
   # Default from Yrs
-  defstruct capture_timeout: 500
+  defstruct capture_timeout: 500, tracked_origins: nil
 
   @type t :: %__MODULE__{
-          capture_timeout: non_neg_integer()
+          capture_timeout: non_neg_integer(),
+          tracked_origins: [term()] | nil
         }
 end
 
@@ -27,6 +31,27 @@ defmodule Yex.UndoManager do
 
   @moduledoc """
   Represents a Y.UndoManager instance.
+
+  ## Tracked origins
+
+  A transaction's origin is the term passed to `Yex.Doc.transaction/3`, or `nil`
+  when none was given. The manager only captures changes from origins it tracks:
+
+  * With no tracked origins (the default), it captures only transactions whose
+    origin is `nil`.
+  * Once at least one origin is tracked, it captures only transactions with a
+    tracked origin, and transactions with a `nil` origin are no longer captured.
+    Removing every tracked origin with `exclude_origin/2` goes back to capturing
+    only `nil`.
+
+  This matches Yjs, where `trackedOrigins` defaults to `new Set([null])`, except that
+  `nil` cannot be tracked alongside other origins. The manager's own undo and redo
+  transactions are always tracked, so undone changes can be redone.
+
+  To track origins from the moment the manager is created, pass them as
+  `tracked_origins` in `Yex.UndoManager.Options` instead of calling
+  `include_origin/2` afterwards; otherwise a `nil`-origin change made in between
+  is captured.
   """
   defstruct [:reference, :doc]
 
@@ -80,6 +105,9 @@ defmodule Yex.UndoManager do
 
   @doc """
   Includes an origin to be tracked by the UndoManager.
+
+  After the first included origin, transactions with a `nil` origin are no longer
+  captured. See "Tracked origins" in the module documentation.
   """
   def include_origin(%{doc: doc} = undo_manager, origin) do
     Doc.run_in_worker_process(doc,
@@ -89,6 +117,11 @@ defmodule Yex.UndoManager do
 
   @doc """
   Excludes an origin from being tracked by the UndoManager.
+
+  This removes an origin added with `include_origin/2` or `tracked_origins`. Origins
+  that were never included are already not captured, so excluding one has no effect.
+  Excluding the last tracked origin makes the manager capture `nil`-origin
+  transactions again.
   """
   def exclude_origin(%{doc: doc} = undo_manager, origin) do
     Doc.run_in_worker_process(doc,
