@@ -1,14 +1,13 @@
 use crate::{
-    atoms, shared_type::NifSharedType, utils::term_to_origin_binary, wrap::NifWrap,
-    yinput::NifSharedTypeInput, Error, NifDoc, ENV,
+    atoms, doc::DocResource, shared_type::NifSharedType, utils::term_to_origin_binary,
+    wrap::NifWrap, yinput::NifSharedTypeInput, Error, NifDoc, ENV,
 };
 
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc, Term};
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::panic::AssertUnwindSafe;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, RwLock};
+use std::sync::RwLock;
 use yrs::{undo::Options as UndoOptions, UndoManager};
 
 #[derive(NifStruct)]
@@ -20,12 +19,14 @@ pub struct NifUndoManager {
 
 pub struct UndoManagerWrapper {
     manager: ManuallyDrop<UndoManager>,
+    doc: ResourceArc<DocResource>,
 }
 
 impl UndoManagerWrapper {
-    pub fn new(manager: UndoManager) -> Self {
+    pub fn new(manager: UndoManager, doc: ResourceArc<DocResource>) -> Self {
         Self {
             manager: ManuallyDrop::new(manager),
+            doc,
         }
     }
 }
@@ -33,33 +34,19 @@ impl UndoManagerWrapper {
 // yrs' `UndoManager::drop` unwraps `unobserve_*` calls that need exclusive access to the
 // document store, so dropping it while a transaction is open panics, and a panic in a
 // resource destructor aborts the VM. Its observers also hold raw pointers to the manager,
-// so it can't simply be freed without detaching them first.
+// so it can't simply be freed without detaching them first. Detaching takes the store,
+// which a destructor must not do (see `crate::deferred`), so the manager is handed to its
+// document and released by the document's next operation.
 impl Drop for UndoManagerWrapper {
     fn drop(&mut self) {
         // SAFETY: `manager` is not accessed again after being taken here.
         let manager = unsafe { ManuallyDrop::take(&mut self.manager) };
-        if let Err(manager) = try_release(manager) {
-            let mut parked = lock_parked();
-            parked.push(manager);
-            HAS_PARKED.store(true, Ordering::Release);
-        }
+        self.doc.deferred.defer_undo_manager(manager);
     }
 }
 
-/// Managers whose document store was busy when they were dropped. Their observers stay
-/// registered (and keep recording into them) until they are released.
-static PARKED: Mutex<Vec<UndoManager>> = Mutex::new(Vec::new());
-/// Lock-free fast path for `release_parked_undo_managers`; only written under `PARKED`.
-static HAS_PARKED: AtomicBool = AtomicBool::new(false);
-
-fn lock_parked() -> std::sync::MutexGuard<'static, Vec<UndoManager>> {
-    PARKED
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
 /// Detaches `manager` from its documents and frees it, or hands it back if a store is busy.
-fn try_release(manager: UndoManager) -> Result<(), UndoManager> {
+pub(crate) fn try_release(manager: UndoManager) -> Result<(), UndoManager> {
     let origin = manager.as_origin();
     let mut detached = true;
     for doc in manager.docs() {
@@ -79,27 +66,6 @@ fn try_release(manager: UndoManager) -> Result<(), UndoManager> {
     // manager is sound because no observer points at it anymore.
     let _ = std::panic::catch_unwind(AssertUnwindSafe(|| drop(manager)));
     Ok(())
-}
-
-/// Retries releasing parked managers. Call once a transaction has been closed.
-pub(crate) fn release_parked_undo_managers() {
-    if !HAS_PARKED.load(Ordering::Acquire) {
-        return;
-    }
-    let parked = {
-        let mut parked = lock_parked();
-        HAS_PARKED.store(false, Ordering::Release);
-        std::mem::take(&mut *parked)
-    };
-    let still_busy: Vec<UndoManager> = parked
-        .into_iter()
-        .filter_map(|manager| try_release(manager).err())
-        .collect();
-    if !still_busy.is_empty() {
-        let mut parked = lock_parked();
-        parked.extend(still_busy);
-        HAS_PARKED.store(true, Ordering::Release);
-    }
 }
 
 pub type UndoManagerResource = NifWrap<RwLock<UndoManagerWrapper>>;
@@ -169,7 +135,7 @@ fn create_undo_manager_with_options<T: NifSharedType>(
 
     let mut undo_manager = UndoManager::with_options(undo_options);
     undo_manager.expand_scope(&doc, &branch);
-    let wrapper = UndoManagerWrapper::new(undo_manager);
+    let wrapper = UndoManagerWrapper::new(undo_manager, doc.reference.clone());
 
     Ok((
         atoms::ok(),

@@ -1,23 +1,21 @@
+use rustler::ResourceArc;
 use std::sync::RwLock;
 use yrs::{ReadTxn, Store, Transaction, TransactionMut};
 
-pub struct TransactionResource(pub RwLock<Option<TransactionMut<'static>>>);
+use crate::doc::DocResource;
+
+/// An open `Yex.Doc.transaction/3`. Its document is kept so that teardown work deferred
+/// while the transaction was open can be carried out on commit.
+pub struct TransactionResource(
+    pub RwLock<Option<TransactionMut<'static>>>,
+    pub(crate) ResourceArc<DocResource>,
+);
 
 #[rustler::resource_impl]
 impl rustler::Resource for TransactionResource {}
 
 unsafe impl Send for TransactionResource {}
 unsafe impl Sync for TransactionResource {}
-
-// A transaction dropped without commit_transaction (e.g. its owner crashed) must still
-// give undo managers parked behind it a chance to be released.
-impl Drop for TransactionResource {
-    fn drop(&mut self) {
-        let txn = self.0.get_mut().unwrap_or_else(|e| e.into_inner());
-        *txn = None;
-        crate::undo::release_parked_undo_managers();
-    }
-}
 
 pub enum ReadTransaction<'a, 'doc> {
     ReadOnly(&'a Transaction<'doc>),

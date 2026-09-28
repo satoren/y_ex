@@ -18,11 +18,11 @@ use crate::event::NifSubdocsEvent;
 // Internal imports
 use crate::{
     atoms,
+    deferred::Deferred,
     error::Error,
-    subscription::{is_active, DocEvent, NifSubscription, SubscriptionKey},
+    subscription::{DocEvent, NifSubscription, SubscriptionKey},
     term_box::TermBox,
     transaction::{ReadTransaction, TransactionResource},
-    undo::release_parked_undo_managers,
     utils::{origin_to_term, term_to_origin_binary},
     wrap::SliceIntoBinary,
     xml::NifXmlFragment,
@@ -33,6 +33,17 @@ use crate::{
 pub(crate) struct DocResource {
     pub(crate) doc: Doc,
     pub(crate) subdocs: Mutex<HashMap<String, ResourceArc<DocResource>>>,
+    pub(crate) deferred: Deferred,
+}
+
+impl DocResource {
+    pub(crate) fn new(doc: Doc) -> Self {
+        DocResource {
+            doc,
+            subdocs: Mutex::new(HashMap::new()),
+            deferred: Deferred::default(),
+        }
+    }
 }
 
 impl std::ops::Deref for DocResource {
@@ -164,10 +175,7 @@ pub(crate) struct NifDoc {
 impl Default for NifDoc {
     fn default() -> Self {
         NifDoc {
-            reference: ResourceArc::new(DocResource {
-                doc: Doc::new(),
-                subdocs: Mutex::new(HashMap::new()),
-            }),
+            reference: ResourceArc::new(DocResource::new(Doc::new())),
             worker_pid: None,
         }
     }
@@ -175,10 +183,7 @@ impl Default for NifDoc {
 impl NifDoc {
     pub fn with_options(option: NifOptions) -> Self {
         NifDoc {
-            reference: ResourceArc::new(DocResource {
-                doc: Doc::with_options(option.into()),
-                subdocs: Mutex::new(HashMap::new()),
-            }),
+            reference: ResourceArc::new(DocResource::new(Doc::with_options(option.into()))),
             worker_pid: None,
         }
     }
@@ -209,19 +214,13 @@ impl NifDoc {
                 return reference.clone();
             }
 
-            let reference: ResourceArc<DocResource> = ResourceArc::new(DocResource {
-                doc: subdoc,
-                subdocs: Mutex::new(HashMap::new()),
-            });
+            let reference: ResourceArc<DocResource> = ResourceArc::new(DocResource::new(subdoc));
             if cache_on_miss {
                 cache.insert(subdoc_guid, reference.clone());
             }
             reference
         } else {
-            ResourceArc::new(DocResource {
-                doc: subdoc,
-                subdocs: Mutex::new(HashMap::new()),
-            })
+            ResourceArc::new(DocResource::new(subdoc))
         }
     }
 
@@ -260,7 +259,10 @@ impl NifDoc {
             Some(txn) => {
                 if let Ok(mut txn_guard) = txn.0.write() {
                     match txn_guard.as_mut() {
-                        Some(txn) => f(txn),
+                        Some(txn) => {
+                            self.reference.deferred.run_unobserves(txn);
+                            f(txn)
+                        }
                         None => self.with_transaction_mut(f),
                     }
                 } else {
@@ -322,7 +324,7 @@ impl DocOperations for NifDoc {
             let txn = yrs::Transact::try_transact(&self.reference.doc).map_err(Error::from)?;
             f(&txn)
         };
-        release_parked_undo_managers();
+        self.reference.deferred.release_undo_managers();
         result
     }
 
@@ -333,9 +335,10 @@ impl DocOperations for NifDoc {
         let result = {
             let mut txn =
                 yrs::Transact::try_transact_mut(&self.reference.doc).map_err(Error::from)?;
+            self.reference.deferred.run_unobserves(&txn);
             f(&mut txn)
         };
-        release_parked_undo_managers();
+        self.reference.deferred.release_undo_managers();
         result
     }
 }
@@ -410,14 +413,16 @@ fn doc_begin_transaction(
         let txn: TransactionMut =
             yrs::Transact::try_transact_mut_with(&doc.reference.doc, origin.as_slice())
                 .map_err(Error::from)?;
+        doc.reference.deferred.run_unobserves(&txn);
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
 
-        Ok(TransactionResource(RwLock::new(Some(txn))).into())
+        Ok(TransactionResource(RwLock::new(Some(txn)), doc.reference.clone()).into())
     } else {
         let txn: TransactionMut =
             yrs::Transact::try_transact_mut(&doc.reference.doc).map_err(Error::from)?;
+        doc.reference.deferred.run_unobserves(&txn);
         let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
-        Ok(TransactionResource(RwLock::new(Some(txn))).into())
+        Ok(TransactionResource(RwLock::new(Some(txn)), doc.reference.clone()).into())
     }
 }
 
@@ -430,7 +435,7 @@ fn commit_transaction(env: Env<'_>, current_transaction: ResourceArc<Transaction
             .unwrap_or_else(|e| e.into_inner());
         *txn = None;
         drop(txn);
-        release_parked_undo_managers();
+        current_transaction.1.deferred.release_undo_managers();
     })
 }
 
@@ -440,18 +445,17 @@ fn doc_monitor_update_v1(
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
-    let metadata = TermBox::new(metadata);
-    let sub_key = SubscriptionKey::new();
-    let active = sub_key.active.clone();
+    let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
 
     doc.observe_update_v1(sub_key.key.clone(), move |txn, event| {
-        if !is_active(&active) {
+        let Some(state) = state.get() else {
             return;
-        }
+        };
+        let (pid, metadata) = &*state;
         ENV.with(|env| {
             let metadata = metadata.get(*env);
             let _ = env.send(
-                &pid,
+                pid,
                 (
                     atoms::update_v1(),
                     SliceIntoBinary::new(event.update.as_slice()),
@@ -464,10 +468,7 @@ fn doc_monitor_update_v1(
     .map(|_| {
         (
             atoms::ok(),
-            NifSubscription::new(
-                sub_key.doc(doc.reference.doc.clone(), DocEvent::UpdateV1),
-                doc.clone(),
-            ),
+            NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV1), doc.clone()),
         )
     })
     .map_err(|e| Error::from(e).into())
@@ -478,18 +479,17 @@ fn doc_monitor_update_v2(
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
-    let metadata = TermBox::new(metadata);
-    let sub_key = SubscriptionKey::new();
-    let active = sub_key.active.clone();
+    let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
 
     doc.observe_update_v2(sub_key.key.clone(), move |txn, event| {
-        if !is_active(&active) {
+        let Some(state) = state.get() else {
             return;
-        }
+        };
+        let (pid, metadata) = &*state;
         ENV.with(|env| {
             let metadata = metadata.get(*env);
             let _ = env.send(
-                &pid,
+                pid,
                 (
                     atoms::update_v2(),
                     SliceIntoBinary::new(event.update.as_slice()),
@@ -502,10 +502,7 @@ fn doc_monitor_update_v2(
     .map(|_| {
         (
             atoms::ok(),
-            NifSubscription::new(
-                sub_key.doc(doc.reference.doc.clone(), DocEvent::UpdateV2),
-                doc.clone(),
-            ),
+            NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV2), doc.clone()),
         )
     })
     .map_err(|e| Error::from(e).into())
@@ -833,22 +830,20 @@ fn doc_monitor_subdocs(
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
-    let metadata = TermBox::new(metadata);
-    let event_doc = doc.clone();
-    let sub_key = SubscriptionKey::new();
-    let active = sub_key.active.clone();
+    let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata), doc.clone()));
 
     doc.observe_subdocs(sub_key.key.clone(), move |txn, event: &SubdocsEvent| {
-        if !is_active(&active) {
+        let Some(state) = state.get() else {
             return;
-        }
+        };
+        let (pid, metadata, event_doc) = &*state;
         ENV.with(|env| {
             let active_subdoc_guids: HashSet<String> =
                 txn.subdoc_guids().map(|guid| guid.to_string()).collect();
-            let event = NifSubdocsEvent::new(event, &event_doc, &active_subdoc_guids);
+            let event = NifSubdocsEvent::new(event, event_doc, &active_subdoc_guids);
             let metadata = metadata.get(*env);
             let _ = env.send(
-                &pid,
+                pid,
                 (
                     atoms::subdocs(),
                     event,
@@ -861,10 +856,7 @@ fn doc_monitor_subdocs(
     .map(|_| {
         (
             atoms::ok(),
-            NifSubscription::new(
-                sub_key.doc(doc.reference.doc.clone(), DocEvent::Subdocs),
-                doc.clone(),
-            ),
+            NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::Subdocs), doc.clone()),
         )
     })
     .map_err(|e| Error::from(e).into())
