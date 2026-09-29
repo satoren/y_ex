@@ -308,9 +308,14 @@ defmodule Yex.Map do
   """
   @spec to_json(t) :: map()
   def to_json(%__MODULE__{doc: doc} = map) do
-    Doc.run_in_worker_process(doc,
-      do: Yex.Nif.map_to_json(map, cur_txn(map))
-    )
+    Doc.run_in_worker_process doc do
+      txn = cur_txn(map)
+
+      case Yex.Nif.map_to_json(map, txn, Yex.Nif.dirty_json_items()) do
+        :dirty -> Yex.Nif.map_to_json_dirty(map, txn)
+        result -> result
+      end
+    end
   end
 
   @doc """

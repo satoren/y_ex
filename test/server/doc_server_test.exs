@@ -173,6 +173,29 @@ defmodule Yex.DocServerTest do
              )
   end
 
+  test "sync step1 against a doc above the dirty item limit" do
+    {:ok, pid} = DocServerTestModule.start_link([])
+    server_doc = GenServer.call(pid, :get_doc)
+    map = Doc.get_map(server_doc, "m")
+
+    Doc.transaction(server_doc, fn ->
+      for i <- 1..(Yex.Nif.dirty_encode_items() + 1), do: Yex.Map.set(map, "k#{i}", i)
+    end)
+
+    {:ok, sv} = Yex.encode_state_vector(Doc.new())
+
+    assert {:ok, [<<0, 1>> <> step2, <<0, 0>> <> _step1, <<1>> <> _awareness]} =
+             DocServerTestModule.process_message_v1(
+               pid,
+               Sync.message_encode!({:sync, {:sync_step1, sv}})
+             )
+
+    assert {:ok, {:sync, {:sync_step2, update}}} = Sync.message_decode(<<0, 1>> <> step2)
+    doc = Doc.new()
+    :ok = Yex.apply_update(doc, update)
+    assert Yex.Map.size(Doc.get_map(doc, "m")) == Yex.Nif.dirty_encode_items() + 1
+  end
+
   test "initial sync" do
     {:ok, pid} = DocServerTestModule.start_link([])
 

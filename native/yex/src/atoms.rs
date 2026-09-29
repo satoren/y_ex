@@ -15,6 +15,7 @@ rustler::atoms! {
     observe_deep_event,
 
     out_of_bounds,
+    dirty,
 
 // messages types
   sync,

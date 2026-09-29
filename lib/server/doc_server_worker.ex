@@ -112,7 +112,19 @@ defmodule Yex.DocServer.Worker do
         _from,
         %{doc: doc, awareness: awareness} = state
       ) do
-    {:reply, Yex.Nif.encode_sync_step1_response_v1(doc, nil, sv_payload, awareness), state}
+    reply =
+      case Yex.Nif.encode_sync_step1_response_v1(
+             doc,
+             nil,
+             sv_payload,
+             awareness,
+             Yex.Nif.dirty_encode_items()
+           ) do
+        :dirty -> Yex.Nif.encode_sync_step1_response_v1_dirty(doc, nil, sv_payload, awareness)
+        result -> result
+      end
+
+    {:reply, reply, state}
   end
 
   @impl true
