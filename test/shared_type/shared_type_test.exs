@@ -54,6 +54,21 @@ defmodule Yex.SharedTypeTest do
       refute_receive {:observe_event, ^ref, _event, _origin, _metadata}, 10
     end
 
+    test "observe inside a transaction joins it and receives later events", %{
+      doc: doc,
+      text: text
+    } do
+      ref = Doc.transaction(doc, fn -> SharedType.observe(text, metadata: :m) end)
+
+      Text.insert(text, 0, "hello")
+
+      assert_receive {:observe_event, ^ref, %Yex.TextEvent{delta: [%{insert: "hello"}]}, nil, :m}
+
+      Doc.transaction(doc, fn -> :ok = SharedType.unobserve(ref) end)
+      Text.insert(text, 0, "world")
+      refute_receive {:observe_event, ^ref, _event, _origin, _metadata}, 10
+    end
+
     test "unobserve after the observed type was deleted", %{doc: doc} do
       map = Doc.get_map(doc, "map")
       nested = Yex.Map.set_and_get(map, "nested", Yex.TextPrelim.from(""))
@@ -101,6 +116,22 @@ defmodule Yex.SharedTypeTest do
         Text.insert(text, 0, "hello")
       end)
 
+      refute_receive {:observe_deep_event, ^ref, _events, _origin, _metadata}, 10
+    end
+
+    test "observe_deep inside a transaction joins it and receives later events", %{
+      doc: doc,
+      text: text
+    } do
+      ref = Doc.transaction(doc, fn -> SharedType.observe_deep(text, metadata: :m) end)
+
+      Text.insert(text, 0, "hello")
+
+      assert_receive {:observe_deep_event, ^ref, [%Yex.TextEvent{delta: [%{insert: "hello"}]}],
+                      nil, :m}
+
+      Doc.transaction(doc, fn -> :ok = SharedType.unobserve_deep(ref) end)
+      Text.insert(text, 0, "world")
       refute_receive {:observe_deep_event, ^ref, _events, _origin, _metadata}, 10
     end
   end
