@@ -72,6 +72,9 @@ defmodule Yex do
   @doc """
   Encode the document state as a single update message that can be applied on the remote document. Optionally, specify the target state vector to only write the missing differences to the update message.
 
+  Returns `{:error, {:encoding_exception, message}}` when `encoded_state_vector` cannot be
+  decoded.
+
   ## Examples
       iex> doc = Yex.Doc.new()
       iex> {:ok, _binary} = Yex.encode_state_as_update(doc)
@@ -97,6 +100,9 @@ defmodule Yex do
   Encodes the document state as a v1 update.
 
   Same as `encode_state_as_update/2`. `encoded_state_vector` must be v1 encoded.
+
+  Returns `{:error, {:encoding_exception, message}}` when `encoded_state_vector` cannot be
+  decoded.
   """
   @spec encode_state_as_update_v1(Yex.Doc.t(), binary() | nil) ::
           {:ok, binary()} | {:error, term()}
@@ -138,6 +144,9 @@ defmodule Yex do
   Optionally, pass a v2 encoded state vector (see `encode_state_vector_v2/1`)
   to only write the missing differences.
 
+  Returns `{:error, {:encoding_exception, message}}` when `encoded_state_vector` cannot be
+  decoded.
+
   ## Examples
       iex> doc = Yex.Doc.new()
       iex> {:ok, _binary} = Yex.encode_state_as_update_v2(doc)
@@ -163,6 +172,8 @@ defmodule Yex do
   @doc """
   Apply a document update on the shared document.
 
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
+
   ## Examples syncs two clients by exchanging the complete document structure
       iex> doc1 = Yex.Doc.new()
       iex> doc2 = Yex.Doc.new()
@@ -182,6 +193,8 @@ defmodule Yex do
   Applies a v1 encoded update to the document.
 
   Same as `apply_update/2`.
+
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
   """
   @spec apply_update_v1(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v1(%Yex.Doc{} = doc, update) do
@@ -194,6 +207,8 @@ defmodule Yex do
 
   @doc """
   Applies a v2 encoded update to the document.
+
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
 
   ## Examples
       iex> doc1 = Yex.Doc.new()
@@ -220,6 +235,8 @@ defmodule Yex do
   The result is equivalent to applying all updates in order, without needing a document.
   Same as `merge_updates_v1/1`.
 
+  Returns `{:error, {:encoding_exception, message}}` when an update cannot be decoded.
+
   ## Examples
       iex> doc = Yex.Doc.new()
       iex> text = Yex.Doc.get_text(doc, "text")
@@ -243,6 +260,8 @@ defmodule Yex do
   Merges multiple v1 encoded updates into a single v1 update.
 
   Same as `merge_updates/1`.
+
+  Returns `{:error, {:encoding_exception, message}}` when an update cannot be decoded.
   """
   @spec merge_updates_v1([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v1(updates) when is_list(updates) do
@@ -253,6 +272,8 @@ defmodule Yex do
 
   @doc """
   Merges multiple v2 encoded updates into a single v2 update.
+
+  Returns `{:error, {:encoding_exception, message}}` when an update cannot be decoded.
   """
   @spec merge_updates_v2([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v2(updates) when is_list(updates) do
@@ -263,6 +284,8 @@ defmodule Yex do
 
   @doc """
   Parses an update payload encoded in lib0 v1 format and returns a human-readable debug string.
+
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
   """
   @spec update_debug_v1(binary()) :: {:ok, String.t()} | {:error, term()}
   def update_debug_v1(update) when is_binary(update) do
@@ -271,6 +294,8 @@ defmodule Yex do
 
   @doc """
   Parses an update payload encoded in lib0 v2 format and returns a human-readable debug string.
+
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
   """
   @spec update_debug_v2(binary()) :: {:ok, String.t()} | {:error, term()}
   def update_debug_v2(update) when is_binary(update) do

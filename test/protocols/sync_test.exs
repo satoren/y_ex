@@ -227,6 +227,16 @@ defmodule Yex.SyncTest do
       assert {:error, _} = Sync.message_decode_v2(<<0, 0, 1, 0>>)
     end
 
+    test "message_decode_v2 with a truncated v2 header returns an encoding error" do
+      assert {:error, {:encoding_exception, _}} = Sync.message_decode_v2(<<0, 128>>)
+      assert {:error, {:encoding_exception, _}} = Sync.message_decode_v2(<<255, 255, 255>>)
+    end
+
+    test "message_decode returns a string reason for an unknown sync message tag" do
+      assert {:error, "Unexpected tag value: 9"} = Sync.message_decode(<<0, 9, 0>>)
+      assert {:error, "Unexpected tag value: 9"} = Sync.message_decode_v1(<<0, 9, 0>>)
+    end
+
     test "message_encode_v2 with valid message" do
       assert {:ok, _} = Sync.message_encode_v2({:sync, {:sync_step1, <<0>>}})
     end

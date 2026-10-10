@@ -1,5 +1,6 @@
 use crate::atoms;
 use crate::awareness::NifAwareness;
+use crate::decode::catch_decode_v2;
 use crate::doc::NifDoc;
 use crate::error::Error;
 use crate::transaction::TransactionResource;
@@ -394,7 +395,7 @@ fn awareness_message_encode_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResul
 
 #[rustler::nif]
 fn sync_message_decode_v2<'a>(env: Env<'a>, msg: Binary<'a>) -> NifResult<(Atom, Term<'a>)> {
-    let mut decoder = DecoderV2::new(Cursor::new(msg.as_slice())).map_err(Error::from)?;
+    let mut decoder = catch_decode_v2(|| DecoderV2::new(Cursor::new(msg.as_slice())))?;
     decode_message(env, &mut decoder)
         .map(|term| (atoms::ok(), term))
         .map_err(|e| e.into())

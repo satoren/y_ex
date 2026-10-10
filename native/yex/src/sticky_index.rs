@@ -4,6 +4,7 @@ use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Assoc, IndexedSequence, StickyIndex};
 
+use crate::decode::catch_decode_v2;
 use crate::error::Error;
 use crate::{
     atoms, doc::NifDoc, shared_type::NifSharedType, transaction::TransactionResource,
@@ -226,7 +227,7 @@ fn sticky_index_decode_v2(
     binary: rustler::types::Binary<'_>,
 ) -> NifResult<NifStickyIndex> {
     let _ = env;
-    let sticky_index_ref = StickyIndex::decode_v2(binary.as_slice()).map_err(Error::from)?;
+    let sticky_index_ref = catch_decode_v2(|| StickyIndex::decode_v2(binary.as_slice()))?;
 
     Ok(NifStickyIndex {
         doc,
