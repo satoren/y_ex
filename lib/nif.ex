@@ -285,6 +285,30 @@ defmodule Yex.Nif do
   def merge_updates_v2_dirty(_updates), do: :erlang.nif_error(:nif_not_loaded)
   def update_debug_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
 
+  def diff_update_v1(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
+  def diff_update_v1_dirty(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
+  def diff_update_v2(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
+  def diff_update_v2_dirty(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
+  def encode_state_vector_from_update_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_state_vector_from_update_v1_dirty(_update),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_state_vector_from_update_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_state_vector_from_update_v2_dirty(_update),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def convert_update_format_v1_to_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def convert_update_format_v1_to_v2_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def convert_update_format_v2_to_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def convert_update_format_v2_to_v1_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def parse_update_meta_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def parse_update_meta_v1_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def parse_update_meta_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def parse_update_meta_v2_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def decode_state_vector(_state_vector), do: :erlang.nif_error(:nif_not_loaded)
+
   def get_pending_update_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def get_pending_ds_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def prune_pending_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
