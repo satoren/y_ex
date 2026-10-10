@@ -108,6 +108,18 @@ fn map_delete(
     })
 }
 #[rustler::nif]
+fn map_clear(
+    env: Env<'_>,
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Atom> {
+    map.mutably(env, current_transaction, |txn| {
+        let map = map.get_ref(txn)?;
+        map.clear(txn);
+        Ok(atoms::ok())
+    })
+}
+#[rustler::nif]
 fn map_to_map(
     map: NifMap,
     current_transaction: Option<ResourceArc<TransactionResource>>,
