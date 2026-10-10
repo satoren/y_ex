@@ -352,6 +352,14 @@ defmodule Yex.Doc do
 
   Raises `Yex.TransactionAcqError` if a transaction is already in progress.
 
+  The transaction is committed when `exec` returns and also when it raises, throws or
+  exits, like `transact` in yjs: changes made before the error are kept, their events
+  are emitted, and then the error propagates. There is no rollback.
+
+  If the process running `exec` is killed, the transaction is committed when its
+  resource is freed. That commit keeps the changes and releases the document, but
+  its events cannot be delivered and are dropped.
+
   ## Examples
       iex> doc = Doc.new()
       iex> text = Doc.get_text(doc, "text")
@@ -375,15 +383,10 @@ defmodule Yex.Doc do
 
       try do
         Process.put(ref, txn)
-        result = exec.()
-        Yex.Nif.commit_transaction(txn)
-        result
-      rescue
-        e ->
-          # Consider rolling back the transaction here if possible
-          reraise e, __STACKTRACE__
+        exec.()
       after
         Process.delete(ref)
+        Yex.Nif.commit_transaction(txn)
       end
     end
   end

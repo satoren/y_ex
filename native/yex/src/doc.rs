@@ -24,7 +24,7 @@ use crate::{
     error::Error,
     subscription::{DocEvent, NifSubscription, SubscriptionKey},
     term_box::TermBox,
-    transaction::{ReadTransaction, TransactionResource},
+    transaction::{take_then_drop, ReadTransaction, TransactionResource},
     utils::{client_id, origin_to_term, term_to_origin_binary},
     wrap::SliceIntoBinary,
     xml::NifXmlFragment,
@@ -441,12 +441,7 @@ fn doc_begin_transaction(
 #[rustler::nif]
 fn commit_transaction(env: Env<'_>, current_transaction: ResourceArc<TransactionResource>) {
     ENV.set(&mut env.clone(), || {
-        let mut txn = current_transaction
-            .0
-            .write()
-            .unwrap_or_else(|e| e.into_inner());
-        *txn = None;
-        drop(txn);
+        take_then_drop(&current_transaction.0);
         current_transaction.1.deferred.release_undo_managers();
     })
 }
