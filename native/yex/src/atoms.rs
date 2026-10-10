@@ -17,6 +17,13 @@ rustler::atoms! {
     out_of_bounds,
     dirty,
 
+    // root kinds
+    map,
+    array,
+    text,
+    xml_fragment,
+    other,
+
 // messages types
   sync,
   awareness,

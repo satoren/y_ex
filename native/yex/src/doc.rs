@@ -410,6 +410,56 @@ fn doc_get_or_insert_xml_fragment(
     })
 }
 
+/// Lists every root type the store holds, with its kind. A root that no typed
+/// getter has claimed yet has an undefined type in yrs: that is every root a
+/// remote update created. Its kind is read from its live content instead:
+/// live keys mean a map, a string chunk or embed means text, an XML child
+/// means an XML fragment, any other sequence content means an array, and a
+/// root with no live content reports `other`, as do roots of any type not
+/// listed. A text root holding only embedded shared types reads as an array.
+#[rustler::nif]
+fn doc_root_refs(
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Vec<(String, Atom)>> {
+    doc.readonly(current_transaction, |txn| {
+        Ok(txn
+            .root_refs()
+            .map(|(name, value)| (name.to_string(), root_kind(txn, value)))
+            .collect())
+    })
+}
+
+fn root_kind<T: ReadTxn>(txn: &T, value: Out) -> Atom {
+    match value {
+        Out::YMap(_) => atoms::map(),
+        Out::YArray(_) => atoms::array(),
+        Out::YText(_) => atoms::text(),
+        Out::YXmlFragment(_) => atoms::xml_fragment(),
+        Out::UndefinedRef(ptr) => undefined_root_kind(txn, ptr),
+        _ => atoms::other(),
+    }
+}
+
+fn undefined_root_kind<T: ReadTxn>(txn: &T, ptr: yrs::branch::BranchPtr) -> Atom {
+    if MapRef::from(ptr).len(txn) > 0 {
+        return atoms::map();
+    }
+    // A text diff yields string chunks and embeds as `Out::Any` and skips
+    // array primitives (`ItemContent::Any`), so this never matches an array.
+    let text_diff = TextRef::from(ptr).diff(txn, types::text::YChange::identity);
+    if text_diff.iter().any(|d| matches!(d.insert, Out::Any(_))) {
+        return atoms::text();
+    }
+    match ArrayRef::from(ptr).iter(txn).next() {
+        Some(Out::YXmlElement(_) | Out::YXmlText(_) | Out::YXmlFragment(_)) => {
+            atoms::xml_fragment()
+        }
+        Some(_) => atoms::array(),
+        None => atoms::other(),
+    }
+}
+
 #[rustler::nif]
 fn doc_begin_transaction(
     doc: NifDoc,

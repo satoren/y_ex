@@ -408,6 +408,61 @@ defmodule Yex.DocTest do
     end
   end
 
+  describe "root_refs" do
+    test "lists typed roots with their declared kind" do
+      doc = Doc.new()
+      Doc.get_map(doc, "m")
+      Doc.get_array(doc, "a")
+      Doc.get_text(doc, "t")
+      Doc.get_xml_fragment(doc, "x")
+
+      assert Enum.sort(Doc.root_refs(doc)) == [
+               {"a", :array},
+               {"m", :map},
+               {"t", :text},
+               {"x", :xml_fragment}
+             ]
+    end
+
+    test "reads the kind of roots a remote update created from their content" do
+      source = Doc.new()
+      Yex.Map.set(Doc.get_map(source, "m"), "k", "v")
+      Yex.Array.push(Doc.get_array(source, "a"), 1)
+      Text.insert(Doc.get_text(source, "t"), 0, "hello")
+      Text.insert_embed(Doc.get_text(source, "embeds"), 0, %{"img" => "x"})
+
+      Yex.XmlFragment.push(
+        Doc.get_xml_fragment(source, "x"),
+        Yex.XmlElementPrelim.empty("p")
+      )
+
+      emptied = Doc.get_map(source, "emptied")
+      Yex.Map.set(emptied, "k", "v")
+      Yex.Map.delete(emptied, "k")
+
+      remote = Doc.new()
+      :ok = Yex.apply_update(remote, Yex.encode_state_as_update!(source))
+
+      assert Enum.sort(Doc.root_refs(remote)) == [
+               {"a", :array},
+               {"embeds", :text},
+               {"emptied", :other},
+               {"m", :map},
+               {"t", :text},
+               {"x", :xml_fragment}
+             ]
+    end
+
+    test "joins the open transaction" do
+      doc = Doc.new()
+
+      Doc.transaction(doc, fn ->
+        Yex.Map.set(Doc.get_map(doc, "m"), "k", "v")
+        assert Doc.root_refs(doc) == [{"m", :map}]
+      end)
+    end
+  end
+
   describe "prune_pending" do
     defp gapped_update do
       a = Doc.new()

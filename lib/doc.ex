@@ -225,6 +225,29 @@ defmodule Yex.Doc do
   end
 
   @doc """
+  Lists every root type the document holds as `{name, kind}`.
+
+  A root created by a remote update has no declared type until a typed getter
+  claims it, so its kind is read from its live content: live keys report
+  `:map`, text or embeds `:text`, XML children `:xml_fragment` and any other
+  sequence content `:array`. A root with no live content, or of a type not
+  listed, reports `:other`. Order is unspecified.
+
+  A text root whose only content is embedded shared types cannot be told
+  apart from an array of shared types, and reports `:array`.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> Yex.Doc.get_text(doc, "text")
+      iex> Yex.Doc.root_refs(doc)
+      [{"text", :text}]
+  """
+  @spec root_refs(t) :: [{String.t(), :map | :array | :text | :xml_fragment | :other}]
+  def root_refs(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_root_refs(doc, cur_txn(doc)))
+  end
+
+  @doc """
   Evaluates a JSONPath expression against the current document state.
 
   Returns all matched values as a list. The path grammar follows yrs JSONPath
