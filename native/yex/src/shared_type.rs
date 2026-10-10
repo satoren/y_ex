@@ -1,11 +1,14 @@
-use rustler::{Decoder, Encoder, Env, NifException, NifResult, ResourceArc, Term};
+use rustler::{Atom, Decoder, Encoder, Env, NifException, NifResult, ResourceArc, Term};
 use std::ops::Deref;
-use yrs::{Hook, ReadTxn, SharedRef, TransactionMut};
+use yrs::{BranchID, ClientID, Hook, Out, ReadTxn, SharedRef, TransactionMut, ID};
 
 use crate::{
+    atoms,
     doc::NifDoc,
     transaction::{ReadTransaction, TransactionResource},
     wrap::SliceIntoBinary,
+    yinput::NifSharedTypeInput,
+    youtput::NifYOut,
 };
 
 pub struct SharedTypeId<T> {
@@ -101,4 +104,81 @@ pub fn deleted_error(message: &str) -> rustler::Error {
     rustler::Error::RaiseTerm(Box::new(DeletedSharedTypeError {
         message: message.to_string(),
     }))
+}
+
+/// A shared type's logical id as an Elixir term: `{:root, name}` or
+/// `{:nested, client, clock}`.
+pub struct NifBranchId(pub BranchID);
+
+impl Encoder for NifBranchId {
+    fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
+        match &self.0 {
+            BranchID::Root(name) => (atoms::root(), name.as_ref()).encode(env),
+            BranchID::Nested(id) => (atoms::nested(), id.client.get(), id.clock).encode(env),
+        }
+    }
+}
+
+impl<'a> Decoder<'a> for NifBranchId {
+    fn decode(term: Term<'a>) -> NifResult<Self> {
+        if let Ok((tag, name)) = term.decode::<(Atom, &str)>() {
+            if tag == atoms::root() {
+                return Ok(NifBranchId(BranchID::Root(name.into())));
+            }
+        }
+        let (tag, client, clock): (Atom, u64, u32) = term.decode()?;
+        // ClientID::new keeps only 53 bits in release builds, so a wider client
+        // would alias another one.
+        if tag != atoms::nested() || client >= 1 << 53 {
+            return Err(rustler::Error::BadArg);
+        }
+        Ok(NifBranchId(BranchID::Nested(ID::new(
+            ClientID::new(client),
+            clock,
+        ))))
+    }
+}
+
+#[rustler::nif]
+fn shared_type_branch_id(shared_type: NifSharedTypeInput) -> NifBranchId {
+    NifBranchId(shared_type.doc_and_id().1.clone())
+}
+
+#[rustler::nif]
+fn shared_type_alive(
+    shared_type: NifSharedTypeInput,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<bool> {
+    let (doc, id) = shared_type.doc_and_id();
+    doc.readonly(current_transaction, |txn| {
+        Ok(id.get_branch(txn).is_some_and(|b| !b.is_deleted()))
+    })
+}
+
+/// Finds the live shared type `id` names. A deleted type is garbage collected when
+/// the deleting transaction commits, so a nested id with no branch is reported as
+/// deleted when the state vector shows the doc has integrated it.
+#[rustler::nif]
+fn shared_type_resolve(
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    id: NifBranchId,
+) -> NifResult<Result<NifYOut, Atom>> {
+    doc.readonly(current_transaction, |txn| {
+        Ok(match id.0.get_branch(txn) {
+            Some(branch) if branch.is_deleted() => Err(atoms::deleted()),
+            Some(branch) => match branch.into() {
+                Out::UndefinedRef(_) => Err(atoms::untyped()),
+                out => Ok(NifYOut::from_native(out, &doc)),
+            },
+            // The state vector stops at the first skipped range, so a type integrated
+            // past a gap, then deleted and collected, reports not_found.
+            None => match &id.0 {
+                BranchID::Nested(nid) if txn.state_vector().get(&nid.client) > nid.clock => {
+                    Err(atoms::deleted())
+                }
+                _ => Err(atoms::not_found()),
+            },
+        })
+    })
 }

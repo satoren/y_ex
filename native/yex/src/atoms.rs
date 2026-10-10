@@ -25,6 +25,10 @@ rustler::atoms! {
     xml_element,
     xml_text,
     weak_link,
+    // branch ids and resolve errors
+    root,
+    nested,
+    deleted,
     untyped,
 
 // messages types

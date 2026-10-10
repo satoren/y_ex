@@ -7,6 +7,7 @@ use crate::{
     doc::{try_parent_doc, NifDoc},
     error::ArgumentError,
     map::NifMap,
+    shared_type::NifSharedType,
     text::NifText,
     weak::NifWeakLink,
     wrap::NifWrap,
@@ -17,8 +18,8 @@ use yrs::{
     block::{ItemContent, Prelim, Unused},
     branch::{Branch, BranchPtr},
     types::{xml::XmlPrelim, Delta, TypeRef},
-    Any, Array, ArrayRef, Doc, Map, MapRef, ReadTxn, Text, TextRef, TransactionMut, WeakPrelim,
-    Xml, XmlElementRef, XmlFragment, XmlFragmentRef, XmlTextRef,
+    Any, Array, ArrayRef, BranchID, Doc, Map, MapRef, ReadTxn, Text, TextRef, TransactionMut,
+    WeakPrelim, Xml, XmlElementRef, XmlFragment, XmlFragmentRef, XmlTextRef,
 };
 
 #[derive(NifStruct)]
@@ -512,3 +513,10 @@ macro_rules! with_shared_type {
     };
 }
 pub(crate) use with_shared_type;
+
+impl NifSharedTypeInput {
+    /// The owning document and the logical id the struct carries.
+    pub fn doc_and_id(&self) -> (&NifDoc, &BranchID) {
+        with_shared_type!(self, v => (v.doc(), v.reference().id()))
+    }
+}

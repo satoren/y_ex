@@ -37,6 +37,18 @@ defmodule Yex.SharedType do
           | %Yex.XmlElement{}
           | %Yex.XmlText{}
           | %Yex.XmlFragment{}
+          | %Yex.WeakLink{}
+
+  @typedoc """
+  Logical identifier of a shared type, the same on every replica of a document.
+
+  `{:root, name}` names a root type. `{:nested, client, clock}` names a type nested inside
+  another by the ID of the item that created it. Both are plain terms, so they can be stored,
+  for example with `:erlang.term_to_binary/1`.
+  """
+  @type branch_id ::
+          {:root, String.t()}
+          | {:nested, client :: non_neg_integer(), clock :: non_neg_integer()}
 
   @spec observe(t, keyword()) :: reference()
   def observe(%{doc: doc} = shared_type, opt \\ []) do
@@ -114,6 +126,87 @@ defmodule Yex.SharedType do
   @spec unobserve_deep(reference()) :: :ok
   def unobserve_deep(observe_ref) do
     unsubscribe(observe_ref)
+  end
+
+  @doc """
+  Returns the logical identifier of `shared_type`.
+
+  The identifier is read from the struct itself, so this works on a deleted type and does not
+  go through the document's worker process.
+
+  ## Examples
+
+      iex> doc = Yex.Doc.new()
+      iex> Yex.SharedType.branch_id(Yex.Doc.get_text(doc, "text"))
+      {:root, "text"}
+  """
+  @spec branch_id(t) :: branch_id
+  def branch_id(%{doc: %Doc{}} = shared_type), do: Yex.Nif.shared_type_branch_id(shared_type)
+
+  @doc """
+  Returns `true` while `shared_type` can still be used.
+
+  A root type is always alive. A nested type stops being alive once it or any of its ancestors
+  is deleted, locally or by a remote update; from then on operations on it raise
+  `Yex.DeletedSharedTypeError`. Joins an open `Yex.Doc.transaction/3`, so a deletion made
+  earlier in the same transaction is seen.
+
+  ## Examples
+
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> nested = Yex.Map.set_and_get(map, "nested", Yex.MapPrelim.from(%{}))
+      iex> Yex.SharedType.alive?(nested)
+      true
+      iex> Yex.Map.delete(map, "nested")
+      iex> Yex.SharedType.alive?(nested)
+      false
+  """
+  @spec alive?(t) :: boolean()
+  def alive?(%{doc: %Doc{reference: doc_ref} = doc} = shared_type) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.shared_type_alive(shared_type, Process.get(doc_ref, nil))
+    )
+  end
+
+  @doc """
+  Finds the shared type that `branch_id` names in `doc`.
+
+  Returns the typed struct, such as `%Yex.Map{}` or `%Yex.Text{}`. It never creates a type.
+  Joins an open `Yex.Doc.transaction/3`.
+
+  Ids are scoped to the document that produced them and its replicas.
+
+  ## Errors
+
+    * `:not_found` - `doc` has no such type: a root that was never created, or a nested type
+      whose update `doc` has not integrated yet (including one still pending on a missing
+      predecessor).
+    * `:deleted` - `doc` has integrated the id and no live shared type is there: the type was
+      deleted, or the id names other content. A document sharing the client id with the one
+      that produced the id may answer `:deleted` for a foreign id.
+    * `:untyped` - a root that only a remote update created and nothing has claimed yet. Claim
+      it with the getter for its kind, such as `Yex.Doc.get_map/2`, and resolve again. When
+      the kind is not known from the application's own schema, the `root_refs` listing in
+      `Yex.Doc` reports it from the root's content; it reports `:other` for an empty root,
+      whose kind cannot be inferred.
+
+  Raises `ArgumentError` for a malformed id: another shape, a name that is not UTF-8, a
+  client of 2^53 or more, or a clock of 2^32 or more.
+
+  ## Examples
+
+      iex> doc = Yex.Doc.new()
+      iex> text = Yex.Doc.get_text(doc, "text")
+      iex> {:ok, ^text} = Yex.SharedType.resolve(doc, {:root, "text"})
+      iex> Yex.SharedType.resolve(doc, {:root, "missing"})
+      {:error, :not_found}
+  """
+  @spec resolve(Doc.t(), branch_id) :: {:ok, t} | {:error, :not_found | :deleted | :untyped}
+  def resolve(%Doc{reference: doc_ref} = doc, branch_id) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.shared_type_resolve(doc, Process.get(doc_ref, nil), branch_id)
+    )
   end
 
   @doc false
