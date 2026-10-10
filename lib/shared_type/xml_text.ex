@@ -229,6 +229,54 @@ defmodule Yex.XmlText do
   end
 
   @doc """
+  Returns the text as a delta as of `snapshot`, like yjs `YXmlText.toDelta(snapshot, prevSnapshot)`.
+
+  With only `snapshot`, returns the content visible at that snapshot. With
+  `prev_snapshot` too, returns everything visible at either snapshot; string chunks
+  visible only at `prev_snapshot` get a `"ychange"` attribute of type `"removed"`,
+  and chunks visible only at `snapshot` one of type `"added"`:
+
+      %{"ychange" => %{"type" => "added", "id" => %{"client" => 1, "clock" => 4}}}
+
+  `"id"` is a y_ex addition (yjs puts only `"type"` there by default): the id of the
+  chunk's first item, so callers can attribute the change to the client that made it.
+  Embeds and nested types never carry a `"ychange"`.
+
+  A `nil` `snapshot` means the current state. Unlike yjs, which then lists text deleted
+  since `prev_snapshot` without a marker, that text is marked `"removed"`. When both
+  are `nil` this is `to_delta/1`.
+
+  Limit: when the document holds a client's later updates but not its first ones (yrs
+  integrates them behind a gap and reports that client at clock 0), a snapshot taken on
+  it, including the current state used for a `nil` `snapshot`, does not see that
+  client's items, so they can show up marked `"removed"`.
+
+  Raises `ArgumentError` when a snapshot is given and the document has garbage
+  collection enabled. Inside an open `Yex.Doc.transaction/3` the call joins it; the items
+  it splits at snapshot boundaries are merged back when that transaction commits.
+  """
+  @spec to_delta(t, Yex.Snapshot.t() | nil, Yex.Snapshot.t() | nil) :: Yex.Text.delta()
+  def to_delta(text, snapshot, prev_snapshot \\ nil)
+  def to_delta(%__MODULE__{} = text, nil, nil), do: to_delta(text)
+
+  def to_delta(%__MODULE__{doc: doc} = text, snapshot, prev_snapshot) do
+    Yex.Snapshot.ensure_skip_gc!(doc)
+
+    Doc.run_in_worker_process(doc,
+      do:
+        Yex.Nif.xml_text_to_delta_with_snapshots(
+          text,
+          cur_txn(text),
+          reference(snapshot),
+          reference(prev_snapshot)
+        )
+    )
+  end
+
+  defp reference(nil), do: nil
+  defp reference(%Yex.Snapshot{reference: reference}), do: reference
+
+  @doc """
   Converts the XML text node to a preliminary representation.
   This is useful when you need to serialize or transfer the text node's content,
   formatting and node attributes.
