@@ -152,6 +152,18 @@ defmodule Yex.Nif do
   def xml_fragment_to_string(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_fragment_length(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
+  def xml_fragment_tree_walker(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_element_tree_walker(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_insert_attribute(_xml_text, _cur_txn, _key, _value),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_remove_attribute(_xml_text, _cur_txn, _key),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_get_attribute(_xml_text, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_text_get_attributes(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
   def xml_fragment_parent(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_element_insert(_xml_element, _cur_txn, _index, _content),

@@ -786,4 +786,25 @@ defmodule YexXmlElementTest do
       assert :ok == XmlElement.push(xml, XmlTextPrelim.from("b"))
     end
   end
+
+  describe "has_attribute?/2" do
+    setup do
+      doc = Doc.new()
+
+      el =
+        XmlFragment.push_and_get(Doc.get_xml_fragment(doc, "xml"), XmlElementPrelim.empty("div"))
+
+      %{xml_element: el}
+    end
+
+    test "set, missing, removed, and nil-valued keys", %{xml_element: el} do
+      XmlElement.insert_attribute(el, "a", "1")
+      XmlElement.insert_attribute(el, "n", nil)
+      assert XmlElement.has_attribute?(el, "a")
+      refute XmlElement.has_attribute?(el, "missing")
+      assert XmlElement.has_attribute?(el, "n")
+      XmlElement.remove_attribute(el, "a")
+      refute XmlElement.has_attribute?(el, "a")
+    end
+  end
 end
