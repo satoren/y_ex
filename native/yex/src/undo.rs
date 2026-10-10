@@ -1,15 +1,63 @@
 use crate::{
-    atoms, doc::DocResource, shared_type::NifSharedType, utils::term_to_origin_binary,
-    wrap::NifWrap, yinput::NifSharedTypeInput, Error, NifDoc, ENV,
+    atoms,
+    doc::DocResource,
+    shared_type::NifSharedType,
+    subscription::{CallbackState, NifSubscription, SubscriptionKey},
+    term_box::TermBox,
+    utils::{origin_to_term, term_to_origin_binary},
+    wrap::NifWrap,
+    yinput::NifSharedTypeInput,
+    Error, NifDoc, ENV,
 };
 
-use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
+use rustler::{Atom, Encoder, Env, LocalPid, NifResult, NifStruct, ResourceArc, Term};
 use scoped_thread_local::scoped_thread_local;
 use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::panic::AssertUnwindSafe;
-use std::sync::RwLock;
-use yrs::{undo::Options as UndoOptions, UndoManager};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use yrs::undo::{Event, EventKind, Options as UndoOptions, StackClearedEvent};
+use yrs::Origin;
+
+pub(crate) type YexUndoManager = yrs::undo::UndoManager<StackMeta>;
+
+/// What y_ex keeps on each stack item: an id that is stable for the item's life (also
+/// across merges, since yrs moves the meta out and back for `:updated`), and the term
+/// set by `undo_manager_put_meta`. The meta lives and dies with its item.
+pub struct StackMeta {
+    id: u64,
+    value: Mutex<Option<TermBox>>,
+}
+
+impl Default for StackMeta {
+    fn default() -> Self {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+        StackMeta {
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+            value: Mutex::new(None),
+        }
+    }
+}
+
+impl StackMeta {
+    fn value(&self) -> MutexGuard<'_, Option<TermBox>> {
+        lock(&self.value)
+    }
+
+    fn get<'a>(&self, env: Env<'a>) -> Term<'a> {
+        match self.value().as_ref() {
+            Some(value) => value.get(env),
+            None => rustler::types::atom::nil().encode(env),
+        }
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
 
 #[derive(NifStruct, Clone)]
 #[module = "Yex.UndoManager"]
@@ -32,12 +80,12 @@ pub(crate) fn active_manager_term<'a>(env: Env<'a>, origin: &yrs::Origin) -> Opt
 }
 
 pub struct UndoManagerWrapper {
-    manager: ManuallyDrop<UndoManager>,
+    manager: ManuallyDrop<YexUndoManager>,
     doc: ResourceArc<DocResource>,
 }
 
 impl UndoManagerWrapper {
-    pub fn new(manager: UndoManager, doc: ResourceArc<DocResource>) -> Self {
+    pub fn new(manager: YexUndoManager, doc: ResourceArc<DocResource>) -> Self {
         Self {
             manager: ManuallyDrop::new(manager),
             doc,
@@ -55,12 +103,18 @@ impl Drop for UndoManagerWrapper {
     fn drop(&mut self) {
         // SAFETY: `manager` is not accessed again after being taken here.
         let manager = unsafe { ManuallyDrop::take(&mut self.manager) };
+        // Free the meta terms now: one holding this document (a `Yex.StickyIndex`, say)
+        // would otherwise keep it alive through its own deferred queue until its next
+        // operation, which may never come.
+        for item in manager.undo_stack().iter().chain(manager.redo_stack()) {
+            *item.meta().value() = None;
+        }
         self.doc.deferred.defer_undo_manager(manager);
     }
 }
 
 /// Detaches `manager` from its documents and frees it, or hands it back if a store is busy.
-pub(crate) fn try_release(manager: UndoManager) -> Result<(), UndoManager> {
+pub(crate) fn try_release(manager: YexUndoManager) -> Result<(), YexUndoManager> {
     let origin = manager.as_origin();
     let mut detached = true;
     for doc in manager.docs() {
@@ -82,7 +136,67 @@ pub(crate) fn try_release(manager: UndoManager) -> Result<(), UndoManager> {
     Ok(())
 }
 
-pub type UndoManagerResource = NifWrap<RwLock<UndoManagerWrapper>>;
+/// The manager and the stack-event observer keys waiting to be removed from it.
+///
+/// yrs reaches the manager's state through a raw pointer from its `after_transaction`
+/// observer, without this lock, and its observer lists are mutated while they fire. So the
+/// stacks and observers are only touched on the document's worker, which also runs every
+/// commit: reads of the stacks need no store guard, and a subscription dropped on another
+/// thread queues its key in `pending_unobserves` instead of removing its observers. The
+/// queue sits beside the lock so that dropping never waits on it; `write` drains it.
+pub struct UndoManagerState {
+    wrapper: RwLock<UndoManagerWrapper>,
+    pending_unobserves: Mutex<Vec<Origin>>,
+}
+
+impl UndoManagerState {
+    fn new(wrapper: UndoManagerWrapper) -> Self {
+        UndoManagerState {
+            wrapper: RwLock::new(wrapper),
+            pending_unobserves: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn read(&self) -> NifResult<RwLockReadGuard<'_, UndoManagerWrapper>> {
+        self.wrapper
+            .read()
+            .map_err(|_| Error::Message("Failed to acquire read lock".to_string()).into())
+    }
+
+    fn write(&self) -> NifResult<RwLockWriteGuard<'_, UndoManagerWrapper>> {
+        let mut wrapper = self
+            .wrapper
+            .write()
+            .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+        let pending = std::mem::take(&mut *lock(&self.pending_unobserves));
+        for key in pending {
+            unobserve_stack_events(&mut wrapper.manager, key);
+        }
+        Ok(wrapper)
+    }
+
+    /// Removes the stack-event observers registered under `key`. Run on the worker.
+    pub(crate) fn unobserve(&self, key: &Origin) {
+        match self.write() {
+            Ok(mut wrapper) => unobserve_stack_events(&mut wrapper.manager, key.clone()),
+            Err(_) => self.defer_unobserve(key.clone()),
+        }
+    }
+
+    /// Queues the removal of the observers registered under `key` for the next `write`.
+    pub(crate) fn defer_unobserve(&self, key: Origin) {
+        lock(&self.pending_unobserves).push(key);
+    }
+}
+
+fn unobserve_stack_events(manager: &mut YexUndoManager, key: Origin) {
+    manager.unobserve_item_added(key.clone());
+    manager.unobserve_item_updated(key.clone());
+    manager.unobserve_item_popped(key.clone());
+    manager.unobserve_stack_cleared(key);
+}
+
+pub type UndoManagerResource = NifWrap<UndoManagerState>;
 
 #[rustler::resource_impl]
 impl rustler::Resource for UndoManagerResource {}
@@ -156,14 +270,14 @@ fn create_undo_manager_with_options<T: NifSharedType>(
             .insert(origin.as_slice().into());
     }
 
-    let mut undo_manager = UndoManager::with_options(undo_options);
+    let mut undo_manager = YexUndoManager::with_options(undo_options);
     undo_manager.expand_scope(&doc, &branch);
     let wrapper = UndoManagerWrapper::new(undo_manager, doc.reference.clone());
 
     Ok((
         atoms::ok(),
         NifUndoManager {
-            reference: ResourceArc::new(NifWrap(RwLock::new(wrapper))),
+            reference: ResourceArc::new(NifWrap(UndoManagerState::new(wrapper))),
             doc,
         },
     ))
@@ -208,11 +322,7 @@ pub fn undo_manager_include_origin(
     origin_term: Term,
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        let mut wrapper = undo_manager
-            .reference
-            .0
-            .write()
-            .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+        let mut wrapper = undo_manager.reference.write()?;
 
         let origin = term_to_origin_binary(origin_term)
             .ok_or_else(|| Error::Message("Invalid origin term".to_string()))?;
@@ -229,11 +339,7 @@ pub fn undo_manager_exclude_origin(
     origin_term: Term,
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        let mut wrapper = undo_manager
-            .reference
-            .0
-            .write()
-            .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+        let mut wrapper = undo_manager.reference.write()?;
 
         let origin = term_to_origin_binary(origin_term)
             .ok_or_else(|| Error::Message("Invalid origin term".to_string()))?;
@@ -251,11 +357,7 @@ fn ensure_store_available(undo_manager: &NifUndoManager) -> Result<(), Error> {
 #[rustler::nif]
 pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> NifResult<(Atom, bool)> {
     ENV.set(&mut env.clone(), || {
-        let mut wrapper = undo_manager
-            .reference
-            .0
-            .write()
-            .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+        let mut wrapper = undo_manager.reference.write()?;
 
         ensure_store_available(&undo_manager)?;
 
@@ -271,11 +373,7 @@ pub fn undo_manager_undo(env: Env, undo_manager: NifUndoManager) -> NifResult<(A
 
 #[rustler::nif]
 pub fn undo_manager_can_undo(undo_manager: NifUndoManager) -> NifResult<bool> {
-    let wrapper = undo_manager
-        .reference
-        .0
-        .read()
-        .map_err(|_| Error::Message("Failed to acquire read lock".to_string()))?;
+    let wrapper = undo_manager.reference.read()?;
 
     Ok(wrapper.manager.can_undo())
 }
@@ -283,11 +381,7 @@ pub fn undo_manager_can_undo(undo_manager: NifUndoManager) -> NifResult<bool> {
 #[rustler::nif]
 pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> NifResult<(Atom, bool)> {
     ENV.set(&mut env.clone(), || {
-        let mut wrapper = undo_manager
-            .reference
-            .0
-            .write()
-            .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+        let mut wrapper = undo_manager.reference.write()?;
 
         ensure_store_available(&undo_manager)?;
 
@@ -303,11 +397,7 @@ pub fn undo_manager_redo(env: Env, undo_manager: NifUndoManager) -> NifResult<(A
 
 #[rustler::nif]
 pub fn undo_manager_can_redo(undo_manager: NifUndoManager) -> NifResult<bool> {
-    let wrapper = undo_manager
-        .reference
-        .0
-        .read()
-        .map_err(|_| Error::Message("Failed to acquire read lock".to_string()))?;
+    let wrapper = undo_manager.reference.read()?;
 
     Ok(wrapper.manager.can_redo())
 }
@@ -319,11 +409,7 @@ pub fn undo_manager_expand_scope(
     scope: NifSharedTypeInput,
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        let mut wrapper = undo_manager
-            .reference
-            .0
-            .write()
-            .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+        let mut wrapper = undo_manager.reference.write()?;
         let doc = undo_manager.doc;
         match scope {
             NifSharedTypeInput::Text(text) => {
@@ -363,11 +449,7 @@ pub fn undo_manager_expand_scope(
 #[rustler::nif]
 pub fn undo_manager_stop_capturing(env: Env<'_>, undo_manager: NifUndoManager) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        let mut wrapper = undo_manager
-            .reference
-            .0
-            .write()
-            .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+        let mut wrapper = undo_manager.reference.write()?;
 
         wrapper.manager.reset();
         Ok(atoms::ok())
@@ -377,11 +459,7 @@ pub fn undo_manager_stop_capturing(env: Env<'_>, undo_manager: NifUndoManager) -
 #[rustler::nif]
 pub fn undo_manager_clear(env: Env, undo_manager: NifUndoManager) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        let mut wrapper = undo_manager
-            .reference
-            .0
-            .write()
-            .map_err(|_| Error::Message("Failed to acquire write lock".to_string()))?;
+        let mut wrapper = undo_manager.reference.write()?;
 
         // UndoManager::clear_all takes a blocking read transaction, so hold a try_transact
         // read across it to fail instead of waiting when a transaction is open.
@@ -391,4 +469,214 @@ pub fn undo_manager_clear(env: Env, undo_manager: NifUndoManager) -> NifResult<A
 
         Ok(atoms::ok())
     })
+}
+
+/// Where a subscription's stack events go: the subscriber, its reference and metadata.
+type EventTarget = (LocalPid, TermBox, TermBox);
+
+#[derive(NifStruct)]
+#[module = "Yex.UndoManager.StackClearedEvent"]
+struct NifStackClearedEvent {
+    undo_stack_cleared: bool,
+    redo_stack_cleared: bool,
+}
+
+/// Encodes `%Yex.UndoManager.StackItemEvent{}` by hand: its `type` field is a Rust keyword.
+fn stack_item_event<'a>(env: &mut Env<'a>, event_type: Atom, e: &Event<StackMeta>) -> Term<'a> {
+    let kind = match e.kind() {
+        EventKind::Undo => atoms::undo(),
+        EventKind::Redo => atoms::redo(),
+    };
+    let origin = origin_to_term(env, e.origin());
+    let env = *env;
+    let module = Atom::from_str(env, "Elixir.Yex.UndoManager.StackItemEvent")
+        .expect("valid atom")
+        .encode(env);
+    let pairs = [
+        (atoms::struct_().encode(env), module),
+        (atoms::type_().encode(env), event_type.encode(env)),
+        (atoms::kind().encode(env), kind.encode(env)),
+        (atoms::item().encode(env), e.meta().id.encode(env)),
+        (atoms::origin().encode(env), origin),
+        (atoms::meta().encode(env), e.meta().get(env)),
+    ];
+    Term::map_from_pairs(env, &pairs).expect("distinct keys")
+}
+
+enum StackEvent<'e> {
+    Item(Atom, &'e Event<StackMeta>),
+    Cleared(&'e StackClearedEvent),
+}
+
+fn notify(state: &CallbackState<EventTarget>, event: StackEvent<'_>) {
+    let Some(state) = state.get() else {
+        return;
+    };
+    // A transaction abandoned by a raise commits when its resource is freed, outside a NIF.
+    if !ENV.is_set() {
+        return;
+    }
+    let (pid, ref_term, metadata) = &*state;
+    ENV.with(|env| {
+        let event = match event {
+            StackEvent::Item(event_type, e) => stack_item_event(env, event_type, e),
+            StackEvent::Cleared(e) => NifStackClearedEvent {
+                undo_stack_cleared: e.undo_stack_cleared,
+                redo_stack_cleared: e.redo_stack_cleared,
+            }
+            .encode(*env),
+        };
+        let _ = env.send(
+            pid,
+            (
+                atoms::undo_manager_event(),
+                ref_term.get(*env),
+                event,
+                metadata.get(*env),
+            ),
+        );
+    })
+}
+
+// The callbacks capture only `state`: holding the manager would keep it alive from its own
+// observers, and popped (and added, during undo) run while undo and redo hold its lock.
+fn item_callback(
+    state: CallbackState<EventTarget>,
+    event_type: Atom,
+) -> impl FnMut(&yrs::TransactionMut, &mut Event<StackMeta>) + Send + Sync + 'static {
+    move |_txn, e| notify(&state, StackEvent::Item(event_type, e))
+}
+
+#[rustler::nif]
+pub fn undo_manager_observe(
+    undo_manager: NifUndoManager,
+    pid: LocalPid,
+    ref_term: Term<'_>,
+    metadata: Term<'_>,
+) -> NifResult<NifSubscription> {
+    let (sub_key, state) =
+        SubscriptionKey::new((pid, TermBox::new(ref_term), TermBox::new(metadata)));
+    {
+        let mut wrapper = undo_manager.reference.write()?;
+        let manager = &mut wrapper.manager;
+        let key = &sub_key.key;
+        manager.observe_item_added(key.clone(), item_callback(state.clone(), atoms::added()));
+        manager.observe_item_updated(key.clone(), item_callback(state.clone(), atoms::updated()));
+        manager.observe_item_popped(key.clone(), item_callback(state.clone(), atoms::popped()));
+        manager.observe_stack_cleared(key.clone(), move |e| notify(&state, StackEvent::Cleared(e)));
+    }
+    let doc = undo_manager.doc.clone();
+    Ok(NifSubscription::new(
+        sub_key.undo_manager(undo_manager.reference),
+        doc,
+    ))
+}
+
+#[rustler::nif]
+pub fn undo_manager_undo_stack_size(undo_manager: NifUndoManager) -> NifResult<usize> {
+    Ok(undo_manager.reference.read()?.manager.undo_stack().len())
+}
+
+#[rustler::nif]
+pub fn undo_manager_redo_stack_size(undo_manager: NifUndoManager) -> NifResult<usize> {
+    Ok(undo_manager.reference.read()?.manager.redo_stack().len())
+}
+
+/// Runs `f` on the meta of the stack item `id`, or returns `{:error, :not_found}`.
+fn with_stack_meta<'a, F>(
+    env: Env<'a>,
+    undo_manager: &NifUndoManager,
+    id: u64,
+    f: F,
+) -> NifResult<Term<'a>>
+where
+    F: FnOnce(&StackMeta) -> Term<'a>,
+{
+    let wrapper = undo_manager.reference.read()?;
+    let manager = &wrapper.manager;
+    let item = manager
+        .undo_stack()
+        .iter()
+        .chain(manager.redo_stack())
+        .find(|item| item.meta().id == id);
+    Ok(match item {
+        Some(item) => f(item.meta()),
+        None => (atoms::error(), atoms::not_found()).encode(env),
+    })
+}
+
+#[rustler::nif]
+pub fn undo_manager_get_meta<'a>(
+    env: Env<'a>,
+    undo_manager: NifUndoManager,
+    id: u64,
+) -> NifResult<Term<'a>> {
+    with_stack_meta(env, &undo_manager, id, |meta| {
+        (atoms::ok(), meta.get(env)).encode(env)
+    })
+}
+
+#[rustler::nif]
+pub fn undo_manager_put_meta<'a>(
+    env: Env<'a>,
+    undo_manager: NifUndoManager,
+    id: u64,
+    value: Term<'a>,
+) -> NifResult<Term<'a>> {
+    with_stack_meta(env, &undo_manager, id, |meta| {
+        *meta.value() = Some(TermBox::new(value));
+        atoms::ok().encode(env)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StackMeta, YexUndoManager};
+    use std::sync::{Arc, Mutex};
+    use yrs::{Doc, Text, Transact};
+
+    #[test]
+    fn stack_meta_ids_are_distinct_and_increasing() {
+        let first = StackMeta::default();
+        let second = StackMeta::default();
+        assert!(second.id > first.id);
+    }
+
+    #[test]
+    fn stack_item_id_follows_the_item_through_merge_and_pop() {
+        let doc = Doc::new();
+        let text = doc.get_or_insert_text("text");
+        let mut manager = YexUndoManager::new();
+        manager.expand_scope(&doc, &text);
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let record = |name: &'static str| {
+            let seen = seen.clone();
+            move |_: &yrs::TransactionMut, e: &mut yrs::undo::Event<StackMeta>| {
+                seen.lock().unwrap().push((name, e.meta().id));
+            }
+        };
+        manager.observe_item_added("test", record("added"));
+        manager.observe_item_updated("test", record("updated"));
+        manager.observe_item_popped("test", record("popped"));
+
+        text.insert(&mut doc.transact_mut(), 0, "a");
+        text.insert(&mut doc.transact_mut(), 1, "b");
+        assert_eq!(manager.undo_stack().len(), 1);
+        let id = manager.undo_stack()[0].meta().id;
+
+        assert!(manager.undo_blocking());
+        let redo_id = manager.redo_stack()[0].meta().id;
+        assert_ne!(redo_id, id);
+        assert_eq!(
+            *seen.lock().unwrap(),
+            vec![
+                ("added", id),
+                ("updated", id),
+                // undo pushes a new item onto the redo stack, then pops the original
+                ("added", redo_id),
+                ("popped", id),
+            ]
+        );
+    }
 }

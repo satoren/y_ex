@@ -41,4 +41,18 @@ rustler::atoms! {
   retain,
   attributes,
 
+  // undo manager stack events
+  undo_manager_event,
+  added,
+  updated,
+  popped,
+  undo,
+  redo,
+  kind,
+  item,
+  origin,
+  meta,
+  not_found,
+  struct_ = "__struct__",
+  type_ = "type",
 }

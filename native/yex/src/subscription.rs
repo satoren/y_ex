@@ -9,6 +9,7 @@ use crate::{
     deferred::Unobserve,
     doc::{DocOperations, DocResource, NifDoc},
     transaction::TransactionResource,
+    undo::UndoManagerResource,
     wrap::NifWrap,
     ENV,
 };
@@ -35,6 +36,10 @@ enum Target {
         awareness: ResourceArc<AwarenessResource>,
         event: Option<AwarenessEvent>,
     },
+    /// Stack-event observers live in the undo manager. `None` once removed.
+    UndoManager {
+        manager: Option<ResourceArc<UndoManagerResource>>,
+    },
 }
 
 /// Observers in yrs are registered under a key and removed via `unobserve(key)`, which
@@ -52,6 +57,12 @@ pub struct Subscription {
 /// State an observer callback needs, released when its subscription is unsubscribed or
 /// dropped. The callback does nothing once it has been released.
 pub struct CallbackState<T>(Arc<Mutex<Option<Arc<T>>>>);
+
+impl<T> Clone for CallbackState<T> {
+    fn clone(&self) -> Self {
+        CallbackState(self.0.clone())
+    }
+}
 
 impl<T> CallbackState<T> {
     pub fn get(&self) -> Option<Arc<T>> {
@@ -137,6 +148,12 @@ impl SubscriptionKey {
         })
     }
 
+    pub fn undo_manager(self, manager: ResourceArc<UndoManagerResource>) -> Subscription {
+        self.into_subscription(Target::UndoManager {
+            manager: Some(manager),
+        })
+    }
+
     fn into_subscription(self, target: Target) -> Subscription {
         Subscription {
             key: self.key,
@@ -148,11 +165,11 @@ impl SubscriptionKey {
 
 impl Subscription {
     /// Whether a transaction on `doc` can remove this subscription's observer. Awareness
-    /// observers don't use the transaction at all.
+    /// and undo manager observers don't use the transaction at all.
     fn observes_store_of(&self, doc: &DocResource) -> bool {
         match &self.target {
             Target::Doc { doc: own, .. } => std::ptr::eq(&*own.reference, doc),
-            Target::Awareness { .. } => true,
+            Target::Awareness { .. } | Target::UndoManager { .. } => true,
         }
     }
 
@@ -183,6 +200,11 @@ impl Subscription {
                 }
             }
             Target::Awareness { .. } => self.remove_awareness_observer(),
+            Target::UndoManager { manager } => {
+                if let Some(manager) = manager.take() {
+                    manager.unobserve(&self.key);
+                }
+            }
         }
     }
 
@@ -211,6 +233,13 @@ impl Drop for Subscription {
             }
             // The awareness lock never fails; at worst it waits for an awareness operation.
             Target::Awareness { .. } => self.remove_awareness_observer(),
+            // The manager's observers may be firing on the worker's thread right now, so
+            // only queue the removal (see `UndoManagerState`).
+            Target::UndoManager { manager } => {
+                if let Some(manager) = manager.take() {
+                    manager.defer_unobserve(self.key.clone());
+                }
+            }
         }
     }
 }
