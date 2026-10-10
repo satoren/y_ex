@@ -1,4 +1,8 @@
 defmodule Yex.DeletedSharedTypeError do
+  @moduledoc """
+  Raised when an operation is performed on a shared type that has been deleted
+  from its document, for example a nested type removed from its parent.
+  """
   defexception message: "Shared type has been deleted"
 end
 

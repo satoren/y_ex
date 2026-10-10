@@ -20,6 +20,14 @@ defmodule Yex.Awareness do
 
   # crdt api
 
+  @doc """
+  Returns the client ID of the local client, which is the client ID of the underlying document.
+
+  ## Examples
+      iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{ client_id: 100 }))
+      iex> Yex.Awareness.client_id(awareness)
+      100
+  """
   @spec client_id(t) :: integer()
   def client_id(%__MODULE__{} = awareness), do: Yex.Nif.awareness_client_id(awareness)
 
@@ -34,7 +42,7 @@ defmodule Yex.Awareness do
   def get_local_state(%__MODULE__{} = awareness), do: Yex.Nif.awareness_get_local_state(awareness)
 
   @doc """
-
+  Sets the local state of the current client and notifies monitors.
 
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{ client_id: 100 }))
@@ -47,7 +55,7 @@ defmodule Yex.Awareness do
     do: Yex.Nif.awareness_set_local_state(awareness, map)
 
   @doc """
-
+  Clears the local state of the current client, marking it as offline for other clients.
 
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{ client_id: 100 }))
@@ -60,7 +68,7 @@ defmodule Yex.Awareness do
     do: Yex.Nif.awareness_clean_local_state(awareness)
 
   @doc """
-
+  Returns the IDs of all clients that currently have a state, including the local client.
 
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.new())
@@ -73,7 +81,7 @@ defmodule Yex.Awareness do
     do: Yex.Nif.awareness_get_client_ids(awareness)
 
   @doc """
-
+  Returns the states of all known clients, keyed by client ID.
 
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{ client_id: 100 }))
@@ -103,6 +111,9 @@ defmodule Yex.Awareness do
     Yex.Subscription.register(sub)
   end
 
+  @doc """
+  Stop monitoring awareness updates started with `monitor_update/2`.
+  """
   @spec demonitor_update(reference()) :: :ok
   def demonitor_update(ref) do
     Yex.Subscription.unsubscribe(ref)
@@ -126,6 +137,9 @@ defmodule Yex.Awareness do
     Yex.Subscription.register(sub)
   end
 
+  @doc """
+  Stop monitoring awareness changes started with `monitor_change/2`.
+  """
   @spec demonitor_change(reference()) :: :ok
   def demonitor_change(ref) do
     Yex.Subscription.unsubscribe(ref)
@@ -134,7 +148,9 @@ defmodule Yex.Awareness do
   # protocols
 
   @doc """
-
+  Encodes the states of the given clients into an awareness update binary that can be
+  sent to remote peers and applied with `apply_update/3`.
+  When `clients` is `nil`, the states of all known clients are encoded.
 
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{ client_id: 10 }))

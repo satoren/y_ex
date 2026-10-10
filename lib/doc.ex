@@ -118,30 +118,72 @@ defmodule Yex.Doc do
     Yex.Nif.doc_with_options(option) |> Map.put(:worker_pid, worker_pid)
   end
 
+  @doc """
+  Returns the client ID of the document.
+
+  The client ID uniquely identifies this replica when generating updates.
+
+  ## Examples
+      iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 10})
+      iex> Yex.Doc.client_id(doc)
+      10
+  """
+  @spec client_id(t) :: integer()
   def client_id(%__MODULE__{} = doc) do
     run_in_worker_process(doc, do: Yex.Nif.doc_client_id(doc))
   end
 
+  @doc """
+  Returns the globally unique identifier of the document.
+
+  A random GUID is generated when none was given in `Yex.Doc.Options`.
+
+  ## Examples
+      iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{guid: "my-guid"})
+      iex> Yex.Doc.guid(doc)
+      "my-guid"
+  """
+  @spec guid(t) :: String.t()
   def guid(%__MODULE__{} = doc) do
     run_in_worker_process(doc, do: Yex.Nif.doc_guid(doc))
   end
 
+  @doc """
+  Returns the collection ID of the document, or an empty string when none was set.
+  """
+  @spec collection_id(t) :: String.t()
   def collection_id(%__MODULE__{} = doc) do
     run_in_worker_process(doc, do: Yex.Nif.doc_collection_id(doc))
   end
 
+  @doc """
+  Returns whether garbage collection of deleted content is disabled for the document.
+  """
+  @spec skip_gc(t) :: boolean()
   def skip_gc(%__MODULE__{} = doc) do
     run_in_worker_process(doc, do: Yex.Nif.doc_skip_gc(doc))
   end
 
+  @doc """
+  Returns whether the document, when used as a subdocument, is loaded automatically.
+  """
+  @spec auto_load(t) :: boolean()
   def auto_load(%__MODULE__{} = doc) do
     run_in_worker_process(doc, do: Yex.Nif.doc_auto_load(doc))
   end
 
+  @doc """
+  Returns whether the document, when used as a subdocument, should be loaded by the provider.
+  """
+  @spec should_load(t) :: boolean()
   def should_load(%__MODULE__{} = doc) do
     run_in_worker_process(doc, do: Yex.Nif.doc_should_load(doc))
   end
 
+  @doc """
+  Returns how text offsets are measured: `:bytes` (UTF-8 bytes) or `:utf16` (UTF-16 code units).
+  """
+  @spec offset_kind(t) :: :bytes | :utf16
   def offset_kind(%__MODULE__{} = doc) do
     run_in_worker_process(doc, do: Yex.Nif.doc_offset_kind(doc))
   end
@@ -296,6 +338,13 @@ defmodule Yex.Doc do
     monitor_update_v1(doc, opt)
   end
 
+  @doc """
+  Monitor document updates encoded with the v1 format.
+
+  The calling process receives `{:update_v1, update, origin, metadata}` messages.
+  See `monitor_update/2` for the meaning of `origin` and the `:metadata` option.
+  """
+  @spec monitor_update_v1(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_update_v1(%__MODULE__{} = doc, opt \\ []) do
     notify_pid = self()
 
@@ -310,6 +359,13 @@ defmodule Yex.Doc do
     end
   end
 
+  @doc """
+  Monitor document updates encoded with the v2 format.
+
+  The calling process receives `{:update_v2, update, origin, metadata}` messages.
+  See `monitor_update/2` for the meaning of `origin` and the `:metadata` option.
+  """
+  @spec monitor_update_v2(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_update_v2(%__MODULE__{} = doc, opt \\ []) do
     notify_pid = self()
 
@@ -332,14 +388,33 @@ defmodule Yex.Doc do
     demonitor_update_v1(sub)
   end
 
+  @doc """
+  Stop monitoring document updates started with `monitor_update_v1/2`.
+  """
+  @spec demonitor_update_v1(reference()) :: :ok | {:error, term()}
   def demonitor_update_v1(sub) do
     Yex.Subscription.unsubscribe(sub)
   end
 
+  @doc """
+  Stop monitoring document updates started with `monitor_update_v2/2`.
+  """
+  @spec demonitor_update_v2(reference()) :: :ok | {:error, term()}
   def demonitor_update_v2(sub) do
     Yex.Subscription.unsubscribe(sub)
   end
 
+  @doc """
+  Monitor subdocument changes.
+
+  The calling process receives
+  `{:subdocs, %{added: [Yex.Doc.t()], removed: [Yex.Doc.t()], loaded: [Yex.Doc.t()]}, origin, metadata}`
+  messages whenever subdocuments are added to, removed from, or loaded in this document.
+  You can pass metadata as an option; if omitted, the document itself is used.
+
+  Use `Yex.Subscription.unsubscribe/1` with the returned reference to stop monitoring.
+  """
+  @spec monitor_subdocs(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_subdocs(%__MODULE__{} = doc, opt \\ []) do
     notify_pid = self()
 

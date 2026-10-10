@@ -42,12 +42,26 @@ defmodule Yex do
     end
   end
 
+  @doc """
+  Computes the state vector and encodes it with the v1 format.
+
+  Same as `encode_state_vector/1`.
+  """
+  @spec encode_state_vector_v1(Yex.Doc.t()) :: {:ok, binary()} | {:error, term()}
   def encode_state_vector_v1(%Yex.Doc{} = doc) do
     Yex.Doc.run_in_worker_process doc do
       Yex.Nif.encode_state_vector_v1(doc, cur_txn(doc))
     end
   end
 
+  @doc """
+  Computes the state vector and encodes it with the v2 format.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> {:ok, _binary} = Yex.encode_state_vector_v2(doc)
+  """
+  @spec encode_state_vector_v2(Yex.Doc.t()) :: {:ok, binary()} | {:error, term()}
   def encode_state_vector_v2(%Yex.Doc{} = doc) do
     Yex.Doc.run_in_worker_process doc do
       Yex.Nif.encode_state_vector_v2(doc, cur_txn(doc))
@@ -78,6 +92,13 @@ defmodule Yex do
     end
   end
 
+  @doc """
+  Encodes the document state as a v1 update.
+
+  Same as `encode_state_as_update/2`. `encoded_state_vector` must be v1 encoded.
+  """
+  @spec encode_state_as_update_v1(Yex.Doc.t(), binary() | nil) ::
+          {:ok, binary()} | {:error, term()}
   def encode_state_as_update_v1(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
     Yex.Doc.run_in_worker_process doc do
       txn = cur_txn(doc)
@@ -110,6 +131,18 @@ defmodule Yex do
     end
   end
 
+  @doc """
+  Encodes the document state as a v2 update.
+
+  Optionally, pass a v2 encoded state vector (see `encode_state_vector_v2/1`)
+  to only write the missing differences.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> {:ok, _binary} = Yex.encode_state_as_update_v2(doc)
+  """
+  @spec encode_state_as_update_v2(Yex.Doc.t(), binary() | nil) ::
+          {:ok, binary()} | {:error, term()}
   def encode_state_as_update_v2(%Yex.Doc{} = doc, encoded_state_vector \\ nil) do
     Yex.Doc.run_in_worker_process doc do
       txn = cur_txn(doc)
@@ -144,6 +177,11 @@ defmodule Yex do
     apply_update_v1(doc, update)
   end
 
+  @doc """
+  Applies a v1 encoded update to the document.
+
+  Same as `apply_update/2`.
+  """
   @spec apply_update_v1(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v1(%Yex.Doc{} = doc, update) do
     Yex.Doc.run_in_worker_process doc do
@@ -153,6 +191,19 @@ defmodule Yex do
     end
   end
 
+  @doc """
+  Applies a v2 encoded update to the document.
+
+  ## Examples
+      iex> doc1 = Yex.Doc.new()
+      iex> doc2 = Yex.Doc.new()
+      iex> Yex.Text.insert(Yex.Doc.get_text(doc1, "text"), 0, "Hello")
+      iex> {:ok, update} = Yex.encode_state_as_update_v2(doc1)
+      iex> Yex.apply_update_v2(doc2, update)
+      :ok
+      iex> Yex.Text.to_string(Yex.Doc.get_text(doc2, "text"))
+      "Hello"
+  """
   @spec apply_update_v2(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v2(%Yex.Doc{} = doc, update) do
     Yex.Doc.run_in_worker_process doc do
@@ -162,11 +213,36 @@ defmodule Yex do
     end
   end
 
+  @doc """
+  Merges multiple v1 encoded updates into a single update.
+
+  The result is equivalent to applying all updates in order, without needing a document.
+  Same as `merge_updates_v1/1`.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> text = Yex.Doc.get_text(doc, "text")
+      iex> Yex.Doc.monitor_update(doc)
+      iex> Yex.Text.insert(text, 0, "Hello")
+      iex> Yex.Text.insert(text, 5, " World")
+      iex> assert_receive {:update_v1, update1, _, _}
+      iex> assert_receive {:update_v1, update2, _, _}
+      iex> {:ok, merged} = Yex.merge_updates([update1, update2])
+      iex> doc2 = Yex.Doc.new()
+      iex> Yex.apply_update(doc2, merged)
+      iex> Yex.Text.to_string(Yex.Doc.get_text(doc2, "text"))
+      "Hello World"
+  """
   @spec merge_updates([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates(updates) when is_list(updates) do
     merge_updates_v1(updates)
   end
 
+  @doc """
+  Merges multiple v1 encoded updates into a single v1 update.
+
+  Same as `merge_updates/1`.
+  """
   @spec merge_updates_v1([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v1(updates) when is_list(updates) do
     if IO.iodata_length(updates) > Yex.Nif.dirty_cutoff(),
@@ -174,6 +250,9 @@ defmodule Yex do
       else: Yex.Nif.merge_updates_v1(updates)
   end
 
+  @doc """
+  Merges multiple v2 encoded updates into a single v2 update.
+  """
   @spec merge_updates_v2([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v2(updates) when is_list(updates) do
     if IO.iodata_length(updates) > Yex.Nif.dirty_cutoff(),
