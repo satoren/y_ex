@@ -75,15 +75,27 @@ defmodule Yex.Sync do
     end
   end
 
+  @doc """
+  Decodes a binary message using the v1 encoding. Same as `message_decode/1`.
+  """
   @spec message_decode_v1(binary) :: {:ok, message} | {:error, term}
   def message_decode_v1(message), do: Yex.Nif.sync_message_decode_v1(message)
 
+  @doc """
+  Encodes a message using the v1 encoding. Same as `message_encode/1`.
+  """
   @spec message_encode_v1(message) :: {:ok, binary} | {:error, term}
   def message_encode_v1(message), do: Yex.Nif.sync_message_encode_v1(message)
 
+  @doc """
+  Decodes a binary message whose sync payloads are encoded with the v2 update format.
+  """
   @spec message_decode_v2(binary) :: {:ok, message} | {:error, term}
   def message_decode_v2(message), do: Yex.Nif.sync_message_decode_v2(message)
 
+  @doc """
+  Encodes a message whose sync payloads are encoded with the v2 update format.
+  """
   @spec message_encode_v2(message) :: {:ok, binary} | {:error, term}
   def message_encode_v2(message), do: Yex.Nif.sync_message_encode_v2(message)
 

@@ -57,6 +57,16 @@ defmodule Yex.StickyIndex do
           | %Yex.XmlElement{}
           | %Yex.XmlText{}
           | %Yex.XmlFragment{}
+  @doc """
+  Creates a sticky index for the given position of a shared type.
+
+  `assoc` decides which neighbour the index sticks to:
+
+    * `:after` - the index sticks to the element at `index`, so content inserted
+      at that position goes before it.
+    * `:before` - the index sticks to the element at `index - 1`, so content
+      inserted at that position goes after it.
+  """
   @spec new(shared_type, integer(), :before | :after) :: t
   def new(%{doc: doc} = shared_type, index, assoc) do
     Doc.run_in_worker_process(doc,
@@ -64,6 +74,12 @@ defmodule Yex.StickyIndex do
     )
   end
 
+  @doc """
+  Resolves the sticky index to its current numeric position in the shared type.
+
+  Returns `{:ok, %{index: index, assoc: assoc}}`, or `:error` when the position
+  can no longer be resolved (for example, the shared type has been deleted).
+  """
   @spec get_offset(t) :: {:ok, %{index: integer(), assoc: :before | :after}} | :error
   def get_offset(%__MODULE__{doc: doc} = sticky_index) do
     Doc.run_in_worker_process(doc,

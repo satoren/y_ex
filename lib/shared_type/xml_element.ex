@@ -344,6 +344,17 @@ defmodule Yex.XmlElement do
     )
   end
 
+  @doc """
+  Returns the XML string representation of the element, including its children.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
+      iex> Yex.XmlFragment.push(xml, Yex.XmlElementPrelim.new("div", [Yex.XmlTextPrelim.from("text")]))
+      iex> {:ok, element} = Yex.XmlFragment.fetch(xml, 0)
+      iex> Yex.XmlElement.to_string(element)
+      "<div>text</div>"
+  """
   @spec to_string(t) :: binary()
   def to_string(%__MODULE__{doc: doc} = xml_element) do
     Doc.run_in_worker_process(doc,
@@ -355,6 +366,11 @@ defmodule Yex.XmlElement do
     Process.get(doc_ref, nil)
   end
 
+  @doc """
+  Converts the element, including its attributes and children, into a `Yex.XmlElementPrelim`.
+
+  The result can be inserted elsewhere to copy the element.
+  """
   @spec as_prelim(t) :: Yex.XmlElementPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = xml_element) do
     Doc.run_in_worker_process doc do
@@ -412,6 +428,10 @@ defmodule Yex.XmlElementPrelim do
           children: [Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()]
         }
 
+  @doc """
+  Creates a preliminary xml element with the given tag, children and attributes.
+  """
+  @spec new(String.t(), Enumerable.t(), %{String.t() => String.t() | Yex.PrelimType.t()}) :: t
   def new(tag, children, attributes \\ %{}) do
     %__MODULE__{
       tag: tag,
@@ -420,6 +440,10 @@ defmodule Yex.XmlElementPrelim do
     }
   end
 
+  @doc """
+  Creates a preliminary xml element with the given tag and no children or attributes.
+  """
+  @spec empty(String.t()) :: t
   def empty(tag) do
     %__MODULE__{
       tag: tag,

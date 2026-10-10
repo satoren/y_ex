@@ -215,6 +215,18 @@ defmodule Yex.Array do
     {:error, :out_of_bounds}
   end
 
+  @doc """
+  Gets a value by index from the array, or returns `default` if the index is out of bounds.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "Hello")
+      iex> Yex.Array.get(array, 0)
+      "Hello"
+      iex> Yex.Array.get(array, 1, :default)
+      :default
+  """
   @spec get(t, integer(), default :: value()) :: value()
   def get(array, index, default \\ nil) do
     case fetch(array, index) do
@@ -370,6 +382,19 @@ defmodule Yex.Array do
     end
   end
 
+  @doc """
+  Checks if the array contains the given value.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> array = Yex.Doc.get_array(doc, "array")
+      iex> Yex.Array.push(array, "Hello")
+      iex> Yex.Array.member?(array, "Hello")
+      true
+      iex> Yex.Array.member?(array, "World")
+      false
+  """
+  @spec member?(t, term()) :: boolean()
   def member?(array, val) do
     val = Yex.normalize(val)
     Enum.member?(to_list(array), val)
@@ -455,6 +480,9 @@ defmodule Yex.ArrayPrelim do
           list: list(Yex.input_type())
         }
 
+  @doc """
+  Creates a preliminary array from the given enumerable.
+  """
   @spec from(Enumerable.t(Yex.input_type())) :: t
   def from(enumerable) do
     %__MODULE__{list: Enum.to_list(enumerable)}
