@@ -15,8 +15,12 @@ defmodule Yex.Doc do
   defmodule Options do
     @moduledoc """
     Document options.
+
+    `client_id` defaults to `nil`, which picks a random client id in
+    `0..9007199254740991`, the same as `Yex.Doc.new/0`. Collaborating replicas
+    must not share a client id.
     """
-    defstruct client_id: 0,
+    defstruct client_id: nil,
               guid: nil,
               collection_id: nil,
               offset_kind: :bytes,
@@ -25,7 +29,7 @@ defmodule Yex.Doc do
               should_load: true
 
     @type t :: %__MODULE__{
-            client_id: integer(),
+            client_id: non_neg_integer() | nil,
             guid: String.t() | nil,
             collection_id: String.t(),
             offset_kind: :bytes | :utf16,
@@ -112,6 +116,8 @@ defmodule Yex.Doc do
 
   @doc """
   Create a new document with options.
+
+  A random client id is used when `client_id` is `nil` (the default).
 
   Raises `ArgumentError` when `client_id` is outside `0..9007199254740991`
   (`2^53 - 1`), the range of yjs client ids.

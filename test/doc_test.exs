@@ -613,6 +613,44 @@ defmodule Yex.DocTest do
       end
     end
 
+    test "with_options picks a random client id when none is given" do
+      ids =
+        for _ <- 1..2 do
+          Doc.with_options(%Doc.Options{guid: "x"}) |> Doc.client_id()
+        end
+
+      assert [a, b] = ids
+      assert a != b
+      assert a != 0 and b != 0
+      assert Enum.all?(ids, &(&1 in 0..(Bitwise.bsl(1, 53) - 1)))
+    end
+
+    test "with_options keeps an explicit client id of 0" do
+      assert Doc.with_options(%Doc.Options{client_id: 0}) |> Doc.client_id() == 0
+    end
+
+    test "with_options keeps an explicit client id" do
+      assert Doc.with_options(%Doc.Options{client_id: 42}) |> Doc.client_id() == 42
+    end
+
+    test "docs with default options converge after concurrent edits" do
+      doc1 = Doc.with_options(%Doc.Options{guid: "x"})
+      doc2 = Doc.with_options(%Doc.Options{guid: "x"})
+
+      Doc.get_text(doc1, "text") |> Yex.Text.insert(0, "abc")
+      Doc.get_text(doc2, "text") |> Yex.Text.insert(0, "xyz")
+
+      {:ok, update1} = Yex.encode_state_as_update(doc1)
+      {:ok, update2} = Yex.encode_state_as_update(doc2)
+      :ok = Yex.apply_update(doc1, update2)
+      :ok = Yex.apply_update(doc2, update1)
+
+      text1 = Doc.get_text(doc1, "text") |> Yex.Text.to_string()
+      text2 = Doc.get_text(doc2, "text") |> Yex.Text.to_string()
+      assert text1 == text2
+      assert String.length(text1) == 6
+    end
+
     test "guid returns string when set in options" do
       guid = "test-guid-123"
       doc = Doc.with_options(%Doc.Options{guid: guid})
@@ -803,7 +841,7 @@ defmodule Yex.DocTest do
     test "Options struct has all expected fields with defaults" do
       options = %Doc.Options{}
 
-      assert options.client_id == 0
+      assert options.client_id == nil
       assert options.guid == nil
       assert options.collection_id == nil
       assert options.offset_kind == :bytes
