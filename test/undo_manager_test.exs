@@ -1533,6 +1533,54 @@ defmodule Yex.UndoManagerTest do
     end
   end
 
+  describe "scope from another document" do
+    setup do
+      other_doc = Doc.new()
+
+      scopes = [
+        Doc.get_text(other_doc, "text"),
+        Doc.get_array(other_doc, "array"),
+        Doc.get_map(other_doc, "map"),
+        Doc.get_xml_fragment(other_doc, "xml")
+      ]
+
+      %{other_doc: other_doc, scopes: scopes}
+    end
+
+    test "expand_scope raises ArgumentError and leaves the manager unchanged", %{
+      doc: doc,
+      text: text,
+      scopes: scopes
+    } do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+
+      for scope <- scopes do
+        assert_raise ArgumentError, "scope belongs to a different document", fn ->
+          UndoManager.expand_scope(undo_manager, scope)
+        end
+      end
+
+      other_text = hd(scopes)
+      Text.insert(other_text, 0, "other")
+      Text.insert(text, 0, "own")
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
+      assert Text.to_string(other_text) == "other"
+    end
+
+    test "new and new_with_options raise ArgumentError", %{doc: doc, scopes: scopes} do
+      for scope <- scopes do
+        assert_raise ArgumentError, "scope belongs to a different document", fn ->
+          UndoManager.new(doc, scope)
+        end
+
+        assert_raise ArgumentError, "scope belongs to a different document", fn ->
+          UndoManager.new_with_options(doc, scope, %UndoManager.Options{})
+        end
+      end
+    end
+  end
+
   test "new_with_options handles NIF errors" do
     # Mock test removed - relies on NIF implementation
   end

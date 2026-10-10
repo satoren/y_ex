@@ -165,6 +165,7 @@ defmodule Yex.UndoManager do
   ## Errors
   - Returns `{:error, "Invalid scope: expected a struct"}` if scope is not a struct
   - Returns `{:error, "Failed to get branch reference"}` if there's an error accessing the scope
+  - Raises `ArgumentError` if `scope` belongs to a document other than `doc`
   """
   @spec new(Yex.Doc.t(), struct()) ::
           {:ok, Yex.UndoManager.t()} | {:error, term()}
@@ -184,6 +185,7 @@ defmodule Yex.UndoManager do
   - Returns `{:error, "NIF error: <message>"}` if underlying NIF returns an error
   - Raises `Yex.TransactionAcqError` when a transaction on the document is open,
     for example inside `Yex.Doc.transaction/3`
+  - Raises `ArgumentError` if `scope` belongs to a document other than `doc`
   """
   @spec new_with_options(Yex.Doc.t(), struct(), Options.t()) ::
           {:ok, Yex.UndoManager.t()} | {:error, term()}
@@ -301,7 +303,8 @@ defmodule Yex.UndoManager do
   Expands the scope of the UndoManager to include additional shared types.
   The scope can be a Text, Array, or Map type.
 
-  Raises `Yex.TransactionAcqError` when a transaction on the document is open.
+  Raises `Yex.TransactionAcqError` when a transaction on the document is open, and
+  `ArgumentError` when `scope` belongs to a document other than the manager's.
   """
   def expand_scope(%{doc: doc} = undo_manager, scope) do
     Doc.run_in_worker_process doc do
