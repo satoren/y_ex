@@ -22,6 +22,7 @@ use crate::{
     decode::{catch_decode_v2, decode_update_v2},
     deferred::Deferred,
     error::Error,
+    snapshot::encode_state_from_snapshot,
     subscription::{DocEvent, NifSubscription, SubscriptionKey},
     term_box::TermBox,
     transaction::{take_then_drop, ReadTransaction, TransactionResource},
@@ -1236,12 +1237,11 @@ fn transaction_encode_state_from_snapshot_v1<'a>(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     snapshot: NifSnapshot,
 ) -> NifResult<Term<'a>> {
-    let update: Vec<u8> = snapshot.doc.readonly(current_transaction, |txn| {
+    let update: Vec<u8> = snapshot.doc.mutably(env, current_transaction, |txn| {
         let mut encoder = EncoderV1::new();
-        txn.encode_state_from_snapshot(&snapshot.reference.0, &mut encoder)
-            .map_err(|e| {
-                rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
-            })?;
+        encode_state_from_snapshot(txn, &snapshot.reference.0, &mut encoder).map_err(|e| {
+            rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
+        })?;
         Ok(encoder.to_vec())
     })?;
 
@@ -1254,12 +1254,11 @@ fn transaction_encode_state_from_snapshot_v2<'a>(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     snapshot: NifSnapshot,
 ) -> NifResult<Term<'a>> {
-    let update: Vec<u8> = snapshot.doc.readonly(current_transaction, |txn| {
+    let update: Vec<u8> = snapshot.doc.mutably(env, current_transaction, |txn| {
         let mut encoder = EncoderV2::new();
-        txn.encode_state_from_snapshot(&snapshot.reference.0, &mut encoder)
-            .map_err(|e| {
-                rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
-            })?;
+        encode_state_from_snapshot(txn, &snapshot.reference.0, &mut encoder).map_err(|e| {
+            rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
+        })?;
         Ok(encoder.to_vec())
     })?;
 
