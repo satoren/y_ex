@@ -1,9 +1,9 @@
 use std::mem;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
-use yrs::{TransactionMut, UndoManager};
+use yrs::TransactionMut;
 
-use crate::undo::try_release;
+use crate::undo::{try_release, YexUndoManager};
 
 pub(crate) type Unobserve = Box<dyn FnOnce(&TransactionMut) + Send>;
 
@@ -18,7 +18,7 @@ pub(crate) type Unobserve = Box<dyn FnOnce(&TransactionMut) + Send>;
 pub(crate) struct Deferred {
     unobserves: Mutex<Vec<Unobserve>>,
     has_unobserves: AtomicBool,
-    undo_managers: Mutex<Vec<UndoManager>>,
+    undo_managers: Mutex<Vec<YexUndoManager>>,
     has_undo_managers: AtomicBool,
 }
 
@@ -49,7 +49,7 @@ impl Deferred {
         }
     }
 
-    pub(crate) fn defer_undo_manager(&self, manager: UndoManager) {
+    pub(crate) fn defer_undo_manager(&self, manager: YexUndoManager) {
         lock(&self.undo_managers).push(manager);
         self.has_undo_managers.store(true, Ordering::Release);
     }
@@ -65,7 +65,7 @@ impl Deferred {
             self.has_undo_managers.store(false, Ordering::Release);
             mem::take(&mut *queue)
         };
-        let still_busy: Vec<UndoManager> = pending
+        let still_busy: Vec<YexUndoManager> = pending
             .into_iter()
             .filter_map(|manager| try_release(manager).err())
             .collect();

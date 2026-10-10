@@ -408,6 +408,14 @@ defmodule Yex.Nif do
   def undo_manager_stop_capturing(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_clear(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
 
+  def undo_manager_observe(_undo_manager, _pid, _ref, _metadata),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def undo_manager_undo_stack_size(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_redo_stack_size(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_get_meta(_undo_manager, _item), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_put_meta(_undo_manager, _item, _meta), do: :erlang.nif_error(:nif_not_loaded)
+
   def weak_string(_weak, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def weak_unquote(_weak, _cur_txn),
