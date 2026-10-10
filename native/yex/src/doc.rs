@@ -8,8 +8,9 @@ use rustler::{
     Atom, Binary, Decoder, Encoder, Env, LocalPid, NifResult, NifStruct, NifUnitEnum, ResourceArc,
     Term,
 };
+use yrs::encoding::read::Read as _;
 use yrs::updates::{
-    decoder::Decode,
+    decoder::{Decode, DecoderV1},
     encoder::{Encode, Encoder as UpdatesEncoder, EncoderV1, EncoderV2},
 };
 use yrs::*;
@@ -632,6 +633,236 @@ fn update_debug_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> 
 fn update_debug_v2<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
     let update = decode_update_v2(update.as_slice())?;
     Ok((atoms::ok(), format!("{:#?}", update)).encode(env))
+}
+
+/// Decodes a v1 update and rejects input left unread. A v2 payload starts with a zero
+/// byte, which the v1 decoder reads as an empty update before stopping, so the leftover
+/// bytes are what tell a v2 update passed by mistake from a real empty one.
+fn decode_update_v1(update: &[u8]) -> Result<Update, Error> {
+    let mut decoder = DecoderV1::from(update);
+    let decoded = Update::decode(&mut decoder)?;
+    if decoder.read_u8().is_ok() {
+        return Err(Error::Encoding(yrs::encoding::read::Error::Custom(
+            "update has trailing bytes".to_string(),
+        )));
+    }
+    Ok(decoded)
+}
+
+fn ok_binary(env: Env<'_>, bytes: Vec<u8>) -> NifResult<Term<'_>> {
+    Ok((atoms::ok(), SliceIntoBinary::new(bytes.as_slice())).encode(env))
+}
+
+fn diff_update_v1_impl<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+    state_vector: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let diff =
+        yrs::diff_updates_v1(update.as_slice(), state_vector.as_slice()).map_err(Error::from)?;
+    ok_binary(env, diff)
+}
+
+#[rustler::nif]
+fn diff_update_v1<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+    state_vector: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    diff_update_v1_impl(env, update, state_vector)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn diff_update_v1_dirty<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+    state_vector: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    diff_update_v1_impl(env, update, state_vector)
+}
+
+fn diff_update_v2_impl<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+    state_vector: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    // yjs reads the state vector in v1 encoding for both update formats. yrs
+    // diff_updates_v2 expects the yrs v2 framing and Update::encode_diff is not public,
+    // so the (small) state vector is re-framed.
+    let state_vector = StateVector::decode_v1(state_vector.as_slice())
+        .map_err(Error::from)?
+        .encode_v2();
+    let diff = catch_decode_v2(|| yrs::diff_updates_v2(update.as_slice(), &state_vector))?;
+    ok_binary(env, diff)
+}
+
+#[rustler::nif]
+fn diff_update_v2<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+    state_vector: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    diff_update_v2_impl(env, update, state_vector)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn diff_update_v2_dirty<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+    state_vector: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    diff_update_v2_impl(env, update, state_vector)
+}
+
+fn encode_state_vector_from_update_v1_impl<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let update = decode_update_v1(update.as_slice())?;
+    ok_binary(env, update.state_vector().encode_v1())
+}
+
+#[rustler::nif]
+fn encode_state_vector_from_update_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
+    encode_state_vector_from_update_v1_impl(env, update)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn encode_state_vector_from_update_v1_dirty<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    encode_state_vector_from_update_v1_impl(env, update)
+}
+
+fn encode_state_vector_from_update_v2_impl<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    // yjs has one state vector wire format for both update formats: the v1 one.
+    let update = decode_update_v2(update.as_slice())?;
+    ok_binary(env, update.state_vector().encode_v1())
+}
+
+#[rustler::nif]
+fn encode_state_vector_from_update_v2<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
+    encode_state_vector_from_update_v2_impl(env, update)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn encode_state_vector_from_update_v2_dirty<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    encode_state_vector_from_update_v2_impl(env, update)
+}
+
+fn convert_update_format_v1_to_v2_impl<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    ok_binary(env, decode_update_v1(update.as_slice())?.encode_v2())
+}
+
+#[rustler::nif]
+fn convert_update_format_v1_to_v2<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
+    convert_update_format_v1_to_v2_impl(env, update)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn convert_update_format_v1_to_v2_dirty<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    convert_update_format_v1_to_v2_impl(env, update)
+}
+
+fn convert_update_format_v2_to_v1_impl<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    let update = decode_update_v2(update.as_slice())?;
+    ok_binary(env, update.encode_v1())
+}
+
+#[rustler::nif]
+fn convert_update_format_v2_to_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
+    convert_update_format_v2_to_v1_impl(env, update)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn convert_update_format_v2_to_v1_dirty<'a>(
+    env: Env<'a>,
+    update: Binary<'a>,
+) -> NifResult<Term<'a>> {
+    convert_update_format_v2_to_v1_impl(env, update)
+}
+
+#[derive(rustler::NifMap)]
+struct NifUpdateMeta {
+    from: HashMap<u64, u32>,
+    to: HashMap<u64, u32>,
+}
+
+/// yjs parseUpdateMeta: per client, the clock of the first struct and the end of the
+/// last one. Skips are left out; yjs and yrs only emit them between structs, never as a
+/// client's first or last one, so the result matches yjs. The delete set is not read.
+fn update_meta(update: &Update) -> NifUpdateMeta {
+    let from = update
+        .state_vector_lower()
+        .iter()
+        .map(|(client, clock)| (client.get(), *clock))
+        .collect();
+    let to = update
+        .insertions(true)
+        .iter()
+        .filter_map(|(client, ranges)| {
+            ranges
+                .iter()
+                .map(|range| range.end)
+                .max()
+                .map(|end| (client.get(), end))
+        })
+        .collect();
+    NifUpdateMeta { from, to }
+}
+
+#[rustler::nif]
+fn parse_update_meta_v1(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
+    Ok((
+        atoms::ok(),
+        update_meta(&decode_update_v1(update.as_slice())?),
+    ))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn parse_update_meta_v1_dirty(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
+    Ok((
+        atoms::ok(),
+        update_meta(&decode_update_v1(update.as_slice())?),
+    ))
+}
+
+#[rustler::nif]
+fn parse_update_meta_v2(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
+    let update = decode_update_v2(update.as_slice())?;
+    Ok((atoms::ok(), update_meta(&update)))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn parse_update_meta_v2_dirty(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
+    let update = decode_update_v2(update.as_slice())?;
+    Ok((atoms::ok(), update_meta(&update)))
+}
+
+#[rustler::nif]
+fn decode_state_vector(state_vector: Binary) -> NifResult<(Atom, HashMap<u64, u32>)> {
+    let state_vector = StateVector::decode_v1(state_vector.as_slice()).map_err(Error::from)?;
+    let clocks = state_vector
+        .iter()
+        .map(|(client, clock)| (client.get(), *clock))
+        .collect();
+    Ok((atoms::ok(), clocks))
 }
 
 #[rustler::nif]
