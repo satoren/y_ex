@@ -18,6 +18,7 @@ use crate::event::NifSubdocsEvent;
 // Internal imports
 use crate::{
     atoms,
+    decode::{catch_decode_v2, decode_update_v2},
     deferred::Deferred,
     error::Error,
     subscription::{DocEvent, NifSubscription, SubscriptionKey},
@@ -549,9 +550,7 @@ fn apply_update_v2_impl(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     update: Binary,
 ) -> NifResult<Atom> {
-    let update = Update::decode_v2(update.as_slice()).map_err(|e| {
-        rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
-    })?;
+    let update = decode_update_v2(update.as_slice())?;
 
     doc.mutably(env, current_transaction, |txn| {
         txn.apply_update(update)
@@ -597,8 +596,13 @@ fn merge_updates_v1_dirty<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResu
 }
 
 fn merge_updates_v2_impl<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
-    let merged =
-        yrs::merge_updates_v2(updates.iter().map(Binary::as_slice)).map_err(Error::from)?;
+    // Only the decode is caught: a panic while merging decodable updates stays a
+    // :nif_panicked raise, as with merge_updates_v1.
+    let updates = updates
+        .iter()
+        .map(|update| decode_update_v2(update.as_slice()))
+        .collect::<Result<Vec<_>, _>>()?;
+    let merged = Update::merge_updates(updates).encode_v2();
     Ok((atoms::ok(), SliceIntoBinary::new(merged.as_slice())).encode(env))
 }
 
@@ -620,7 +624,7 @@ fn update_debug_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> 
 
 #[rustler::nif]
 fn update_debug_v2<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
-    let update = Update::decode_v2(update.as_slice()).map_err(Error::from)?;
+    let update = decode_update_v2(update.as_slice())?;
     Ok((atoms::ok(), format!("{:#?}", update)).encode(env))
 }
 
@@ -751,7 +755,7 @@ fn encode_state_as_update_v2_impl<'a>(
     item_limit: Option<u64>,
 ) -> NifResult<Term<'a>> {
     let sv = if let Some(vector) = state_vector {
-        StateVector::decode_v2(vector.as_slice()).map_err(Error::from)?
+        catch_decode_v2(|| StateVector::decode_v2(vector.as_slice()))?
     } else {
         StateVector::default()
     };

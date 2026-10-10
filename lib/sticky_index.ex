@@ -122,16 +122,20 @@ defmodule Yex.StickyIndex do
 
   This reverses the encoding done by `encode/1` or `encode_v1/1`. The Doc is required
   to associate the decoded StickyIndex with its document context.
+
+  Returns `{:error, {:encoding_exception, message}}` when `binary` cannot be decoded.
   """
-  @spec decode(Doc.t(), binary()) :: t
+  @spec decode(Doc.t(), binary()) :: t | {:error, {:encoding_exception, String.t()}}
   def decode(%Doc{} = doc, binary) when is_binary(binary) do
     Doc.run_in_worker_process(doc, do: Yex.Nif.sticky_index_decode(doc, binary))
   end
 
   @doc """
   Decodes a StickyIndex from binary flexbuffer format (v1).
+
+  Returns `{:error, {:encoding_exception, message}}` when `binary` cannot be decoded.
   """
-  @spec decode_v1(Doc.t(), binary()) :: t
+  @spec decode_v1(Doc.t(), binary()) :: t | {:error, {:encoding_exception, String.t()}}
   def decode_v1(%Doc{} = doc, binary) when is_binary(binary) do
     Doc.run_in_worker_process(doc, do: Yex.Nif.sticky_index_decode_v1(doc, binary))
   end
@@ -141,8 +145,10 @@ defmodule Yex.StickyIndex do
 
   This reverses the encoding done by `encode_v2/1`. The Doc is required to associate
   the decoded StickyIndex with its document context.
+
+  Returns `{:error, {:encoding_exception, message}}` when `binary` cannot be decoded.
   """
-  @spec decode_v2(Doc.t(), binary()) :: t
+  @spec decode_v2(Doc.t(), binary()) :: t | {:error, {:encoding_exception, String.t()}}
   def decode_v2(%Doc{} = doc, binary) when is_binary(binary) do
     Doc.run_in_worker_process(doc, do: Yex.Nif.sticky_index_decode_v2(doc, binary))
   end
