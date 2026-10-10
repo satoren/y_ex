@@ -8,6 +8,7 @@ mod error;
 mod event;
 mod map;
 mod shared_type;
+mod snapshot;
 mod sticky_index;
 mod subscription;
 mod sync;

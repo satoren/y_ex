@@ -1,6 +1,22 @@
 defmodule Yex.SnapshotTest do
   use ExUnit.Case, async: true
 
+  # "X" and "Y" merge into one block "XY" whose right origin is "a"; the snapshot ends
+  # between them, so encoding has to cut that block.
+  defp mid_block_snapshot(doc, text) do
+    Yex.Text.insert(text, 0, "abc")
+    Yex.Text.insert(text, 0, "X")
+    {:ok, snapshot} = Yex.snapshot(doc)
+    Yex.Text.insert(text, 1, "Y")
+    snapshot
+  end
+
+  defp assert_restores(update, apply, expected) do
+    restored = Yex.Doc.new()
+    assert :ok = apply.(restored, update)
+    assert Yex.Text.to_string(Yex.Doc.get_text(restored, "text")) == expected
+  end
+
   describe "snapshot / encode_state_from_snapshot" do
     test "Yex.Snapshot.encode_state_v1/1 and encode_state_v2/1 are available" do
       doc = Yex.Doc.with_options(%Yex.Doc.Options{skip_gc: true})
@@ -164,6 +180,42 @@ defmodule Yex.SnapshotTest do
 
       assert Yex.Array.to_list(restored_array) == [1.0, 2.0]
       assert Yex.Array.to_list(array) == [1.0, 2.0, 3.0, 4.0]
+    end
+
+    test "a snapshot clock inside a block encodes a valid update" do
+      doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 1, skip_gc: true})
+      text = Yex.Doc.get_text(doc, "text")
+      snapshot = mid_block_snapshot(doc, text)
+      {:ok, state_vector} = Yex.encode_state_vector(doc)
+      {:ok, _} = Yex.Doc.monitor_update(doc)
+
+      {:ok, update_v1} = Yex.Snapshot.encode_state_v1(snapshot)
+      {:ok, update_v2} = Yex.Snapshot.encode_state_v2(snapshot)
+
+      assert_restores(update_v1, &Yex.apply_update_v1/2, "Xabc")
+      assert_restores(update_v2, &Yex.apply_update_v2/2, "Xabc")
+      # the split leaves the content and state vector unchanged and emits no update
+      refute_receive {:update_v1, _, _, _}, 50
+      assert Yex.encode_state_vector(doc) == {:ok, state_vector}
+      assert Yex.Text.to_string(text) == "XYabc"
+    end
+
+    test "a snapshot clock inside a block encodes a valid update inside a transaction" do
+      doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 1, skip_gc: true})
+      text = Yex.Doc.get_text(doc, "text")
+      snapshot = mid_block_snapshot(doc, text)
+
+      {update_v1, update_v2} =
+        Yex.Doc.transaction(doc, fn ->
+          Yex.Text.insert(text, 5, "!")
+          {:ok, update_v1} = Yex.Snapshot.encode_state_v1(snapshot)
+          {:ok, update_v2} = Yex.Snapshot.encode_state_v2(snapshot)
+          {update_v1, update_v2}
+        end)
+
+      assert_restores(update_v1, &Yex.apply_update_v1/2, "Xabc")
+      assert_restores(update_v2, &Yex.apply_update_v2/2, "Xabc")
+      assert Yex.Text.to_string(text) == "XYabc!"
     end
   end
 end
