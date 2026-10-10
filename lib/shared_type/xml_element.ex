@@ -37,6 +37,10 @@ defmodule Yex.XmlElement do
 
   @doc """
   Returns a stream of all child nodes of the XML element.
+
+  A child that is not an XML node (for example a `Y.Map` a yjs peer inserted into
+  the fragment) ends the stream: yrs `Xml::siblings` stops there, so later children
+  are not returned.
   """
   @spec children(t) :: Enumerable.t(Yex.XmlElement.t() | Yex.XmlText.t())
   def children(%__MODULE__{doc: doc} = xml_element) do
@@ -48,6 +52,70 @@ defmodule Yex.XmlElement do
         end)
     )
   end
+
+  @typedoc "A node returned by `tree_walker/2`."
+  @type xml_node :: Yex.XmlElement.t() | Yex.XmlText.t() | Yex.XmlFragment.t()
+
+  @doc """
+  Returns every descendant node of this element as a list, in document order
+  (depth-first, pre-order), excluding the element itself. Unlike `children/1`,
+  which returns a lazy `Stream`, this reads the whole subtree at once.
+
+  The nodes are read in a single read transaction, or inside the open
+  `Yex.Doc.transaction/2` if there is one, so the result is a consistent snapshot.
+
+  When `filter` is given, only nodes for which it returns a truthy value are
+  returned. The filter does not prune: descendants of a rejected element are
+  still visited, as with yjs `createTreeWalker(filter)`. The filter runs in the
+  document's worker process (`doc.worker_pid`) when that is another process, so
+  `self()` inside it is the worker, as with the function given to `Yex.Doc.transaction/3`.
+
+  A child that is not an XML node (for example a `Y.Map` a yjs peer inserted into
+  the fragment) ends the walk: yrs `XmlFragment::successors` (`TreeWalker`) stops
+  there, so later nodes are not returned.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
+      iex> div = Yex.XmlFragment.push_and_get(xml, Yex.XmlElementPrelim.new("div", [Yex.XmlElementPrelim.new("p", [Yex.XmlTextPrelim.from("hi")])]))
+      iex> Yex.XmlElement.tree_walker(div) |> Enum.map(&to_string/1)
+      ["<p>hi</p>", "hi"]
+  """
+  @spec tree_walker(t) :: [xml_node()]
+  @spec tree_walker(t, (xml_node() -> as_boolean(term()))) :: [xml_node()]
+  def tree_walker(%__MODULE__{doc: doc} = xml_element, filter \\ fn _ -> true end) do
+    Doc.run_in_worker_process doc do
+      xml_element
+      |> Yex.Nif.xml_element_tree_walker(cur_txn(xml_element))
+      |> Enum.filter(filter)
+    end
+  end
+
+  @doc """
+  Returns the first descendant `Yex.XmlElement` whose tag equals `tag`, compared
+  case-insensitively, in document order, or `nil`. Only tag names are supported,
+  as in yjs `querySelector`.
+  """
+  @spec query_selector(t, String.t()) :: Yex.XmlElement.t() | nil
+  def query_selector(%__MODULE__{} = xml_element, tag) do
+    xml_element |> query_selector_all(tag) |> List.first()
+  end
+
+  @doc """
+  Returns every descendant `Yex.XmlElement` whose tag equals `tag`, compared
+  case-insensitively, in document order. Only tag names are supported, as in yjs
+  `querySelectorAll`.
+  """
+  @spec query_selector_all(t, String.t()) :: [Yex.XmlElement.t()]
+  def query_selector_all(%__MODULE__{} = xml_element, tag) do
+    tag = String.upcase(tag)
+    tree_walker(xml_element, &tag_matches?(&1, tag))
+  end
+
+  defp tag_matches?(%Yex.XmlElement{} = element, tag),
+    do: String.upcase(Yex.XmlElement.get_tag(element) || "") == tag
+
+  defp tag_matches?(_node, _tag), do: false
 
   @doc """
   Returns the number of child nodes in the XML element.
@@ -265,7 +333,7 @@ defmodule Yex.XmlElement do
   Adds or updates an attribute with the specified key and value.
   Returns :ok on success, :error on failure.
   """
-  @spec insert_attribute(t, binary(), binary() | Yex.PrelimType.t()) :: :ok | :error
+  @spec insert_attribute(t, binary(), Yex.input_type()) :: :ok | :error
   def insert_attribute(%__MODULE__{doc: doc} = xml_element, key, value) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_element_insert_attribute(xml_element, cur_txn(xml_element), key, value)
@@ -298,7 +366,7 @@ defmodule Yex.XmlElement do
   Returns the value of the specified attribute.
   Returns nil if the attribute does not exist.
   """
-  @spec get_attribute(t, binary()) :: binary() | Yex.SharedType.t() | nil
+  @spec get_attribute(t, binary()) :: term()
   def get_attribute(%__MODULE__{doc: doc} = xml_element, key) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_element_get_attribute(xml_element, cur_txn(xml_element), key)
@@ -308,11 +376,19 @@ defmodule Yex.XmlElement do
   @doc """
   Returns a map of all attributes for this XML element.
   """
-  @spec get_attributes(t) :: %{binary() => binary() | Yex.SharedType.t()}
+  @spec get_attributes(t) :: %{binary() => term()}
   def get_attributes(%__MODULE__{doc: doc} = xml_element) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_element_get_attributes(xml_element, cur_txn(xml_element))
     )
+  end
+
+  @doc """
+  Returns true when the element has the attribute `key`, even if its value is nil.
+  """
+  @spec has_attribute?(t, binary()) :: boolean()
+  def has_attribute?(%__MODULE__{} = xml_element, key) do
+    Map.has_key?(get_attributes(xml_element), key)
   end
 
   @doc """
@@ -394,6 +470,8 @@ defmodule Yex.XmlElement do
     defdelegate prev_sibling(xml), to: Yex.XmlElement
     defdelegate parent(xml), to: Yex.XmlElement
     defdelegate to_string(xml), to: Yex.XmlElement
+    defdelegate get_attribute(xml, key), to: Yex.XmlElement
+    defdelegate get_attributes(xml), to: Yex.XmlElement
   end
 
   defimpl String.Chars do

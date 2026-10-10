@@ -326,6 +326,7 @@ pub struct NifXmlTextEvent {
     pub path: NifPath,
     pub target: NifXmlText,
     pub delta: NifYTextDelta,
+    pub keys: NifYMapChange,
 }
 
 impl NifEventConstructor<XmlTextEvent> for NifXmlTextEvent {
@@ -336,6 +337,10 @@ impl NifEventConstructor<XmlTextEvent> for NifXmlTextEvent {
             delta: NifYTextDelta {
                 doc: doc.clone(),
                 delta: event.delta(txn).to_vec(),
+            },
+            keys: NifYMapChange {
+                doc: doc.clone(),
+                change: event.keys(txn).clone(),
             },
         }
     }
