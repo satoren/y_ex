@@ -581,6 +581,10 @@ defmodule Yex do
   `Yex.Snapshot.encode_state_v1/1` or `Yex.Snapshot.encode_state_v2/1`
   to produce a time-travel update for that point-in-time state.
 
+  The snapshot can also be persisted with `Yex.Snapshot.encode_v1/1` and compared with
+  `Yex.Snapshot.equal?/2`, and `Yex.Text.to_delta/3` shows the text changes between two
+  snapshots.
+
   The source document must have garbage collection disabled
   (`Yex.Doc.Options.skip_gc == true`) for snapshot-based time-travel encoding.
   """

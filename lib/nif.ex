@@ -109,6 +109,9 @@ defmodule Yex.Nif do
 
   def text_to_delta(_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
+  def text_to_delta_with_snapshots(_text, _cur_txn, _snapshot, _prev_snapshot),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def text_delete(_text, _cur_txn, _index, _len), do: :erlang.nif_error(:nif_not_loaded)
   def text_format(_text, _cur_txn, _index, _len, _attr), do: :erlang.nif_error(:nif_not_loaded)
   def text_to_string(_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -236,6 +239,10 @@ defmodule Yex.Nif do
   def xml_text_next_sibling(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_text_prev_sibling(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_text_to_delta(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_to_delta_with_snapshots(_xml_text, _cur_txn, _snapshot, _prev_snapshot),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def xml_text_to_string(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_text_parent(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -344,11 +351,15 @@ defmodule Yex.Nif do
   def prune_pending_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def transaction_snapshot(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
-  def transaction_encode_state_from_snapshot_v1(_cur_txn, _snapshot),
+  def transaction_encode_state_from_snapshot_v1(_doc, _cur_txn, _snapshot),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def transaction_encode_state_from_snapshot_v2(_cur_txn, _snapshot),
+  def transaction_encode_state_from_snapshot_v2(_doc, _cur_txn, _snapshot),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  def snapshot_decode_v1(_bytes), do: :erlang.nif_error(:nif_not_loaded)
+  def snapshot_decode_v2(_bytes), do: :erlang.nif_error(:nif_not_loaded)
+  def snapshot_encode_v2(_reference), do: :erlang.nif_error(:nif_not_loaded)
 
   def transaction_json_path_all(_doc, _cur_txn, _path),
     do: :erlang.nif_error(:nif_not_loaded)
