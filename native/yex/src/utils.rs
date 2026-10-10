@@ -100,3 +100,16 @@ fn test_capped_index_and_length() {
     assert_eq!(capped_index_and_length(1, 5, 3), None);
     assert_eq!(capped_index_and_length(1, -1, 3), Some((0, 1)));
 }
+
+/// Converts a client id from Elixir, raising `ArgumentError` outside yjs' 53-bit range.
+/// `yrs::block::ClientID::new` only debug-asserts the range, so in release builds a larger
+/// value would silently alias to the client id in its low 53 bits.
+pub fn client_id(value: u64) -> rustler::NifResult<yrs::block::ClientID> {
+    if value >> 53 == 0 {
+        Ok(yrs::block::ClientID::new(value))
+    } else {
+        Err(crate::error::ArgumentError::raise(
+            "client id must be in 0..9007199254740991",
+        ))
+    }
+}

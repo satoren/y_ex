@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Mutex};
 use crate::error::Error;
 use crate::subscription::{AwarenessEvent, NifSubscription, SubscriptionKey};
 use crate::term_box::TermBox;
-use crate::utils::{origin_to_term, term_to_origin_binary};
+use crate::utils::{client_id, origin_to_term, term_to_origin_binary};
 use crate::{
     atoms,
     wrap::{NifWrap, SliceIntoBinary},
@@ -209,7 +209,10 @@ pub fn awareness_encode_update_v1(
 ) -> NifResult<Term<'_>> {
     let awareness = awareness.lock();
     let update = if let Some(clients) = clients {
-        let clients = clients.into_iter().map(ClientID::new);
+        let clients = clients
+            .into_iter()
+            .map(client_id)
+            .collect::<NifResult<Vec<_>>>()?;
         awareness
             .update_with_clients(clients)
             .map_err(Error::from)?
@@ -248,11 +251,21 @@ pub fn awareness_apply_update_v1(
     })
 }
 #[rustler::nif]
-pub fn awareness_remove_states(env: Env<'_>, awareness: NifAwareness, clients: Vec<u64>) {
+pub fn awareness_remove_states(
+    env: Env<'_>,
+    awareness: NifAwareness,
+    clients: Vec<u64>,
+) -> NifResult<()> {
+    // Validate every id before removing any, so a bad id leaves all states in place.
+    let clients = clients
+        .into_iter()
+        .map(client_id)
+        .collect::<NifResult<Vec<_>>>()?;
     ENV.set(&mut env.clone(), || {
         let mut awareness = awareness.lock();
         for client_id in clients {
-            awareness.remove_state(ClientID::new(client_id));
+            awareness.remove_state(client_id);
         }
-    })
+    });
+    Ok(())
 }
