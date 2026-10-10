@@ -1046,4 +1046,115 @@ defmodule Yex.DocTest do
       assert Text.to_string(text) == "World"
     end
   end
+
+  describe "transaction/3 when the function does not return" do
+    # yjs `transact` commits in a `finally` block: changes made before a throw are kept and
+    # their events are emitted, then the error propagates. transaction/3 matches that.
+    test "a raise commits the changes made before it and emits their events" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      map = Doc.get_map(doc, "map")
+      {:ok, _} = Doc.monitor_update(doc)
+      {:ok, _} = Doc.monitor_subdocs(doc)
+      ref = Yex.SharedType.observe(text)
+      subdoc = Doc.with_options(%Doc.Options{guid: "sub"})
+
+      assert_raise RuntimeError, "boom", fn ->
+        Doc.transaction(doc, "origin", fn ->
+          Text.insert(text, 0, "Hello")
+          Map.set(map, "sub", subdoc)
+          raise "boom"
+        end)
+      end
+
+      assert_receive {:update_v1, update, "origin", ^doc}
+      refute_receive {:update_v1, _, _, _}, 10
+      assert_receive {:observe_event, ^ref, %Yex.TextEvent{}, "origin", _}
+      assert_receive {:subdocs, %{added: [added]}, "origin", ^doc}
+      assert Doc.guid(added) == "sub"
+
+      remote = Doc.new()
+      :ok = Yex.apply_update(remote, update)
+      assert Text.to_string(Doc.get_text(remote, "text")) == "Hello"
+    end
+
+    test "the document is writable right after a raise" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+
+      assert_raise RuntimeError, fn ->
+        Doc.transaction(doc, fn ->
+          Text.insert(text, 0, "Hello")
+          raise "boom"
+        end)
+      end
+
+      assert :ok = Text.insert(text, 5, " World")
+      assert Text.to_string(text) == "Hello World"
+      assert :ok = Doc.transaction(doc, fn -> Text.insert(text, 0, ">") end)
+    end
+
+    test "a throw or an exit also commits" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      {:ok, _} = Doc.monitor_update(doc)
+
+      assert catch_throw(Doc.transaction(doc, fn -> Text.insert(text, 0, "a") && throw(:t) end)) ==
+               :t
+
+      assert_receive {:update_v1, _, nil, _}
+
+      assert catch_exit(Doc.transaction(doc, fn -> Text.insert(text, 1, "b") && exit(:e) end)) ==
+               :e
+
+      assert_receive {:update_v1, _, nil, _}
+      assert Text.to_string(text) == "ab"
+    end
+
+    test "a process that dies with an open transaction leaves the VM up and the doc usable" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      {:ok, _} = Doc.monitor_update(doc)
+      {:ok, _} = Doc.monitor_subdocs(doc)
+      Yex.SharedType.observe(text)
+      Yex.SharedType.observe_deep(text)
+      test_pid = self()
+
+      pid =
+        spawn(fn ->
+          doc = %{doc | worker_pid: self()}
+          text = %{text | doc: doc}
+
+          Doc.transaction(doc, fn ->
+            Text.insert(text, 0, "Hello")
+            send(test_pid, :inserted)
+
+            receive do
+              :never -> :ok
+            end
+          end)
+        end)
+
+      assert_receive :inserted
+      ref = Process.monitor(pid)
+      Process.exit(pid, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
+
+      # The transaction commits when its resource is freed, on a thread with no NIF
+      # environment, so its events cannot be delivered. The lock is released either way.
+      assert wait_until_readable(text, 5_000) == "Hello"
+      refute_received {:update_v1, _, _, _}
+
+      Text.insert(text, 0, ">")
+      assert_receive {:update_v1, _, nil, _}
+    end
+  end
+
+  defp wait_until_readable(text, timeout) when timeout > 0 do
+    Text.to_string(text)
+  rescue
+    Yex.TransactionAcqError ->
+      Process.sleep(10)
+      wait_until_readable(text, timeout - 10)
+  end
 end

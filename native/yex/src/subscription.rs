@@ -54,7 +54,14 @@ pub struct Subscription {
 pub struct CallbackState<T>(Arc<Mutex<Option<Arc<T>>>>);
 
 impl<T> CallbackState<T> {
+    /// The state, or `None` when the callback must not run: after release, or when no NIF
+    /// environment is set to send from. The latter happens when a transaction commits in a
+    /// resource destructor (its process died with the transaction open); `ENV.with` would
+    /// panic there and take the VM down, so the event is dropped instead.
     pub fn get(&self) -> Option<Arc<T>> {
+        if !ENV.is_set() {
+            return None;
+        }
         lock(&self.0).clone()
     }
 }
@@ -255,4 +262,15 @@ fn sub_unsubscribe(
         inner.unsubscribe(txn_guard.as_ref().and_then(|guard| guard.as_ref()));
         Ok(atoms::ok())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SubscriptionKey;
+
+    #[test]
+    fn callback_state_is_withheld_without_a_nif_env() {
+        let (_key, state) = SubscriptionKey::new(42);
+        assert!(state.get().is_none());
+    }
 }
