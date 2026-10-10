@@ -193,6 +193,85 @@ defmodule YexTest do
     end
   end
 
+  describe "malformed v2 input" do
+    # A truncated length varint at the end of a v2 update makes yrs index past the
+    # input (DecoderV2::read_usize); these must come back as encoding errors.
+    @truncated_v2 [<<0, 128>>, <<255, 255, 255>>]
+
+    # A valid 16_390 byte first column, then a truncated varint: decoding panics at
+    # the last byte, and the input is above Yex.Nif.dirty_cutoff().
+    @oversized_truncated_v2 <<0, 134, 128, 1>> <> :binary.copy(<<0>>, 16_390) <> <<128>>
+
+    test "apply_update_v2 returns an encoding error" do
+      doc = Yex.Doc.new()
+
+      for update <- @truncated_v2 do
+        assert {:error, {:encoding_exception, _}} = Yex.apply_update_v2(doc, update)
+      end
+    end
+
+    test "apply_update_v2 above the dirty cutoff returns an encoding error" do
+      assert byte_size(@oversized_truncated_v2) > Yex.Nif.dirty_cutoff()
+      doc = Yex.Doc.new()
+
+      assert {:error, {:encoding_exception, _}} =
+               Yex.apply_update_v2(doc, @oversized_truncated_v2)
+    end
+
+    test "apply_update_v2 inside a transaction returns an encoding error" do
+      doc = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc, "text")
+
+      Yex.Doc.transaction(doc, fn ->
+        Yex.Text.insert(text, 0, "a")
+        assert {:error, {:encoding_exception, _}} = Yex.apply_update_v2(doc, <<0, 128>>)
+        Yex.Text.insert(text, 1, "b")
+      end)
+
+      assert Yex.Text.to_string(text) == "ab"
+    end
+
+    test "merge_updates_v2 returns an encoding error" do
+      for update <- @truncated_v2 do
+        assert {:error, {:encoding_exception, _}} = Yex.merge_updates_v2([update])
+      end
+
+      {:ok, valid} = Yex.encode_state_as_update_v2(Yex.Doc.new())
+      assert {:error, {:encoding_exception, _}} = Yex.merge_updates_v2([valid, <<0, 128>>])
+    end
+
+    test "merge_updates_v2 output on valid input is unchanged" do
+      # Bytes from yrs::merge_updates_v2 before decoding moved into y_ex.
+      u1 = Base.decode16!("000001010000010407047461626301030101000001010000")
+      u2 = Base.decode16!("000001020000012805026D6B4100010100010101010077017600")
+
+      merged =
+        Base.decode16!("00000202010000032800040A066D6B746162634101030101000101020100770176010000")
+
+      assert {:ok, ^merged} = Yex.merge_updates_v2([u1, u2])
+      assert {:ok, ^merged} = Yex.Nif.merge_updates_v2_dirty([u1, u2])
+    end
+
+    test "merge_updates_v2 above the dirty cutoff returns an encoding error" do
+      assert {:error, {:encoding_exception, _}} =
+               Yex.merge_updates_v2([@oversized_truncated_v2])
+    end
+
+    test "update_debug_v2 returns an encoding error" do
+      for update <- @truncated_v2 do
+        assert {:error, {:encoding_exception, _}} = Yex.update_debug_v2(update)
+      end
+    end
+
+    test "encode_state_as_update_v2 with a malformed state vector returns an encoding error" do
+      doc = Yex.Doc.new()
+
+      for sv <- @truncated_v2 do
+        assert {:error, {:encoding_exception, _}} = Yex.encode_state_as_update_v2(doc, sv)
+      end
+    end
+  end
+
   describe "encode_state_as_update" do
     test "encode_state_as_update" do
       doc = Yex.Doc.new()

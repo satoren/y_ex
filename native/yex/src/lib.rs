@@ -2,6 +2,7 @@ mod any;
 mod array;
 mod atoms;
 mod awareness;
+mod decode;
 mod deferred;
 mod doc;
 mod error;
