@@ -1,8 +1,6 @@
 use rustler::{Decoder, Encoder, Env, NifException, NifResult, ResourceArc, Term};
 use std::ops::Deref;
-use yrs::block::ClientID;
-use yrs::branch::BranchID;
-use yrs::{Hook, ReadTxn, SharedRef, TransactionMut, ID};
+use yrs::{Hook, ReadTxn, SharedRef, TransactionMut};
 
 use crate::{
     doc::NifDoc,
@@ -27,28 +25,17 @@ impl<T> Deref for SharedTypeId<T> {
         &self.hook
     }
 }
-// The hook is encoded by hand rather than through serde: it is decoded on every call on a
-// shared type and encoded on every one that returns one.
-// Nested: [0, client: u64 LE, clock: u32 LE]. Root: [1, name as UTF-8].
-const NESTED_TAG: u8 = 0;
-const ROOT_TAG: u8 = 1;
-
+// Hooks go through postcard rather than a self-describing format: they are decoded on every
+// call on a shared type and encoded on every one that returns one. Nested hooks and typical
+// root names fit the stack buffer, so encoding allocates only the result binary.
 impl<T> Encoder for SharedTypeId<T> {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
-        match self.hook.id() {
-            BranchID::Nested(id) => {
-                let mut bytes = [0u8; 13];
-                bytes[0] = NESTED_TAG;
-                bytes[1..9].copy_from_slice(&id.client.get().to_le_bytes());
-                bytes[9..13].copy_from_slice(&id.clock.to_le_bytes());
+        let mut buf = [0u8; 64];
+        match postcard::to_slice(&self.hook, &mut buf) {
+            Ok(bytes) => SliceIntoBinary::new(bytes).encode(env),
+            Err(_) => {
+                let bytes = postcard::to_allocvec(&self.hook).expect("encode failed");
                 SliceIntoBinary::new(&bytes).encode(env)
-            }
-            BranchID::Root(name) => {
-                let mut bin = rustler::NewBinary::new(env, name.len() + 1);
-                let bytes = bin.as_mut_slice();
-                bytes[0] = ROOT_TAG;
-                bytes[1..].copy_from_slice(name.as_bytes());
-                bin.into()
             }
         }
     }
@@ -56,23 +43,10 @@ impl<T> Encoder for SharedTypeId<T> {
 impl<'a, T: 'a> Decoder<'a> for SharedTypeId<T> {
     fn decode(term: Term<'a>) -> NifResult<Self> {
         let bin = term.decode_as_binary()?;
-        let id = match bin.as_slice() {
-            [NESTED_TAG, rest @ ..] if rest.len() == 12 => {
-                let client = u64::from_le_bytes(rest[0..8].try_into().unwrap());
-                let clock = u32::from_le_bytes(rest[8..12].try_into().unwrap());
-                if client >= 1 << 53 {
-                    return Err(rustler::Error::BadArg);
-                }
-                BranchID::Nested(ID::new(ClientID::new(client), clock))
-            }
-            [ROOT_TAG, name @ ..] => BranchID::Root(
-                std::str::from_utf8(name)
-                    .map_err(|_| rustler::Error::BadArg)?
-                    .into(),
-            ),
-            _ => return Err(rustler::Error::BadArg),
-        };
-        Ok(SharedTypeId::new(Hook::from(id)))
+        match postcard::take_from_bytes::<Hook<T>>(bin.as_slice()) {
+            Ok((hook, [])) => Ok(SharedTypeId::new(hook)),
+            _ => Err(rustler::Error::BadArg),
+        }
     }
 }
 

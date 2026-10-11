@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 flexbuffers = "25.0.0"
+postcard = { version = "1", default-features = false, features = ["alloc"] }
 rustler = "0.38.0"
 scoped_thread_local = "1.0.0"
 serde = "1.0.210"
