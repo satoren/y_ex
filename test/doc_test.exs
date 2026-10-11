@@ -996,4 +996,37 @@ defmodule Yex.DocTest do
       assert %Yex.Map{} = Doc.get_map(%{doc | worker_pid: self()}, "map")
     end
   end
+
+  describe "force_gc/1" do
+    test "collects deleted content of a skip_gc document" do
+      doc = Doc.with_options(%Doc.Options{skip_gc: true})
+      text = Doc.get_text(doc, "text")
+      Text.insert(text, 0, String.duplicate("x", 1_000))
+      Text.delete(text, 0, 1_000)
+      {:ok, before_gc} = Yex.encode_state_as_update(doc)
+
+      assert :ok = Doc.force_gc(doc)
+
+      {:ok, after_gc} = Yex.encode_state_as_update(doc)
+      assert byte_size(after_gc) < byte_size(before_gc)
+      assert Text.to_string(text) == ""
+
+      other = Doc.new()
+      :ok = Yex.apply_update(other, after_gc)
+      assert Text.to_string(Doc.get_text(other, "text")) == ""
+    end
+
+    test "works inside a transaction" do
+      doc = Doc.with_options(%Doc.Options{skip_gc: true})
+      text = Doc.get_text(doc, "text")
+
+      Doc.transaction(doc, fn ->
+        Text.insert(text, 0, "Hello World")
+        Text.delete(text, 0, 6)
+        assert :ok = Doc.force_gc(doc)
+      end)
+
+      assert Text.to_string(text) == "World"
+    end
+  end
 end

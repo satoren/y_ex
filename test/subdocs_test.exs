@@ -79,4 +79,92 @@ defmodule Yex.SubdocsTest do
 
     :ok = Doc.demonitor_update(monitor_ref)
   end
+
+  describe "load/1" do
+    test "loading a remote subdoc emits a loaded event on the parent" do
+      local = Doc.new()
+      :ok = Map.set(Doc.get_map(local, "folder"), "a", Doc.new())
+      {:ok, update} = Yex.encode_state_as_update(local)
+
+      remote = Doc.new()
+      {:ok, monitor_ref} = Doc.monitor_subdocs(remote)
+      :ok = Yex.apply_update(remote, update)
+
+      assert_receive {:subdocs, %{added: [_], removed: [], loaded: []}, _, ^remote}
+
+      sub_doc = Map.fetch!(Doc.get_map(remote, "folder"), "a")
+      refute Doc.should_load(sub_doc)
+
+      assert :ok = Doc.load(sub_doc)
+
+      assert_receive {:subdocs, %{added: [], removed: [], loaded: [loaded]}, _, ^remote}
+      assert Doc.guid(loaded) == Doc.guid(sub_doc)
+      assert Doc.should_load(sub_doc)
+
+      :ok = Doc.demonitor_update(monitor_ref)
+    end
+
+    test "sets should_load on a root document" do
+      doc = Doc.with_options(%Doc.Options{should_load: false})
+      refute Doc.should_load(doc)
+
+      assert :ok = Doc.load(doc)
+      assert Doc.should_load(doc)
+    end
+
+    test "raises inside a transaction on the parent" do
+      root_doc = Doc.new()
+      folder = Doc.get_map(root_doc, "folder")
+      :ok = Map.set(folder, "a", Doc.new())
+      sub_doc = Map.fetch!(folder, "a")
+
+      assert_raise Yex.TransactionAcqError, fn ->
+        Doc.transaction(root_doc, fn -> Doc.load(sub_doc) end)
+      end
+    end
+  end
+
+  describe "destroy/1" do
+    test "replaces a subdoc with a new unloaded doc in its parent" do
+      root_doc = Doc.new()
+      folder = Doc.get_map(root_doc, "folder")
+      sub_doc = Doc.new()
+      Text.insert(Doc.get_text(sub_doc, "text"), 0, "content")
+      :ok = Map.set(folder, "a", sub_doc)
+      {:ok, monitor_ref} = Doc.monitor_subdocs(root_doc)
+
+      stored = Map.fetch!(folder, "a")
+      assert :ok = Doc.destroy(stored)
+
+      assert_receive {:subdocs, %{added: [added], removed: [removed], loaded: []}, _, ^root_doc}
+      assert Doc.guid(added) == Doc.guid(sub_doc)
+      assert Doc.guid(removed) == Doc.guid(sub_doc)
+
+      replaced = Map.fetch!(folder, "a")
+      assert replaced.reference != stored.reference
+      assert Doc.guid(replaced) == Doc.guid(sub_doc)
+      refute Doc.should_load(replaced)
+
+      :ok = Doc.demonitor_update(monitor_ref)
+    end
+
+    test "drops the observers of a root document" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      {:ok, _} = Doc.monitor_update(doc)
+
+      assert :ok = Doc.destroy(doc)
+
+      Text.insert(text, 0, "after destroy")
+      refute_receive {:update_v1, _, _, _}
+    end
+
+    test "raises inside a transaction on the document" do
+      doc = Doc.new()
+
+      assert_raise Yex.TransactionAcqError, fn ->
+        Doc.transaction(doc, fn -> Doc.destroy(doc) end)
+      end
+    end
+  end
 end

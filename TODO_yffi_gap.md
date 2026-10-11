@@ -6,7 +6,8 @@
 - [x] Add APIs to retrieve pending update/pending delete set (ytransaction_pending_update / ytransaction_pending_ds / ypending_update_destroy / ydelete_set_destroy)
 - [x] Add snapshot and time-travel APIs (ytransaction_snapshot / ytransaction_encode_state_from_snapshot_v1 / ytransaction_encode_state_from_snapshot_v2)
 - [ ] Add UndoManager observability and stack-metrics APIs (yundo_manager_observe_added / yundo_manager_observe_popped / yundo_manager_undo_stack_len / yundo_manager_redo_stack_len)
-- [ ] Add low-level Doc/Transaction control APIs (ydoc_read_transaction / ytransaction_writeable / ytransaction_force_gc / ydoc_load / ydoc_clear / ydoc_clone)
+- [x] Add Doc control APIs (ytransaction_force_gc / ydoc_load / ydoc_clear) as `Yex.Doc.force_gc/1`, `load/1`, `destroy/1`
+- [ ] Add read-only transaction APIs (ydoc_read_transaction / ytransaction_writeable)
 
 ## Medium Priority
 
