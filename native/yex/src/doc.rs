@@ -23,7 +23,7 @@ use crate::{
     subscription::{DocEvent, NifSubscription, SubscriptionKey},
     term_box::TermBox,
     transaction::{ReadTransaction, TransactionResource},
-    utils::{origin_to_term, term_to_origin_binary},
+    utils::{client_id, origin_to_term, term_to_origin_binary},
     wrap::SliceIntoBinary,
     xml::NifXmlFragment,
     youtput::NifYOut,
@@ -155,7 +155,7 @@ impl TryFrom<NifOptions> for Options {
             uuid_v4()
         };
         Ok(Options {
-            client_id: crate::utils::client_id(w.client_id)?,
+            client_id: client_id(w.client_id)?,
             guid,
             collection_id: w.collection_id.map(|s| s.into()),
             offset_kind,

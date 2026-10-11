@@ -263,8 +263,8 @@ pub fn awareness_remove_states(
         .collect::<NifResult<Vec<_>>>()?;
     ENV.set(&mut env.clone(), || {
         let mut awareness = awareness.lock();
-        for client_id in clients {
-            awareness.remove_state(client_id);
+        for id in clients {
+            awareness.remove_state(id);
         }
     });
     Ok(())
