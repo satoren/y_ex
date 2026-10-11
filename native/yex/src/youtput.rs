@@ -21,18 +21,25 @@ pub enum NifYOut {
 }
 
 impl NifYOut {
-    pub fn from_native(v: yrs::Out, doc: NifDoc) -> Self {
+    /// `doc` is cloned only for shared types, so plain values cost no reference count update.
+    pub fn from_native(v: yrs::Out, doc: &NifDoc) -> Self {
         match v {
             yrs::Out::Any(any) => NifYOut::Any(any.into()),
-            yrs::Out::YText(text) => NifYOut::YText(NifText::new(doc, text)),
-            yrs::Out::YArray(array) => NifYOut::YArray(NifArray::new(doc, array)),
-            yrs::Out::YMap(map) => NifYOut::YMap(NifMap::new(doc, map)),
-            yrs::Out::YXmlElement(xml) => NifYOut::YXmlElement(NifXmlElement::new(doc, xml)),
-            yrs::Out::YXmlFragment(xml) => NifYOut::YXmlFragment(NifXmlFragment::new(doc, xml)),
-            yrs::Out::YXmlText(xml) => NifYOut::YXmlText(NifXmlText::new(doc, xml)),
-            yrs::Out::YWeakLink(weak) => NifYOut::YWeakLink(NifWeakLink::new(doc, weak)),
+            yrs::Out::YText(text) => NifYOut::YText(NifText::new(doc.clone(), text)),
+            yrs::Out::YArray(array) => NifYOut::YArray(NifArray::new(doc.clone(), array)),
+            yrs::Out::YMap(map) => NifYOut::YMap(NifMap::new(doc.clone(), map)),
+            yrs::Out::YXmlElement(xml) => {
+                NifYOut::YXmlElement(NifXmlElement::new(doc.clone(), xml))
+            }
+            yrs::Out::YXmlFragment(xml) => {
+                NifYOut::YXmlFragment(NifXmlFragment::new(doc.clone(), xml))
+            }
+            yrs::Out::YXmlText(xml) => NifYOut::YXmlText(NifXmlText::new(doc.clone(), xml)),
+            yrs::Out::YWeakLink(weak) => NifYOut::YWeakLink(NifWeakLink::new(doc.clone(), weak)),
             yrs::Out::YDoc(subdoc) => NifYOut::YDoc(doc.with_cached_subdoc(subdoc, None)),
-            yrs::Out::UndefinedRef(_) => NifYOut::UndefinedRef(NifUndefinedRef { doc }),
+            yrs::Out::UndefinedRef(_) => {
+                NifYOut::UndefinedRef(NifUndefinedRef { doc: doc.clone() })
+            }
         }
     }
     pub fn from_xml_out(v: yrs::XmlOut, doc: NifDoc) -> Self {

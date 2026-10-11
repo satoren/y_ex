@@ -93,10 +93,7 @@ fn array_insert_and_get(
         let array = array.get_ref(txn)?;
         let index = normalize_index_for_insert(array.len(txn), index);
         array.insert(txn, index, value);
-        Ok(NifYOut::from_native(
-            array.get(txn, index).unwrap(),
-            doc.clone(),
-        ))
+        Ok(NifYOut::from_native(array.get(txn, index).unwrap(), doc))
     })
 }
 #[rustler::nif]
@@ -121,7 +118,7 @@ fn array_get(
         let index = normalize_index(array.len(txn), index);
         array
             .get(txn, index)
-            .map(|b| (atoms::ok(), NifYOut::from_native(b, doc.clone())))
+            .map(|b| (atoms::ok(), NifYOut::from_native(b, doc)))
             .ok_or(rustler::Error::Atom("error"))
     })
 }
@@ -176,7 +173,7 @@ fn array_to_list(
         let array = array.get_ref(txn)?;
         Ok(array
             .iter(txn)
-            .map(|b| NifYOut::from_native(b, doc.clone()))
+            .map(|b| NifYOut::from_native(b, doc))
             .collect())
     })
 }
@@ -196,7 +193,7 @@ fn array_slice(
             .skip(start_index)
             .take(amount)
             .step_by(step)
-            .map(|b| NifYOut::from_native(b, doc.clone()))
+            .map(|b| NifYOut::from_native(b, doc))
             .collect())
     })
 }
