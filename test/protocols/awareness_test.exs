@@ -71,6 +71,22 @@ defmodule Yex.AwarenessTest do
     assert [] === Awareness.get_client_ids(awareness)
   end
 
+  test "encode_update and remove_states raise ArgumentError for a client id outside the 53-bit range" do
+    {:ok, awareness} = Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{client_id: 5}))
+    Awareness.set_local_state(awareness, %{"key" => "value"})
+    aliased = Bitwise.bsl(1, 53) + 5
+
+    assert_raise ArgumentError, "client id must be in 0..9007199254740991", fn ->
+      Awareness.encode_update(awareness, [aliased])
+    end
+
+    assert_raise ArgumentError, "client id must be in 0..9007199254740991", fn ->
+      Awareness.remove_states(awareness, [5, aliased])
+    end
+
+    assert [5] === Awareness.get_client_ids(awareness)
+  end
+
   test "apply_update with origin" do
     {:ok, awareness} = Yex.Awareness.new(Yex.Doc.new())
     Yex.Awareness.monitor_change(awareness)

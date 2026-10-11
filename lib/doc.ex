@@ -112,6 +112,9 @@ defmodule Yex.Doc do
 
   @doc """
   Create a new document with options.
+
+  Raises `ArgumentError` when `client_id` is outside `0..9007199254740991`
+  (`2^53 - 1`), the range of yjs client ids.
   """
   @spec with_options(Options.t(), pid()) :: Yex.Doc.t()
   def with_options(%Options{} = option, worker_pid \\ self()) do

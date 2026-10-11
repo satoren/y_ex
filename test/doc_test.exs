@@ -596,6 +596,23 @@ defmodule Yex.DocTest do
       assert is_integer(Doc.client_id(doc))
     end
 
+    test "with_options keeps client ids in the 53-bit range" do
+      max = Bitwise.bsl(1, 53) - 1
+
+      for client_id <- [0, 1, max] do
+        doc = Doc.with_options(%Doc.Options{client_id: client_id})
+        assert Doc.client_id(doc) == client_id
+      end
+    end
+
+    test "with_options raises ArgumentError for a client id outside the 53-bit range" do
+      for client_id <- [Bitwise.bsl(1, 53), Bitwise.bsl(1, 53) + 5, Bitwise.bsl(1, 64) - 1] do
+        assert_raise ArgumentError, "client id must be in 0..9007199254740991", fn ->
+          Doc.with_options(%Doc.Options{client_id: client_id})
+        end
+      end
+    end
+
     test "guid returns string when set in options" do
       guid = "test-guid-123"
       doc = Doc.with_options(%Doc.Options{guid: guid})

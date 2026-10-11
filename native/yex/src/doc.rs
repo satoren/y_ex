@@ -141,8 +141,10 @@ pub struct NifOptions {
     pub should_load: bool,
 }
 
-impl From<NifOptions> for Options {
-    fn from(w: NifOptions) -> Options {
+impl TryFrom<NifOptions> for Options {
+    type Error = rustler::Error;
+
+    fn try_from(w: NifOptions) -> NifResult<Options> {
         let offset_kind = match w.offset_kind {
             NifOffsetKind::Bytes => OffsetKind::Bytes,
             NifOffsetKind::Utf16 => OffsetKind::Utf16,
@@ -152,8 +154,8 @@ impl From<NifOptions> for Options {
         } else {
             uuid_v4()
         };
-        Options {
-            client_id: ClientID::new(w.client_id),
+        Ok(Options {
+            client_id: crate::utils::client_id(w.client_id)?,
             guid,
             collection_id: w.collection_id.map(|s| s.into()),
             offset_kind,
@@ -161,7 +163,7 @@ impl From<NifOptions> for Options {
             auto_load: w.auto_load,
             should_load: w.should_load,
             cleanup_formatting: true,
-        }
+        })
     }
 }
 
@@ -181,11 +183,11 @@ impl Default for NifDoc {
     }
 }
 impl NifDoc {
-    pub fn with_options(option: NifOptions) -> Self {
-        NifDoc {
-            reference: ResourceArc::new(DocResource::new(Doc::with_options(option.into()))),
+    pub fn with_options(option: NifOptions) -> NifResult<Self> {
+        Ok(NifDoc {
+            reference: ResourceArc::new(DocResource::new(Doc::with_options(option.try_into()?))),
             worker_pid: None,
-        }
+        })
     }
 
     fn prune_subdoc_cache(
@@ -353,7 +355,7 @@ fn doc_new() -> NifDoc {
 }
 
 #[rustler::nif]
-fn doc_with_options(option: NifOptions) -> NifDoc {
+fn doc_with_options(option: NifOptions) -> NifResult<NifDoc> {
     NifDoc::with_options(option)
 }
 

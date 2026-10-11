@@ -17,6 +17,21 @@ impl TransactionAcqError {
     }
 }
 
+/// Raised as `ArgumentError` for arguments a correct caller never passes.
+#[derive(Debug, NifException)]
+#[module = "ArgumentError"]
+pub struct ArgumentError {
+    message: String,
+}
+
+impl ArgumentError {
+    pub fn raise(message: &str) -> rustler::Error {
+        rustler::Error::RaiseTerm(Box::new(ArgumentError {
+            message: message.to_string(),
+        }))
+    }
+}
+
 #[derive(Debug)]
 pub enum Error {
     Transaction,

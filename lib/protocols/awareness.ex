@@ -151,6 +151,7 @@ defmodule Yex.Awareness do
   Encodes the states of the given clients into an awareness update binary that can be
   sent to remote peers and applied with `apply_update/3`.
   When `clients` is `nil`, the states of all known clients are encoded.
+  Raises `ArgumentError` when a client id is outside `0..9007199254740991`.
 
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{ client_id: 10 }))
@@ -181,6 +182,8 @@ defmodule Yex.Awareness do
 
   @doc """
   Clears out a state of a given client, effectively marking it as disconnected.
+  Raises `ArgumentError`, removing no state, when a client id is outside
+  `0..9007199254740991`.
 
   ## Examples
       iex> {:ok, _awareness} = Yex.Awareness.new(Yex.Doc.new())
