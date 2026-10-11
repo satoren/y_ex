@@ -1,5 +1,4 @@
 use rustler::{Decoder, Encoder, Env, NifException, NifResult, ResourceArc, Term};
-use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 use yrs::{Hook, ReadTxn, SharedRef, TransactionMut};
 
@@ -26,21 +25,28 @@ impl<T> Deref for SharedTypeId<T> {
         &self.hook
     }
 }
+// Hooks go through postcard rather than a self-describing format: they are decoded on every
+// call on a shared type and encoded on every one that returns one. Nested hooks and typical
+// root names fit the stack buffer, so encoding allocates only the result binary.
 impl<T> Encoder for SharedTypeId<T> {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
-        let mut s = flexbuffers::FlexbufferSerializer::new();
-
-        self.hook.serialize(&mut s).expect("encode failed");
-        SliceIntoBinary::new(s.view()).encode(env)
+        let mut buf = [0u8; 64];
+        match postcard::to_slice(&self.hook, &mut buf) {
+            Ok(bytes) => SliceIntoBinary::new(bytes).encode(env),
+            Err(_) => {
+                let bytes = postcard::to_allocvec(&self.hook).expect("encode failed");
+                SliceIntoBinary::new(&bytes).encode(env)
+            }
+        }
     }
 }
 impl<'a, T: 'a> Decoder<'a> for SharedTypeId<T> {
     fn decode(term: Term<'a>) -> NifResult<Self> {
         let bin = term.decode_as_binary()?;
-        let r =
-            flexbuffers::Reader::get_root(bin.as_slice()).map_err(|_e| rustler::Error::BadArg)?;
-        let hook = Hook::<T>::deserialize(r).map_err(|_e| rustler::Error::BadArg)?;
-        Ok(SharedTypeId::new(hook))
+        match postcard::take_from_bytes::<Hook<T>>(bin.as_slice()) {
+            Ok((hook, [])) => Ok(SharedTypeId::new(hook)),
+            _ => Err(rustler::Error::BadArg),
+        }
     }
 }
 

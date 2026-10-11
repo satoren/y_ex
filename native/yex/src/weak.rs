@@ -69,7 +69,7 @@ fn weak_unquote(
         let doc = weak.doc.clone();
         let unquoted: Vec<NifYOut> = a
             .unquote(txn)
-            .map(|v| NifYOut::from_native(v, doc.clone()))
+            .map(|v| NifYOut::from_native(v, &doc))
             .collect();
         Ok(unquoted)
     })
@@ -85,7 +85,9 @@ fn weak_deref(
         let a: WeakRef<MapRef> = weak_ref.into();
 
         let doc = weak.doc.clone();
-        let value: Option<NifYOut> = a.try_deref_value(txn).map(|v| NifYOut::from_native(v, doc));
+        let value: Option<NifYOut> = a
+            .try_deref_value(txn)
+            .map(|v| NifYOut::from_native(v, &doc));
         Ok(value)
     })
 }

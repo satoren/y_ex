@@ -4,10 +4,10 @@ use crate::event::{NifMapEvent, NifSharedTypeDeepObservable, NifSharedTypeObserv
 use crate::shared_type::NifSharedType;
 use crate::shared_type::SharedTypeId;
 use crate::transaction::TransactionResource;
+use crate::wrap::{NifMapPairs, NifStr};
 use crate::yinput::NifWeakPrelim;
 use crate::{yinput::NifYInput, youtput::NifYOut, NifAny};
 use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
-use std::collections::HashMap;
 use yrs::types::ToJson;
 use yrs::*;
 
@@ -77,7 +77,7 @@ fn map_get(
     map.readonly(current_transaction, |txn| {
         let map = map.get_ref(txn)?;
         map.get(txn, key)
-            .map(|b| (atoms::ok(), NifYOut::from_native(b, doc.clone())))
+            .map(|b| (atoms::ok(), NifYOut::from_native(b, doc)))
             .ok_or(rustler::Error::Atom("error"))
     })
 }
@@ -111,13 +111,13 @@ fn map_delete(
 fn map_to_map(
     map: NifMap,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<HashMap<String, NifYOut>> {
+) -> NifResult<NifMapPairs<NifYOut>> {
     let doc = map.doc();
     map.readonly(current_transaction, |txn| {
         let map = map.get_ref(txn)?;
         Ok(map
             .iter(txn)
-            .map(|(key, value)| (key.into(), NifYOut::from_native(value, doc.clone())))
+            .map(|(key, value)| (key.into(), NifYOut::from_native(value, doc)))
             .collect())
     })
 }
@@ -159,10 +159,10 @@ fn map_to_json_dirty(
 fn map_keys(
     map: NifMap,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<Vec<String>> {
+) -> NifResult<Vec<NifStr<String>>> {
     map.readonly(current_transaction, |txn| {
         let map = map.get_ref(txn)?;
-        Ok(map.keys(txn).map(String::from).collect())
+        Ok(map.keys(txn).map(|k| NifStr(k.to_string())).collect())
     })
 }
 #[rustler::nif]
@@ -177,7 +177,7 @@ fn map_values(
         Ok(map
             .values(txn)
             .flatten()
-            .map(|v| NifYOut::from_native(v, doc.clone()))
+            .map(|v| NifYOut::from_native(v, doc))
             .collect())
     })
 }

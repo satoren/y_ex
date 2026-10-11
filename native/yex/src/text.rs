@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     utils::{capped_index_and_length, normalize_index_for_insert},
+    wrap::NifStr,
     yinput::NifWeakPrelim,
 };
 use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
@@ -172,10 +173,10 @@ fn text_format(
 fn text_to_string(
     text: NifText,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<String> {
+) -> NifResult<NifStr<String>> {
     text.readonly(current_transaction, |txn| {
         let text = text.get_ref(txn)?;
-        Ok(text.get_string(txn))
+        Ok(NifStr(text.get_string(txn)))
     })
 }
 #[rustler::nif]
@@ -254,7 +255,7 @@ pub fn encode_diffs<'a>(
     Ok(deltas.encode(env))
 }
 pub fn encode_diff<'a>(diff: &Diff<YChange>, doc: &NifDoc, env: Env<'a>) -> NifResult<Term<'a>> {
-    let insert = NifYOut::from_native(diff.insert.clone(), doc.clone());
+    let insert = NifYOut::from_native(diff.insert.clone(), doc);
 
     let mut attribute = diff.attributes.as_deref().map(|attr| {
         attr.iter()

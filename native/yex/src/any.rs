@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::wrap::NifWrap;
+use crate::wrap::{NifStr, NifWrap, SliceIntoBinary};
 use rustler::dynamic::TermType;
 use rustler::types;
 use rustler::{Decoder, Encoder, Env, Error, ListIterator, MapIterator, NifResult, Term};
@@ -20,20 +20,32 @@ fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
             (*n as f64).encode(env)
         }
         Any::Number(Number::Int(n)) => n.encode(env),
-        Any::String(s) => s.encode(env),
-        Any::Buffer(b) => b.encode(env),
+        Any::String(s) => encode_str(env, s),
+        Any::Buffer(b) => SliceIntoBinary::new(b).encode(env),
         Any::Array(a) => {
             let list: Vec<Term<'a>> = a.iter().map(|item| encode(env, item)).collect();
             list.encode(env)
         }
-        Any::Map(m) => {
-            let map: HashMap<String, NifAny> = m
-                .iter()
-                .map(|(k, v)| (k.into(), v.clone().into()))
-                .collect();
-            map.encode(env)
-        }
+        Any::Map(m) => encode_map(env, m.iter()),
     }
+}
+
+fn encode_str<'a>(env: Env<'a>, s: &str) -> Term<'a> {
+    NifStr(s).encode(env)
+}
+
+/// Builds the map straight from term arrays; the keys come from a map, so they are unique.
+fn encode_map<'a, 'b, K: AsRef<str> + 'b>(
+    env: Env<'a>,
+    entries: impl ExactSizeIterator<Item = (&'b K, &'b Any)>,
+) -> Term<'a> {
+    let mut keys = Vec::with_capacity(entries.len());
+    let mut values = Vec::with_capacity(entries.len());
+    for (k, v) in entries {
+        keys.push(encode_str(env, k.as_ref()));
+        values.push(encode(env, v));
+    }
+    Term::map_from_term_arrays(env, &keys, &values).expect("map keys are unique")
 }
 impl rustler::Encoder for NifAny {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
@@ -107,12 +119,7 @@ impl<'a> Decoder<'a> for NifAttr {
 
 impl rustler::Encoder for NifAttr {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
-        let map: HashMap<String, NifAny> = self
-            .0
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.clone().into()))
-            .collect();
-        map.encode(env)
+        encode_map(env, self.0.iter())
     }
 }
 

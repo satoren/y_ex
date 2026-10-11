@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
 use yrs::{
     types::text::YChange, GetString, SharedRef as _, Text, Xml, XmlElementRef, XmlFragment,
@@ -15,6 +13,7 @@ use crate::{
     text::encode_diffs,
     transaction::TransactionResource,
     utils::{capped_index_and_length, normalize_index, normalize_index_for_insert},
+    wrap::NifMapPairs,
     yinput::{NifWeakPrelim, NifXmlIn, NifYInput, NifYInputDelta},
     youtput::NifYOut,
     ENV,
@@ -351,7 +350,7 @@ fn xml_element_get_attribute(
         let doc = xml.doc();
         let xml = xml.get_ref(txn)?;
         let attr = xml.get_attribute(txn, key);
-        Ok(attr.map(|b| NifYOut::from_native(b, doc.clone())))
+        Ok(attr.map(|b| NifYOut::from_native(b, doc)))
     })
 }
 
@@ -385,14 +384,14 @@ fn xml_element_remove_attribute(
 fn xml_element_get_attributes(
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<HashMap<String, NifYOut>> {
+) -> NifResult<NifMapPairs<NifYOut>> {
     xml.readonly(current_transaction, |txn| {
         let doc = xml.doc();
         let xml = xml.get_ref(txn)?;
 
         let attr = xml
             .attributes(txn)
-            .map(|(key, value)| (key.into(), NifYOut::from_native(value, doc.clone())))
+            .map(|(key, value)| (key.into(), NifYOut::from_native(value, doc)))
             .collect();
 
         Ok(attr)

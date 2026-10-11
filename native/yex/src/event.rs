@@ -29,6 +29,7 @@ use crate::{
     transaction::TransactionResource,
     utils::origin_to_term,
     weak::NifWeakLink,
+    wrap::NifMapPairs,
     wrap::NifWrap,
     xml::NifXmlText,
     yinput::NifSharedTypeInput,
@@ -86,7 +87,7 @@ impl rustler::Encoder for NifYArrayChange {
                     let content: Vec<Term<'_>> = content
                         .iter()
                         .cloned()
-                        .map(|item| NifYOut::from_native(item, self.doc.clone()).encode(env))
+                        .map(|item| NifYOut::from_native(item, &self.doc).encode(env))
                         .collect();
 
                     let mut map = Term::map_new(env);
@@ -155,14 +156,14 @@ impl rustler::Encoder for NifYTextDelta {
             .iter()
             .map(|change| match change {
                 Delta::Inserted(content, attr) => {
-                    let insert = NifYOut::from_native(content.clone(), self.doc.clone());
+                    let insert = NifYOut::from_native(content.clone(), &self.doc);
 
                     let mut map = Term::map_new(env).map_put(atoms::insert(), insert).unwrap();
                     if let Some(attr) = attr {
                         let attribute = attr
                             .iter()
                             .map(|(k, v)| (k.to_string(), NifAny::from(v.clone())))
-                            .collect::<HashMap<String, NifAny>>();
+                            .collect::<NifMapPairs<NifAny>>();
                         map = map.map_put(atoms::attributes(), attribute).unwrap();
                     }
                     map
@@ -179,7 +180,7 @@ impl rustler::Encoder for NifYTextDelta {
                         let attribute = attr
                             .iter()
                             .map(|(k, v)| (k.to_string(), NifAny::from(v.clone())))
-                            .collect::<HashMap<String, NifAny>>();
+                            .collect::<NifMapPairs<NifAny>>();
                         map = map.map_put(atoms::attributes(), attribute).unwrap();
                     }
                     map
@@ -224,12 +225,12 @@ pub struct NifYMapChange {
 
 impl rustler::Encoder for NifYMapChange {
     fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
-        let v: HashMap<String, Term> = self
+        let v: NifMapPairs<Term> = self
             .change
             .iter()
             .map(|(key, change)| match change {
                 EntryChange::Inserted(content) => {
-                    let content = NifYOut::from_native(content.clone(), self.doc.clone());
+                    let content = NifYOut::from_native(content.clone(), &self.doc);
                     let map = Term::map_new(env)
                         .map_put(atoms::action(), atoms::add())
                         .unwrap()
@@ -238,7 +239,7 @@ impl rustler::Encoder for NifYMapChange {
                     (key.to_string(), map)
                 }
                 EntryChange::Removed(old_value) => {
-                    let old_value = NifYOut::from_native(old_value.clone(), self.doc.clone());
+                    let old_value = NifYOut::from_native(old_value.clone(), &self.doc);
                     let map = Term::map_new(env)
                         .map_put(atoms::action(), atoms::delete())
                         .unwrap()
@@ -247,8 +248,8 @@ impl rustler::Encoder for NifYMapChange {
                     (key.to_string(), map)
                 }
                 EntryChange::Updated(old_value, new_value) => {
-                    let old_value = NifYOut::from_native(old_value.clone(), self.doc.clone());
-                    let new_value = NifYOut::from_native(new_value.clone(), self.doc.clone());
+                    let old_value = NifYOut::from_native(old_value.clone(), &self.doc);
+                    let new_value = NifYOut::from_native(new_value.clone(), &self.doc);
                     let map = Term::map_new(env)
                         .map_put(atoms::action(), atoms::update())
                         .unwrap()

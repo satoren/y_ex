@@ -899,7 +899,7 @@ fn transaction_json_path_all<'a>(
     let values = doc.readonly(current_transaction, |txn| {
         let values = txn
             .json_path(&query)
-            .map(|out| NifYOut::from_native(out, doc.clone()))
+            .map(|out| NifYOut::from_native(out, &doc))
             .collect::<Vec<NifYOut>>();
         Ok(values)
     })?;
