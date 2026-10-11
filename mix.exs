@@ -55,7 +55,6 @@ defmodule Yex.MixProject do
         "native/yex/Cargo.*",
         "native/yex/Cross.*",
         "native/yex/README.md",
-        "native/yex/README.md",
         "README.md",
         "checksum-*.exs",
         "mix.exs"
@@ -65,7 +64,7 @@ defmodule Yex.MixProject do
 
   defp deps do
     [
-      {:rustler, ">= 0.0.0", optional: true},
+      {:rustler, "~> 0.37", optional: true},
       {:rustler_precompiled, ">= 0.6.0"},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

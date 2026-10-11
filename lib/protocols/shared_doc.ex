@@ -13,12 +13,16 @@ defmodule Yex.Sync.SharedDoc do
   require Logger
   alias Yex.{Sync, Doc, Awareness}
 
+  @default_auto_exit_timeout 5_000
+  @auto_exit_check {__MODULE__, :auto_exit_check}
+
   @typedoc """
   Launch Parameters
 
     * `:doc_name` - The name of the document.
     * `:persistence` - Persistence module that implements PersistenceBehaviour.
     * `:auto_exit` - Automatically terminate the SharedDoc process when there is no longer a process to receive update notifications.
+    * `:auto_exit_timeout` - With `:auto_exit`, how long (in milliseconds) to wait for the first observer after start before terminating. Defaults to 5000.
     * `:doc_option` - Options for the document.
 
   """
@@ -26,6 +30,7 @@ defmodule Yex.Sync.SharedDoc do
           {:doc_name, String.t()}
           | {:persistence, {module() | {module(), init_arg :: term()}}}
           | {:auto_exit, boolean()}
+          | {:auto_exit_timeout, timeout()}
           | {:doc_option, Yex.Doc.Options.t()}
 
   @doc """
@@ -126,18 +131,26 @@ defmodule Yex.Sync.SharedDoc do
         persistence_init_arg
       end
 
-    {:ok,
-     assign(
-       state,
-       %{
-         doc_name: doc_name,
-         persistence: persistence,
-         persistence_state: persistence_state,
-         auto_exit: auto_exit,
-         observer_process: %{},
-         origin_client_map: %{}
-       }
-     )}
+    state =
+      assign(
+        state,
+        %{
+          doc_name: doc_name,
+          persistence: persistence,
+          persistence_state: persistence_state,
+          auto_exit: auto_exit,
+          observer_process: %{},
+          origin_client_map: %{}
+        }
+      )
+
+    # With auto_exit, stop if no process has observed the document by the timeout.
+    if auto_exit do
+      timeout = Keyword.get(option, :auto_exit_timeout, @default_auto_exit_timeout)
+      Process.send_after(self(), @auto_exit_check, timeout)
+    end
+
+    {:ok, state}
   end
 
   @impl true
@@ -162,8 +175,17 @@ defmodule Yex.Sync.SharedDoc do
 
   @impl true
   def handle_call({:update_doc, fun}, _from, state) do
-    fun.(state.doc)
-    {:reply, :ok, state}
+    reply =
+      try do
+        fun.(state.doc)
+        :ok
+      rescue
+        e -> {:error, e}
+      catch
+        kind, reason -> {:error, {kind, reason}}
+      end
+
+    {:reply, reply, state}
   end
 
   defp do_remove_observer_process(client, state) do
@@ -186,15 +208,14 @@ defmodule Yex.Sync.SharedDoc do
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
     state = do_remove_observer_process(pid, state)
-
-    if state.assigns.auto_exit and state.assigns.observer_process === %{} do
-      {:stop, :normal, state}
-    else
-      {:noreply, state}
-    end
+    maybe_auto_exit(state)
   end
 
-  def handle_info(:timeout, state) do
+  def handle_info(:timeout, state), do: maybe_auto_exit(state)
+
+  def handle_info(@auto_exit_check, state), do: maybe_auto_exit(state)
+
+  defp maybe_auto_exit(state) do
     if state.assigns.auto_exit and state.assigns.observer_process === %{} do
       {:stop, :normal, state}
     else
@@ -272,7 +293,7 @@ defmodule Yex.Sync.SharedDoc do
       broadcast_to_users(message, origin, state)
     else
       error ->
-        error
+        Logger.warning("Failed to broadcast document update: #{inspect(error)}")
     end
 
     {:noreply, state}
