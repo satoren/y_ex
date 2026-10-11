@@ -16,6 +16,7 @@ defmodule Yex.Text do
 
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   @type delta ::
           [%{:insert => binary(), optional(:attributes) => map()}]
@@ -233,10 +234,6 @@ defmodule Yex.Text do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.text_to_delta(text, cur_txn(text))
     )
-  end
-
-  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
-    Process.get(doc_ref, nil)
   end
 end
 

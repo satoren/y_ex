@@ -50,6 +50,7 @@ defmodule Yex.StickyIndex do
 
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   @type shared_type ::
           %Yex.Array{}
@@ -204,11 +205,5 @@ defmodule Yex.StickyIndex do
           {:error, reason} -> {:error, reason}
         end
     )
-  end
-
-  @doc false
-  # Gets the current transaction reference from the process dictionary for the given document
-  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
-    Process.get(doc_ref, nil)
   end
 end

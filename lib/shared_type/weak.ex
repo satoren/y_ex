@@ -15,6 +15,7 @@ defmodule Yex.WeakLink do
 
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   defstruct [
     :doc,
@@ -70,10 +71,6 @@ defmodule Yex.WeakLink do
     def as_prelim(weak_link) do
       Yex.WeakLink.as_prelim(weak_link)
     end
-  end
-
-  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
-    Process.get(doc_ref, nil)
   end
 end
 

@@ -14,6 +14,7 @@ defmodule Yex.XmlFragment do
 
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   @type t :: %__MODULE__{
           doc: Yex.Doc.t(),
@@ -278,12 +279,6 @@ defmodule Yex.XmlFragment do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_fragment_to_string(xml_fragment, cur_txn(xml_fragment))
     )
-  end
-
-  @doc false
-  # Gets the current transaction reference from the process dictionary for the given document
-  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
-    Process.get(doc_ref, nil)
   end
 
   @doc """
