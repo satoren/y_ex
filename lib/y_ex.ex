@@ -7,6 +7,7 @@ defmodule Yex do
 
   @type any_type ::
           binary
+          | Yex.Buffer.t()
           | map
           | list
           | integer

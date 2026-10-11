@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::atoms;
 use crate::wrap::{NifStr, NifWrap, SliceIntoBinary};
 use rustler::dynamic::TermType;
 use rustler::types;
@@ -21,13 +22,24 @@ fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
         }
         Any::Number(Number::Int(n)) => n.encode(env),
         Any::String(s) => encode_str(env, s),
-        Any::Buffer(b) => SliceIntoBinary::new(b).encode(env),
+        Any::Buffer(b) => encode_buffer(env, b),
         Any::Array(a) => {
             let list: Vec<Term<'a>> = a.iter().map(|item| encode(env, item)).collect();
             list.encode(env)
         }
         Any::Map(m) => encode_map(env, m.iter()),
     }
+}
+
+/// Buffers are wrapped in `%Yex.Buffer{}` so they stay distinct from strings, which are
+/// binaries too.
+fn encode_buffer<'a>(env: Env<'a>, bytes: &[u8]) -> Term<'a> {
+    let keys = [atoms::struct_().encode(env), atoms::data().encode(env)];
+    let values = [
+        atoms::yex_buffer().encode(env),
+        SliceIntoBinary::new(bytes).encode(env),
+    ];
+    Term::map_from_term_arrays(env, &keys, &values).expect("map keys are unique")
 }
 
 fn encode_str<'a>(env: Env<'a>, s: &str) -> Term<'a> {
@@ -76,7 +88,7 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
                 return Ok(Any::String(v.into()));
             }
 
-            // Binaries that are not valid UTF-8 become a Buffer, which reads back as a binary.
+            // Binaries that are not valid UTF-8 cannot be strings, so they are taken as a Buffer.
             term.decode::<rustler::Binary>()
                 .map(|v| Any::Buffer(v.as_slice().into()))
         }
@@ -88,6 +100,9 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
             Ok(Any::from(values))
         }
         TermType::Map => {
+            if let Ok(name) = term.map_get(atoms::struct_()) {
+                return decode_struct(term, name);
+            }
             let iter = term.decode::<MapIterator<'a>>()?;
             let values = iter
                 .map(|(k, v)| Ok((k.decode::<String>()?, decode(v)?)))
@@ -96,6 +111,16 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
         }
         _ => Err(rustler::Error::BadArg),
     }
+}
+
+/// `%Yex.Buffer{}` is the only struct that maps to `Any`; anything else is left to the
+/// other input decoders.
+fn decode_struct<'a>(term: Term<'a>, name: Term<'a>) -> NifResult<Any> {
+    if name.decode::<types::atom::Atom>()? != atoms::yex_buffer() {
+        return Err(rustler::Error::BadArg);
+    }
+    let data = term.map_get(atoms::data())?.decode::<rustler::Binary>()?;
+    Ok(Any::Buffer(data.as_slice().into()))
 }
 
 pub type NifAny = NifWrap<Any>;

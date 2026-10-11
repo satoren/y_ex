@@ -23,26 +23,46 @@ defmodule Yex.MapTest do
       assert {:ok, "new_value"} = Map.fetch(map, "key")
     end
 
-    test "non-UTF-8 binaries are stored as buffers and read back as binaries", %{
-      doc: doc,
-      map: map
-    } do
+    test "non-UTF-8 binaries are stored as buffers and read back as Yex.Buffer", %{map: map} do
       bin = <<255, 0, 1>>
+      buffer = %Yex.Buffer{data: bin}
       assert :ok = Map.set(map, "buffer", bin)
       assert :ok = Map.set(map, "nested", %{"list" => [bin]})
 
-      assert {:ok, ^bin} = Map.fetch(map, "buffer")
-      assert {:ok, %{"list" => [^bin]}} = Map.fetch(map, "nested")
-      assert %{"buffer" => ^bin, "nested" => %{"list" => [^bin]}} = Map.to_json(map)
+      assert {:ok, ^buffer} = Map.fetch(map, "buffer")
+      assert {:ok, %{"list" => [^buffer]}} = Map.fetch(map, "nested")
+      assert %{"buffer" => ^buffer, "nested" => %{"list" => [^buffer]}} = Map.to_json(map)
+    end
 
-      # The value read back can be written again, and survives a sync.
+    test "Yex.Buffer is stored as a buffer even when its data is valid UTF-8", %{map: map} do
+      for data <- [<<1, 2, 3>>, "", "text"] do
+        buffer = Yex.Buffer.new(data)
+        assert :ok = Map.set(map, "buffer", buffer)
+        assert {:ok, ^buffer} = Map.fetch(map, "buffer")
+      end
+
+      assert :ok = Map.set(map, "string", <<1, 2, 3>>)
+      assert {:ok, <<1, 2, 3>>} = Map.fetch(map, "string")
+    end
+
+    test "buffers keep their type when read and written again after a sync", %{
+      doc: doc,
+      map: map
+    } do
+      buffer = Yex.Buffer.new(<<1, 2, 3>>)
+      :ok = Map.set(map, "buffer", buffer)
+
       remote = Doc.new()
       {:ok, update} = Yex.encode_state_as_update(doc)
       :ok = Yex.apply_update(remote, update)
       remote_map = Doc.get_map(remote, "map")
       {:ok, value} = Map.fetch(remote_map, "buffer")
       assert :ok = Map.set(remote_map, "copy", value)
-      assert {:ok, ^bin} = Map.fetch(remote_map, "copy")
+      assert {:ok, ^buffer} = Map.fetch(remote_map, "copy")
+    end
+
+    test "structs other than Yex.Buffer are rejected", %{map: map} do
+      assert_raise ErlangError, fn -> Map.set(map, "range", 1..2) end
     end
 
     test "set_and_get/3 with nested types", %{map: map} do

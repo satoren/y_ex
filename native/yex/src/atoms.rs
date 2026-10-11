@@ -41,4 +41,8 @@ rustler::atoms! {
   retain,
   attributes,
 
+  // %Yex.Buffer{}
+  struct_ = "__struct__",
+  yex_buffer = "Elixir.Yex.Buffer",
+  data,
 }
