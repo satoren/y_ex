@@ -12,6 +12,7 @@ defmodule Yex.XmlText do
 
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   @type t :: %__MODULE__{
           doc: Yex.Doc.t(),
@@ -166,12 +167,6 @@ defmodule Yex.XmlText do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_text_parent(xml_text, cur_txn(xml_text))
     )
-  end
-
-  @doc false
-  # Gets the current transaction reference from the process dictionary for the given document
-  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
-    Process.get(doc_ref, nil)
   end
 
   @doc """

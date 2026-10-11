@@ -8,6 +8,7 @@ defmodule Yex.Snapshot do
 
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   defstruct [:doc, :reference]
 
@@ -34,9 +35,5 @@ defmodule Yex.Snapshot do
     Doc.run_in_worker_process doc do
       Yex.Nif.transaction_encode_state_from_snapshot_v2(cur_txn(doc), snapshot)
     end
-  end
-
-  defp cur_txn(%Yex.Doc{reference: doc_ref}) do
-    Process.get(doc_ref, nil)
   end
 end

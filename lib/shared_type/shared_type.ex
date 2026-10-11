@@ -28,6 +28,7 @@ defmodule Yex.SharedType do
 
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   @type t ::
           %Yex.Array{}
@@ -113,12 +114,6 @@ defmodule Yex.SharedType do
   @spec unobserve_deep(reference()) :: :ok
   def unobserve_deep(observe_ref) do
     unsubscribe(observe_ref)
-  end
-
-  @doc false
-  # Gets the current transaction reference from the process dictionary
-  defp cur_txn(%{doc: %Doc{reference: doc_ref}}) do
-    Process.get(doc_ref, nil)
   end
 
   @doc false

@@ -4,6 +4,7 @@ defmodule Yex do
   """
 
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   @type any_type ::
           binary
@@ -330,9 +331,5 @@ defmodule Yex do
 
   def normalize(number) do
     number
-  end
-
-  defp cur_txn(%Yex.Doc{reference: doc_ref}) do
-    Process.get(doc_ref, nil)
   end
 end

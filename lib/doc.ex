@@ -489,7 +489,9 @@ defmodule Yex.Doc do
     end
   end
 
-  defp cur_txn(%__MODULE__{reference: ref}) do
-    Process.get(ref, nil)
-  end
+  @doc false
+  # Returns the transaction opened by `transaction/3` in the calling process, or nil.
+  # Accepts a doc or any struct holding one in its `:doc` field (shared types, sticky indexes).
+  def cur_txn(%__MODULE__{reference: ref}), do: Process.get(ref, nil)
+  def cur_txn(%{doc: %__MODULE__{} = doc}), do: cur_txn(doc)
 end

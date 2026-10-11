@@ -24,6 +24,7 @@ defmodule Yex.Array do
   @type value :: term()
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   @u32_max 2 ** 32 - 1
 
@@ -398,10 +399,6 @@ defmodule Yex.Array do
   def member?(array, val) do
     val = Yex.normalize(val)
     Enum.member?(to_list(array), val)
-  end
-
-  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
-    Process.get(doc_ref, nil)
   end
 
   @doc """

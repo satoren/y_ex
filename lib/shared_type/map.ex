@@ -24,6 +24,7 @@ defmodule Yex.Map do
 
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   @type value :: term()
 
@@ -328,12 +329,6 @@ defmodule Yex.Map do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.map_link(map, cur_txn(map), key)
     )
-  end
-
-  @doc false
-  # Gets the current transaction reference from the process dictionary for the given document
-  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
-    Process.get(doc_ref, nil)
   end
 
   @doc """

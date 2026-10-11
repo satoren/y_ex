@@ -14,6 +14,7 @@ defmodule Yex.XmlElement do
 
   alias Yex.Doc
   require Yex.Doc
+  import Yex.Doc, only: [cur_txn: 1]
 
   @type t :: %__MODULE__{
           doc: Yex.Doc.t(),
@@ -360,10 +361,6 @@ defmodule Yex.XmlElement do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.xml_element_to_string(xml_element, cur_txn(xml_element))
     )
-  end
-
-  defp cur_txn(%{doc: %Yex.Doc{reference: doc_ref}}) do
-    Process.get(doc_ref, nil)
   end
 
   @doc """

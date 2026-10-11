@@ -65,11 +65,11 @@ defmodule Yex.Subscription do
   """
   def unsubscribe(ref) do
     case Process.get(ref) do
-      %__MODULE__{doc: %Doc{reference: doc_ref} = doc} = sub ->
+      %__MODULE__{doc: %Doc{} = doc} = sub ->
         Process.delete(ref)
 
         Doc.run_in_worker_process doc do
-          Yex.Nif.sub_unsubscribe(sub, Process.get(doc_ref, nil))
+          Yex.Nif.sub_unsubscribe(sub, Doc.cur_txn(doc))
         end
 
       _ ->

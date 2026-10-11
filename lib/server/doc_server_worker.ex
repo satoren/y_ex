@@ -6,6 +6,7 @@ defmodule Yex.DocServer.Worker do
   alias Yex.DocServer.State
 
   alias Yex.{Doc, Awareness}
+  import Yex.Doc, only: [cur_txn: 1]
 
   # MSG_QUERY_AWARENESS (<<3>>) — bypass message_decode NIF
   @query_awareness_call :__yex_query_awareness
@@ -290,9 +291,5 @@ defmodule Yex.DocServer.Worker do
       0 ->
         {:noreply, state}
     end
-  end
-
-  defp cur_txn(%Yex.Doc{reference: doc_ref}) do
-    Process.get(doc_ref, nil)
   end
 end
