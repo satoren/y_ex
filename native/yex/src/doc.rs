@@ -210,8 +210,12 @@ impl NifDoc {
         if let Ok(mut cache) = self.reference.subdocs.lock() {
             self.prune_subdoc_cache(&mut cache, &subdoc_guid, active_subdoc_guids);
 
+            // A destroyed subdoc is replaced in its parent by a new Doc with the same guid,
+            // so only reuse the cached resource when it still wraps the same Doc.
             if let Some(reference) = cache.get(&subdoc_guid) {
-                return reference.clone();
+                if Doc::ptr_eq(&reference.doc, &subdoc) {
+                    return reference.clone();
+                }
             }
 
             let reference: ResourceArc<DocResource> = ResourceArc::new(DocResource::new(subdoc));
@@ -829,6 +833,67 @@ fn prune_pending_v1<'a>(
             SliceIntoBinary::new(bytes.as_slice()).encode(env)
         });
         Ok((atoms::ok(), result).encode(env))
+    })
+}
+
+// GC walks every block in the document, so keep it off the normal schedulers.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn doc_force_gc(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Atom> {
+    doc.mutably(env, current_transaction, |txn| {
+        txn.gc(None);
+        Ok(atoms::ok())
+    })
+}
+
+/// Returns the parent of a subdocument, failing instead of blocking when the document is
+/// locked by an open transaction.
+fn try_parent_doc(doc: &NifDoc) -> NifResult<Option<Doc>> {
+    let txn = yrs::Transact::try_transact(&doc.reference.doc).map_err(Error::from)?;
+    Ok(txn.parent_doc())
+}
+
+#[rustler::nif]
+fn doc_load(env: Env<'_>, doc: NifDoc) -> NifResult<Atom> {
+    ENV.set(&mut env.clone(), || {
+        match try_parent_doc(&doc)? {
+            Some(parent) => {
+                // Committing the parent transaction emits the `loaded` subdocs event.
+                let mut parent_txn =
+                    yrs::Transact::try_transact_mut(&parent).map_err(Error::from)?;
+                doc.reference.doc.load(&mut parent_txn);
+            }
+            None => {
+                // A root document has no parent to notify. Doc::load still needs a write
+                // transaction, so a throwaway one only serves to set `should_load`.
+                let scratch = Doc::new();
+                let mut scratch_txn = yrs::Transact::transact_mut(&scratch);
+                doc.reference.doc.load(&mut scratch_txn);
+            }
+        }
+        Ok(atoms::ok())
+    })
+}
+
+#[rustler::nif]
+fn doc_destroy(env: Env<'_>, doc: NifDoc) -> NifResult<Atom> {
+    ENV.set(&mut env.clone(), || {
+        let parent = try_parent_doc(&doc)?;
+        // Doc::destroy blocks on the document lock, so fail first if it is held.
+        drop(yrs::Transact::try_transact_mut(&doc.reference.doc).map_err(Error::from)?);
+        match parent {
+            Some(parent) => {
+                // Committing the parent transaction emits the `removed`/`added` subdocs event.
+                let mut parent_txn =
+                    yrs::Transact::try_transact_mut(&parent).map_err(Error::from)?;
+                doc.reference.doc.destroy(Some(&mut parent_txn));
+            }
+            None => doc.reference.doc.destroy(None),
+        }
+        Ok(atoms::ok())
     })
 }
 

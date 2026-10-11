@@ -285,6 +285,66 @@ defmodule Yex.Doc do
   end
 
   @doc """
+  Garbage-collects deleted content now, even when the document was created with
+  `skip_gc: true`.
+
+  Deleted items are replaced by lightweight placeholders, so their content can no
+  longer be restored (for example by an `Yex.UndoManager` or from a snapshot taken
+  before the deletion). Works both inside and outside `transaction/3`.
+
+  ## Examples
+      iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{skip_gc: true})
+      iex> text = Yex.Doc.get_text(doc, "text")
+      iex> Yex.Text.insert(text, 0, "Hello World")
+      iex> Yex.Text.delete(text, 0, 6)
+      iex> Yex.Doc.force_gc(doc)
+      :ok
+      iex> Yex.Text.to_string(text)
+      "World"
+  """
+  @spec force_gc(t) :: :ok
+  def force_gc(%__MODULE__{} = doc) do
+    run_in_worker_process doc do
+      Yex.Nif.doc_force_gc(doc, cur_txn(doc))
+    end
+  end
+
+  @doc """
+  Requests a subdocument to be loaded.
+
+  Sets `should_load/1` to `true`. When the document is a subdocument, its parent
+  emits a subdocs event listing it under `:loaded` (see `monitor_subdocs/2`), which
+  providers use to start syncing it.
+
+  Raises `Yex.TransactionAcqError` when called inside a transaction on the
+  document or its parent.
+  """
+  @spec load(t) :: :ok
+  def load(%__MODULE__{} = doc) do
+    run_in_worker_process doc do
+      Yex.Nif.doc_load(doc)
+    end
+  end
+
+  @doc """
+  Destroys the document, dropping all of its observers and destroying its subdocuments.
+
+  When the document is a subdocument, its parent replaces it with a new, unloaded
+  document with the same guid, and emits a subdocs event listing it under
+  `:removed` and `:added`. Getting the subdocument from the parent again returns
+  that new document. Use this to free a loaded subdocument.
+
+  Raises `Yex.TransactionAcqError` when called inside a transaction on the
+  document or its parent.
+  """
+  @spec destroy(t) :: :ok
+  def destroy(%__MODULE__{} = doc) do
+    run_in_worker_process doc do
+      Yex.Nif.doc_destroy(doc)
+    end
+  end
+
+  @doc """
   Start a transaction.
 
   Raises `Yex.TransactionAcqError` if a transaction is already in progress.
