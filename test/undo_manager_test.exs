@@ -1581,6 +1581,19 @@ defmodule Yex.UndoManagerTest do
     end
   end
 
+  test "accepts a scope from another wrapper of the same subdocument", %{doc: doc} do
+    subdoc = Doc.new()
+    Yex.Map.set(Doc.get_map(doc, "subdocs"), "sub", subdoc)
+    {:ok, fetched} = Yex.Map.fetch(Doc.get_map(doc, "subdocs"), "sub")
+    refute fetched.reference == subdoc.reference
+
+    text = Doc.get_text(subdoc, "text")
+    {:ok, undo_manager} = UndoManager.new(fetched, text)
+    Text.insert(text, 0, "sub")
+    assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+    assert Text.to_string(text) == ""
+  end
+
   test "new_with_options handles NIF errors" do
     # Mock test removed - relies on NIF implementation
   end

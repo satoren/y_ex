@@ -250,9 +250,10 @@ fn create_undo_manager<T: NifSharedType>(
 // Raises TransactionAcqError when a transaction is open, instead of folding it
 // into the generic lookup failure message. Raises ArgumentError when `scope` belongs to
 // a document other than `doc`: the manager observes only `doc`, so yrs would accept the
-// scope and never capture its changes.
+// scope and never capture its changes. Compares the yrs document, not the wrapper: one
+// subdocument can have several `Yex.Doc` wrappers.
 fn branch_ref<T: NifSharedType>(doc: &NifDoc, scope: &T, message: &str) -> NifResult<T::RefType> {
-    if !std::ptr::eq(&*doc.reference, &*scope.doc().reference) {
+    if !yrs::Doc::ptr_eq(&doc.reference.doc, &scope.doc().reference.doc) {
         return Err(ArgumentError::raise(
             "scope belongs to a different document",
         ));
