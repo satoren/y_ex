@@ -76,7 +76,9 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
                 return Ok(Any::String(v.into()));
             }
 
-            term.decode::<Vec<u8>>().map(|v| Any::Buffer(v.into()))
+            // Binaries that are not valid UTF-8 become a Buffer, which reads back as a binary.
+            term.decode::<rustler::Binary>()
+                .map(|v| Any::Buffer(v.as_slice().into()))
         }
         TermType::List => {
             let iter = term.decode::<ListIterator<'a>>()?;
