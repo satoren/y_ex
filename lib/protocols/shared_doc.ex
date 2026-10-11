@@ -98,6 +98,11 @@ defmodule Yex.Sync.SharedDoc do
 
   Returns :ok on success or {:error, reason} on failure.
 
+  If the function raises, throws, or exits, the SharedDoc process keeps running and
+  `{:error, reason}` is returned. The update is not atomic: changes the function made
+  to the document before failing are kept and synced to observers, so retrying the
+  same function may apply those changes twice.
+
   ## Examples
       iex> {:ok, shared_doc} = SharedDoc.start_link(doc_name: "document_name")
       iex> SharedDoc.update_doc(shared_doc, fn doc -> Yex.Doc.get_array(doc, "array") |> Array.insert(0, "updated_data") end) # update the document
