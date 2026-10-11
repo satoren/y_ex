@@ -23,6 +23,28 @@ defmodule Yex.MapTest do
       assert {:ok, "new_value"} = Map.fetch(map, "key")
     end
 
+    test "non-UTF-8 binaries are stored as buffers and read back as binaries", %{
+      doc: doc,
+      map: map
+    } do
+      bin = <<255, 0, 1>>
+      assert :ok = Map.set(map, "buffer", bin)
+      assert :ok = Map.set(map, "nested", %{"list" => [bin]})
+
+      assert {:ok, ^bin} = Map.fetch(map, "buffer")
+      assert {:ok, %{"list" => [^bin]}} = Map.fetch(map, "nested")
+      assert %{"buffer" => ^bin, "nested" => %{"list" => [^bin]}} = Map.to_json(map)
+
+      # The value read back can be written again, and survives a sync.
+      remote = Doc.new()
+      {:ok, update} = Yex.encode_state_as_update(doc)
+      :ok = Yex.apply_update(remote, update)
+      remote_map = Doc.get_map(remote, "map")
+      {:ok, value} = Map.fetch(remote_map, "buffer")
+      assert :ok = Map.set(remote_map, "copy", value)
+      assert {:ok, ^bin} = Map.fetch(remote_map, "copy")
+    end
+
     test "set_and_get/3 with nested types", %{map: map} do
       # Test with ArrayPrelim
       assert %Yex.Array{} =
