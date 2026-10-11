@@ -37,25 +37,13 @@ defmodule Yex.DocServer.Worker do
     end
   end
 
-  #  defp message_v1(server, {:sync, {:sync_step1, encoded_state_vector}}, origin) do
-  #    GenServer.call(server, {__MODULE__, :document_sync_step1, encoded_state_vector, origin})
-  #  end
-
   defp message_v1(server, {:sync, {:sync_step2, encoded_diff}}, origin) do
     GenServer.cast(server, {__MODULE__, :document_update, encoded_diff, origin})
   end
 
-  #  defp message_v1(server, {:sync, {:sync_update, encoded_diff}}, origin) do
-  #    GenServer.cast(server, {__MODULE__, :document_update, encoded_diff, origin})
-  #  end
-
   defp message_v1(server, {:awareness, awareness}, origin) do
     GenServer.cast(server, {__MODULE__, :awareness_update, awareness, origin})
   end
-
-  #  defp message_v1(server, :query_awareness, _origin) do
-  #    GenServer.call(server, @query_awareness_call)
-  #  end
 
   defp message_v1(_server, _message, _origin) do
     {:error, :unknown_message}

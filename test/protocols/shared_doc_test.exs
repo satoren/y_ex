@@ -379,5 +379,53 @@ defmodule Yex.Sync.SharedDocTest do
       assert Enum.member?(result, "initial_data")
       assert Enum.member?(result, "updated_data")
     end
+
+    test "update_doc returns an error and keeps the process alive when the function raises" do
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname())
+
+      assert {:error, %RuntimeError{message: "boom"}} =
+               SharedDoc.update_doc(pid, fn _doc -> raise "boom" end)
+
+      assert {:error, {:throw, :oops}} = SharedDoc.update_doc(pid, fn _doc -> throw(:oops) end)
+
+      assert Process.alive?(pid)
+
+      :ok =
+        SharedDoc.update_doc(pid, fn doc -> Doc.get_array(doc, "array") |> Array.push("ok") end)
+
+      assert SharedDoc.get_doc(pid) |> Doc.get_array("array") |> Array.to_json() == ["ok"]
+    end
+  end
+
+  describe "auto_exit" do
+    test "stops when no process observes before auto_exit_timeout" do
+      Process.flag(:trap_exit, true)
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname(), auto_exit_timeout: 10)
+
+      assert_receive {:EXIT, ^pid, :normal}, 1_000
+    end
+
+    test "keeps running when observed before auto_exit_timeout" do
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname(), auto_exit_timeout: 200)
+      :ok = SharedDoc.observe(pid)
+
+      Process.sleep(300)
+      assert Process.alive?(pid)
+    end
+
+    test "keeps running without observers when auto_exit_timeout is :infinity" do
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname(), auto_exit_timeout: :infinity)
+
+      Process.sleep(50)
+      assert Process.alive?(pid)
+    end
+
+    test "keeps running without observers when auto_exit is false" do
+      {:ok, pid} =
+        SharedDoc.start_link(doc_name: random_docname(), auto_exit: false, auto_exit_timeout: 10)
+
+      Process.sleep(50)
+      assert Process.alive?(pid)
+    end
   end
 end
