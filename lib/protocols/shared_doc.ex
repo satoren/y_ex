@@ -22,7 +22,7 @@ defmodule Yex.Sync.SharedDoc do
     * `:doc_name` - The name of the document.
     * `:persistence` - Persistence module that implements PersistenceBehaviour.
     * `:auto_exit` - Automatically terminate the SharedDoc process when there is no longer a process to receive update notifications.
-    * `:auto_exit_timeout` - With `:auto_exit`, how long (in milliseconds) to wait for the first observer after start before terminating. Defaults to 5000.
+    * `:auto_exit_timeout` - With `:auto_exit`, how long (in milliseconds) to wait for the first observer after start before terminating. Defaults to 5000. `:infinity` disables this check.
     * `:doc_option` - Options for the document.
 
   """
@@ -145,9 +145,12 @@ defmodule Yex.Sync.SharedDoc do
       )
 
     # With auto_exit, stop if no process has observed the document by the timeout.
-    if auto_exit do
-      timeout = Keyword.get(option, :auto_exit_timeout, @default_auto_exit_timeout)
-      Process.send_after(self(), @auto_exit_check, timeout)
+    case Keyword.get(option, :auto_exit_timeout, @default_auto_exit_timeout) do
+      timeout when auto_exit and is_integer(timeout) ->
+        Process.send_after(self(), @auto_exit_check, timeout)
+
+      _ ->
+        :ok
     end
 
     {:ok, state}

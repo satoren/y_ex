@@ -406,8 +406,15 @@ defmodule Yex.Sync.SharedDocTest do
     end
 
     test "keeps running when observed before auto_exit_timeout" do
-      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname(), auto_exit_timeout: 10)
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname(), auto_exit_timeout: 200)
       :ok = SharedDoc.observe(pid)
+
+      Process.sleep(300)
+      assert Process.alive?(pid)
+    end
+
+    test "keeps running without observers when auto_exit_timeout is :infinity" do
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname(), auto_exit_timeout: :infinity)
 
       Process.sleep(50)
       assert Process.alive?(pid)
