@@ -117,7 +117,7 @@ defmodule Yex.SharedType do
 
   @doc false
   # Gets the current transaction reference from the process dictionary
-  defp cur_txn(%{doc: doc_ref}) do
+  defp cur_txn(%{doc: %Doc{reference: doc_ref}}) do
     Process.get(doc_ref, nil)
   end
 
