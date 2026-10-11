@@ -101,15 +101,27 @@ fn test_capped_index_and_length() {
     assert_eq!(capped_index_and_length(1, -1, 3), Some((0, 1)));
 }
 
-/// Converts a client id from Elixir, raising `ArgumentError` outside yjs' 53-bit range.
+/// Largest client id yjs allows (`2^53 - 1`).
+pub const MAX_CLIENT_ID: u64 = (1 << 53) - 1;
+
+/// Converts a client id from Elixir, raising `ArgumentError` outside `0..=MAX_CLIENT_ID`.
 /// `yrs::block::ClientID::new` only debug-asserts the range, so in release builds a larger
 /// value would silently alias to the client id in its low 53 bits.
 pub fn client_id(value: u64) -> rustler::NifResult<yrs::block::ClientID> {
-    if value >> 53 == 0 {
+    if value <= MAX_CLIENT_ID {
         Ok(yrs::block::ClientID::new(value))
     } else {
-        Err(crate::error::ArgumentError::raise(
-            "client id must be in 0..9007199254740991",
-        ))
+        Err(crate::error::ArgumentError::raise(&format!(
+            "client id must be in 0..{MAX_CLIENT_ID}"
+        )))
     }
+}
+
+#[test]
+fn test_client_id_range() {
+    assert_eq!(MAX_CLIENT_ID, 9007199254740991);
+    assert_eq!(client_id(0).unwrap().get(), 0);
+    assert_eq!(client_id(MAX_CLIENT_ID).unwrap().get(), MAX_CLIENT_ID);
+    assert!(client_id(MAX_CLIENT_ID + 1).is_err());
+    assert!(client_id(u64::MAX).is_err());
 }
