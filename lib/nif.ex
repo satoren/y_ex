@@ -308,6 +308,7 @@ defmodule Yex.Nif do
   def parse_update_meta_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
   def parse_update_meta_v2_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
   def decode_state_vector(_state_vector), do: :erlang.nif_error(:nif_not_loaded)
+  def decode_state_vector_dirty(_state_vector), do: :erlang.nif_error(:nif_not_loaded)
 
   def get_pending_update_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def get_pending_ds_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)

@@ -49,6 +49,12 @@ defmodule Yex.UpdateUtilsTest do
     doc
   end
 
+  # lib0 unsigned varint, as in a v1 state vector.
+  defp varint(n) when n < 128, do: <<n>>
+
+  defp varint(n),
+    do: <<Bitwise.bor(Bitwise.band(n, 127), 128), varint(Bitwise.bsr(n, 7))::binary>>
+
   defp text_of(update, apply \\ &Yex.apply_update_v1/2) do
     doc = Yex.Doc.new()
     :ok = apply.(doc, update)
@@ -313,6 +319,17 @@ defmodule Yex.UpdateUtilsTest do
       assert Yex.parse_update_meta_v2(v2) == Yex.Nif.parse_update_meta_v2(v2)
       assert {:ok, %{from: from}} = Yex.parse_update_meta_v1(v1)
       assert map_size(from) == 1
+    end
+
+    test "a large state vector takes the dirty path even with a small update" do
+      clients = for i <- 1..3_000, do: Bitwise.bsl(1, 40) + i
+      big_sv = IO.iodata_to_binary([varint(3_000) | Enum.map(clients, &[varint(&1), 1])])
+      assert byte_size(big_sv) > Yex.Nif.dirty_cutoff()
+
+      assert {:ok, clocks} = Yex.decode_state_vector(big_sv)
+      assert clocks == Map.new(clients, &{&1, 1})
+      assert Yex.diff_update_v1(@u1, big_sv) == Yex.Nif.diff_update_v1(@u1, big_sv)
+      assert Yex.diff_update_v2(@u2, big_sv) == Yex.Nif.diff_update_v2(@u2, big_sv)
     end
 
     test "the dirty twins reject a v2 update or state vector passed to the v1 form",

@@ -871,14 +871,23 @@ fn parse_update_meta_v2_dirty(update: Binary) -> NifResult<(Atom, NifUpdateMeta)
     parse_update_meta_v2_impl(update)
 }
 
-#[rustler::nif]
-fn decode_state_vector(state_vector: Binary) -> NifResult<(Atom, HashMap<u64, u32>)> {
+fn decode_state_vector_impl(state_vector: Binary) -> NifResult<(Atom, HashMap<u64, u32>)> {
     let state_vector = decode_state_vector_v1(state_vector.as_slice())?;
     let clocks = state_vector
         .iter()
         .map(|(client, clock)| (client.get(), *clock))
         .collect();
     Ok((atoms::ok(), clocks))
+}
+
+#[rustler::nif]
+fn decode_state_vector(state_vector: Binary) -> NifResult<(Atom, HashMap<u64, u32>)> {
+    decode_state_vector_impl(state_vector)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn decode_state_vector_dirty(state_vector: Binary) -> NifResult<(Atom, HashMap<u64, u32>)> {
+    decode_state_vector_impl(state_vector)
 }
 
 #[rustler::nif]
