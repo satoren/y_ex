@@ -165,6 +165,39 @@ defmodule YexXmlTreeWalkerTest do
         assert ["a", "b"] == result
       end
 
+      test "query_selector joins an open transaction and sees its inserts", %{
+        doc: doc,
+        mod: mod,
+        root: root
+      } do
+        result =
+          Doc.transaction(doc, fn ->
+            fill(mod, root, [el("a", [el("b")]), el("b")])
+            {label(mod.query_selector(root, "b")), length(mod.query_selector_all(root, "b"))}
+          end)
+
+        assert {"b", 2} == result
+      end
+
+      test "query_selector runs in another worker process", %{mod: mod} do
+        {:ok, worker} = GenServer.start_link(Worker, nil)
+        doc = Doc.new(worker)
+        frag = Doc.get_xml_fragment(doc, "xml")
+
+        root =
+          if mod == XmlFragment, do: frag, else: XmlFragment.push_and_get(frag, el("root"))
+
+        fill(mod, root, yrs_doc_tree())
+
+        assert "b" == label(mod.query_selector(root, "B"))
+
+        assert ["p", "b"] ==
+                 Enum.map(
+                   mod.query_selector_all(root, "p") ++ mod.query_selector_all(root, "b"),
+                   &label/1
+                 )
+      end
+
       test "a remote tree walks the same after v1 and v2 updates", %{
         doc: doc,
         mod: mod,

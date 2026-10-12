@@ -143,7 +143,7 @@ pub(crate) fn try_release(manager: YexUndoManager) -> Result<(), YexUndoManager>
 /// stacks and observers are only touched on the document's worker, which also runs every
 /// commit: reads of the stacks need no store guard, and a subscription dropped on another
 /// thread queues its key in `pending_unobserves` instead of removing its observers. The
-/// queue sits beside the lock so that dropping never waits on it; `write` drains it.
+/// queue sits beside the lock so that dropping never waits on it; `read` and `write` drain it.
 pub struct UndoManagerState {
     wrapper: RwLock<UndoManagerWrapper>,
     pending_unobserves: Mutex<Vec<Origin>>,
@@ -158,6 +158,11 @@ impl UndoManagerState {
     }
 
     fn read(&self) -> NifResult<RwLockReadGuard<'_, UndoManagerWrapper>> {
+        // Read-only calls also run on the worker, so drain queued removals here too:
+        // otherwise they wait for the next write, which a read-only workload never makes.
+        if !lock(&self.pending_unobserves).is_empty() {
+            drop(self.write()?);
+        }
         self.wrapper
             .read()
             .map_err(|_| Error::Message("Failed to acquire read lock".to_string()).into())
@@ -183,7 +188,7 @@ impl UndoManagerState {
         }
     }
 
-    /// Queues the removal of the observers registered under `key` for the next `write`.
+    /// Queues the removal of the observers registered under `key` for the next `read` or `write`.
     pub(crate) fn defer_unobserve(&self, key: Origin) {
         lock(&self.pending_unobserves).push(key);
     }
@@ -509,13 +514,10 @@ enum StackEvent<'e> {
 }
 
 fn notify(state: &CallbackState<EventTarget>, event: StackEvent<'_>) {
+    // `None` also when no NIF env is set (a transaction freed with its killed process).
     let Some(state) = state.get() else {
         return;
     };
-    // A transaction abandoned by a raise commits when its resource is freed, outside a NIF.
-    if !ENV.is_set() {
-        return;
-    }
     let (pid, ref_term, metadata) = &*state;
     ENV.with(|env| {
         let event = match event {

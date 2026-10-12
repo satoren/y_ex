@@ -221,17 +221,28 @@ defmodule Yex.XmlText do
   end
 
   @doc """
+  Returns true when the text node has the node attribute `key`, even if its value is nil.
+  """
+  @spec has_attribute?(t, binary()) :: boolean()
+  def has_attribute?(%__MODULE__{} = xml_text, key) do
+    Map.has_key?(get_attributes(xml_text), key)
+  end
+
+  @doc """
   Converts the XML text node to a preliminary representation.
   This is useful when you need to serialize or transfer the text node's content,
   formatting and node attributes.
 
-  A node attribute whose value is a shared type cannot be copied: inserting the
-  returned prelim raises. Plain values copy as they are.
+  Node attributes whose values are shared types are copied as prelims too, like the
+  values of `Yex.Map.as_prelim/1`.
   """
   @spec as_prelim(t) :: Yex.XmlTextPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = xml_text) do
     Doc.run_in_worker_process doc do
-      %{Yex.XmlTextPrelim.from(to_delta(xml_text)) | attributes: get_attributes(xml_text)}
+      attributes =
+        Map.new(get_attributes(xml_text), fn {k, v} -> {k, Yex.Output.as_prelim(v)} end)
+
+      %{Yex.XmlTextPrelim.from(to_delta(xml_text)) | attributes: attributes}
     end
   end
 
@@ -303,7 +314,7 @@ defmodule Yex.XmlTextPrelim do
 
   @type t :: %__MODULE__{
           delta: Yex.Text.delta(),
-          attributes: %{binary() => term()}
+          attributes: %{binary() => Yex.input_type()}
         }
 
   @doc """

@@ -95,8 +95,13 @@ defmodule Yex.XmlFragment do
   as in yjs `querySelector`.
   """
   @spec query_selector(t, String.t()) :: Yex.XmlElement.t() | nil
-  def query_selector(%__MODULE__{} = xml_fragment, tag) do
-    xml_fragment |> query_selector_all(tag) |> List.first()
+  def query_selector(%__MODULE__{doc: doc} = xml_fragment, tag) do
+    Doc.run_in_worker_process(doc,
+      do:
+        xml_fragment
+        |> Yex.Nif.xml_fragment_query_selector(cur_txn(xml_fragment), tag, true)
+        |> List.first()
+    )
   end
 
   @doc """
@@ -105,15 +110,11 @@ defmodule Yex.XmlFragment do
   `querySelectorAll`.
   """
   @spec query_selector_all(t, String.t()) :: [Yex.XmlElement.t()]
-  def query_selector_all(%__MODULE__{} = xml_fragment, tag) do
-    tag = String.upcase(tag)
-    tree_walker(xml_fragment, &tag_matches?(&1, tag))
+  def query_selector_all(%__MODULE__{doc: doc} = xml_fragment, tag) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_fragment_query_selector(xml_fragment, cur_txn(xml_fragment), tag, false)
+    )
   end
-
-  defp tag_matches?(%Yex.XmlElement{} = element, tag),
-    do: String.upcase(Yex.XmlElement.get_tag(element) || "") == tag
-
-  defp tag_matches?(_node, _tag), do: false
 
   @doc """
   Returns the parent node of this fragment.

@@ -416,6 +416,14 @@ defmodule YexXmlTextTest do
       assert :ok == XmlText.remove_attribute(text, "missing")
     end
 
+    test "has_attribute?", %{xml_text: text} do
+      XmlText.insert_attribute(text, "n", nil)
+      assert XmlText.has_attribute?(text, "n")
+      refute XmlText.has_attribute?(text, "missing")
+      XmlText.remove_attribute(text, "n")
+      refute XmlText.has_attribute?(text, "n")
+    end
+
     test "node attributes are independent of formatting", %{xml_text: text} do
       XmlText.format(text, 0, 5, %{"bold" => true})
       XmlText.insert_attribute(text, "bold", "node")
@@ -499,13 +507,23 @@ defmodule YexXmlTextTest do
       assert "hello" == XmlText.to_string(copy)
     end
 
-    test "as_prelim with a shared-type attribute fails at insert", %{
+    test "as_prelim copies shared-type attributes as prelims", %{
       xml_text: text,
       xml_fragment: f
     } do
-      XmlText.insert_attribute(text, "m", Yex.MapPrelim.from(%{"a" => 1}))
+      XmlText.insert_attribute(text, "m", Yex.MapPrelim.from(%{"a" => "b"}))
+      XmlText.insert_attribute(text, "s", "v")
       prelim = XmlText.as_prelim(text)
-      assert_raise ErlangError, fn -> XmlFragment.push(f, prelim) end
+      assert %{"m" => %Yex.MapPrelim{}, "s" => "v"} = prelim.attributes
+
+      copy = XmlFragment.push_and_get(f, prelim)
+      assert %Yex.Map{} = copied = XmlText.get_attribute(copy, "m")
+      assert %{"a" => "b"} == Yex.Map.to_map(copied)
+      assert "v" == XmlText.get_attribute(copy, "s")
+
+      # The copy is independent of the original.
+      Yex.Map.set(copied, "a", "changed")
+      assert %{"a" => "b"} == Yex.Map.to_map(XmlText.get_attribute(text, "m"))
     end
 
     test "observe reports attribute changes in keys", %{doc: doc, xml_text: text} do

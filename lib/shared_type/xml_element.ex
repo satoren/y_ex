@@ -97,8 +97,13 @@ defmodule Yex.XmlElement do
   as in yjs `querySelector`.
   """
   @spec query_selector(t, String.t()) :: Yex.XmlElement.t() | nil
-  def query_selector(%__MODULE__{} = xml_element, tag) do
-    xml_element |> query_selector_all(tag) |> List.first()
+  def query_selector(%__MODULE__{doc: doc} = xml_element, tag) do
+    Doc.run_in_worker_process(doc,
+      do:
+        xml_element
+        |> Yex.Nif.xml_element_query_selector(cur_txn(xml_element), tag, true)
+        |> List.first()
+    )
   end
 
   @doc """
@@ -107,15 +112,11 @@ defmodule Yex.XmlElement do
   `querySelectorAll`.
   """
   @spec query_selector_all(t, String.t()) :: [Yex.XmlElement.t()]
-  def query_selector_all(%__MODULE__{} = xml_element, tag) do
-    tag = String.upcase(tag)
-    tree_walker(xml_element, &tag_matches?(&1, tag))
+  def query_selector_all(%__MODULE__{doc: doc} = xml_element, tag) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_element_query_selector(xml_element, cur_txn(xml_element), tag, false)
+    )
   end
-
-  defp tag_matches?(%Yex.XmlElement{} = element, tag),
-    do: String.upcase(Yex.XmlElement.get_tag(element) || "") == tag
-
-  defp tag_matches?(_node, _tag), do: false
 
   @doc """
   Returns the number of child nodes in the XML element.
@@ -442,7 +443,8 @@ defmodule Yex.XmlElement do
   @doc """
   Converts the element, including its attributes and children, into a `Yex.XmlElementPrelim`.
 
-  The result can be inserted elsewhere to copy the element.
+  The result can be inserted elsewhere to copy the element. Attribute values that are
+  shared types are copied as prelims too, like the values of `Yex.Map.as_prelim/1`.
   """
   @spec as_prelim(t) :: Yex.XmlElementPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = xml_element) do
@@ -451,11 +453,10 @@ defmodule Yex.XmlElement do
         children(xml_element)
         |> Enum.map(fn child -> Yex.Output.as_prelim(child) end)
 
-      Yex.XmlElementPrelim.new(
-        get_tag(xml_element),
-        c,
-        get_attributes(xml_element)
-      )
+      attributes =
+        Map.new(get_attributes(xml_element), fn {k, v} -> {k, Yex.Output.as_prelim(v)} end)
+
+      Yex.XmlElementPrelim.new(get_tag(xml_element), c, attributes)
     end
   end
 
@@ -499,7 +500,7 @@ defmodule Yex.XmlElementPrelim do
 
   @type t :: %__MODULE__{
           tag: String.t(),
-          attributes: %{String.t() => String.t() | Yex.PrelimType.t()},
+          attributes: %{binary() => Yex.input_type()},
           children: [Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()]
         }
 

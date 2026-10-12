@@ -218,7 +218,7 @@ impl NifDoc {
             // its parent by a new Doc with the same guid, and a map entry can be replaced by
             // another doc with that guid, so only reuse the cached resource when it still wraps
             // the same Doc.
-            // ponytail: two live subdocs sharing a guid evict each other's entry; each lookup
+            // Note: two live subdocs sharing a guid evict each other's entry; each lookup
             // is still correct, but the resource reference returned is not stable.
             if let Some(reference) = cache.get(&subdoc_guid) {
                 if Doc::ptr_eq(&reference.doc, &subdoc) {

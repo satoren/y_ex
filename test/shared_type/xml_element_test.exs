@@ -699,6 +699,22 @@ defmodule YexXmlElementTest do
              ] = prelim.children
     end
 
+    test "copies shared-type attributes as prelims", %{xml_element: xml, xml_fragment: f} do
+      XmlElement.insert_attribute(xml, "m", Yex.MapPrelim.from(%{"a" => "b"}))
+      XmlElement.insert_attribute(xml, "s", "v")
+      prelim = XmlElement.as_prelim(xml)
+      assert %{"m" => %Yex.MapPrelim{}, "s" => "v"} = prelim.attributes
+
+      copy = XmlFragment.push_and_get(f, prelim)
+      assert %Yex.Map{} = copied = XmlElement.get_attribute(copy, "m")
+      assert %{"a" => "b"} == Yex.Map.to_map(copied)
+      assert "v" == XmlElement.get_attribute(copy, "s")
+
+      # The copy is independent of the original.
+      Yex.Map.set(copied, "a", "changed")
+      assert %{"a" => "b"} == Yex.Map.to_map(XmlElement.get_attribute(xml, "m"))
+    end
+
     test "converts complex XmlElement to TextPrelim", %{xml_element: xml} do
       XmlElement.insert_attribute(xml, "class", "container")
       XmlElement.push(xml, XmlTextPrelim.from("Hello"))
