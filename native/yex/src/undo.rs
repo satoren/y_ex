@@ -1,5 +1,6 @@
 use crate::{
     atoms,
+    deferred::Deferred,
     doc::DocResource,
     error::ArgumentError,
     shared_type::NifSharedType,
@@ -110,15 +111,25 @@ impl Drop for UndoManagerWrapper {
         for item in manager.undo_stack().iter().chain(manager.redo_stack()) {
             *item.meta().value() = None;
         }
-        self.doc.deferred.defer_undo_manager(manager);
+        self.doc
+            .deferred
+            .defer_undo_manager(manager, self.doc.doc.clone());
     }
 }
 
 /// Detaches `manager` from its documents and frees it, or hands it back if a store is busy.
-pub(crate) fn try_release(manager: YexUndoManager) -> Result<(), YexUndoManager> {
+///
+/// `home` is the document the manager was created on. It is detached even when the manager
+/// no longer lists it: after `Yex.Doc.destroy/1` dropped it from the list, a racing
+/// `expand_scope` can have registered a destroy observer there again (see `expand`), and
+/// a second destroy would call it after the manager is freed. Removing by origin cannot
+/// hit another manager's observer, since the origin is this manager's own address.
+pub(crate) fn try_release(manager: YexUndoManager, home: &yrs::Doc) -> Result<(), YexUndoManager> {
     let origin = manager.as_origin();
     let mut detached = true;
-    for doc in manager.docs() {
+    let home_listed = manager.docs().any(|doc| yrs::Doc::ptr_eq(doc, home));
+    let unlisted_home = (!home_listed).then_some(home);
+    for doc in manager.docs().chain(unlisted_home) {
         match yrs::Transact::try_transact_mut(doc) {
             Ok(txn) => {
                 txn.unobserve_destroy(origin.clone());
@@ -265,6 +276,56 @@ fn branch_ref<T: NifSharedType>(scope: &T, message: &str) -> NifResult<T::RefTyp
         .map_err(|_| Error::Message(message.to_string()).into())
 }
 
+// yrs 0.28 `UndoManager::expand_scope` registers two observers on the document the first
+// time it sees it, unwrapping a `try_transact_mut` for each, so it panics when another
+// thread holds the store (y-crdt/y-crdt#665 makes it fallible). These helpers contain the
+// panic and raise `TransactionAcqError` instead.
+
+/// Attaches a new manager to `doc`. If the panic comes after the destroy observer was
+/// registered, that observer holds a raw pointer into the manager, so the manager is kept
+/// until the next mutable transaction y_ex opens on the document (`Yex.Doc.transaction/3`
+/// or any mutating call) removes the observers, and leaked if that never happens.
+fn attach<R: AsRef<yrs::branch::Branch>>(
+    mut manager: YexUndoManager,
+    doc: &yrs::Doc,
+    deferred: &Deferred,
+    branch: &R,
+) -> Result<YexUndoManager, Error> {
+    let expanded = std::panic::catch_unwind(AssertUnwindSafe(|| manager.expand_scope(doc, branch)));
+    if expanded.is_ok() {
+        return Ok(manager);
+    }
+    defer_detach(manager, deferred);
+    Err(Error::Transaction)
+}
+
+/// Queues removal of the observers a failed first `expand_scope` may have left on the
+/// document, then frees `manager`.
+fn defer_detach(manager: YexUndoManager, deferred: &Deferred) {
+    let origin = manager.as_origin();
+    let manager = ManuallyDrop::new(manager);
+    deferred.defer_unobserve(Box::new(move |txn| {
+        txn.unobserve_destroy(origin.clone());
+        txn.unobserve_after_transaction(origin);
+        // The panic came before the document was recorded in the manager, so its Drop
+        // has no observers to remove and does not touch the store.
+        drop(ManuallyDrop::into_inner(manager));
+    }));
+}
+
+/// Expands the scope of an attached manager. The panic is only reachable here after
+/// `Yex.Doc.destroy/1` detached the manager from its document. A half-registered destroy
+/// observer is left in place, since removing it by origin now could also remove a later,
+/// complete one; `try_release` removes it when the manager is freed.
+fn expand<R: AsRef<yrs::branch::Branch>>(
+    manager: &mut YexUndoManager,
+    doc: &NifDoc,
+    branch: &R,
+) -> Result<(), Error> {
+    std::panic::catch_unwind(AssertUnwindSafe(|| manager.expand_scope(doc, branch)))
+        .map_err(|_| Error::Transaction)
+}
+
 fn expand_scope<T: NifSharedType>(
     manager: &mut YexUndoManager,
     doc: &NifDoc,
@@ -272,7 +333,7 @@ fn expand_scope<T: NifSharedType>(
 ) -> NifResult<()> {
     ensure_same_doc(doc, scope)?;
     let branch = branch_ref(scope, "Failed to get branch reference")?;
-    manager.expand_scope(doc.deref(), &branch);
+    expand(manager, doc, &branch)?;
     Ok(())
 }
 
@@ -297,8 +358,12 @@ fn create_undo_manager_with_options<T: NifSharedType>(
             .insert(origin.as_slice().into());
     }
 
-    let mut undo_manager = YexUndoManager::with_options(undo_options);
-    undo_manager.expand_scope(&doc, &branch);
+    let undo_manager = attach(
+        YexUndoManager::with_options(undo_options),
+        &doc,
+        &doc.reference.deferred,
+        &branch,
+    )?;
     let wrapper = UndoManagerWrapper::new(undo_manager, doc.reference.clone());
 
     Ok((
@@ -609,9 +674,68 @@ pub fn undo_manager_put_meta<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::{StackMeta, YexUndoManager};
+    use super::{attach, defer_detach, try_release, StackMeta, YexUndoManager};
+    use crate::deferred::Deferred;
+    use crate::Error;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
     use yrs::{Doc, Text, Transact};
+
+    #[test]
+    fn attach_while_a_transaction_is_open_fails_instead_of_panicking() {
+        let doc = Doc::new();
+        let text = doc.get_or_insert_text("text");
+        let deferred = Deferred::default();
+
+        let read = doc.transact();
+        let result = attach(YexUndoManager::new(), &doc, &deferred, &text);
+        assert!(matches!(result, Err(Error::Transaction)));
+        drop(read);
+
+        deferred.run_unobserves(&doc.transact_mut());
+        let manager = attach(YexUndoManager::new(), &doc, &deferred, &text).unwrap();
+        text.insert(&mut doc.transact_mut(), 0, "a");
+        assert!(manager.can_undo());
+    }
+
+    // The panic between the two observer registrations cannot be timed from a test, so
+    // this registers the destroy observer the first one would have left behind.
+    #[test]
+    fn defer_detach_removes_a_half_registered_destroy_observer() {
+        let doc = Doc::new();
+        let deferred = Deferred::default();
+        let manager = YexUndoManager::new();
+        let fired = Arc::new(AtomicBool::new(false));
+        let flag = fired.clone();
+        doc.observe_destroy(manager.as_origin(), move |_, _| {
+            flag.store(true, Ordering::SeqCst)
+        })
+        .unwrap();
+
+        defer_detach(manager, &deferred);
+        deferred.run_unobserves(&doc.transact_mut());
+        doc.destroy(None);
+        assert!(!fired.load(Ordering::SeqCst));
+    }
+
+    // A manager whose document was destroyed no longer lists it, but `expand_scope` can
+    // have left a destroy observer there. Releasing it must still remove that observer.
+    #[test]
+    fn try_release_removes_observers_from_the_home_document() {
+        let doc = Doc::new();
+        let manager = YexUndoManager::new();
+        let fired = Arc::new(AtomicBool::new(false));
+        let flag = fired.clone();
+        doc.observe_destroy(manager.as_origin(), move |_, _| {
+            flag.store(true, Ordering::SeqCst)
+        })
+        .unwrap();
+        assert_eq!(manager.docs().count(), 0);
+
+        assert!(try_release(manager, &doc).is_ok());
+        doc.destroy(None);
+        assert!(!fired.load(Ordering::SeqCst));
+    }
 
     #[test]
     fn stack_meta_ids_are_distinct_and_increasing() {
