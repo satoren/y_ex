@@ -65,7 +65,7 @@ impl Prelim for NifXmlFragmentPrelim {
 #[module = "Yex.XmlElementPrelim"]
 pub struct NifXmlElementPrelim {
     tag: String,
-    attributes: HashMap<String, NifAny>,
+    attributes: HashMap<String, NifYInput>,
     children: Vec<NifXmlIn>,
 }
 impl XmlPrelim for NifXmlElementPrelim {}
@@ -81,7 +81,7 @@ impl Prelim for NifXmlElementPrelim {
     fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
         let xml = XmlElementRef::from(inner_ref);
         for (key, value) in self.attributes {
-            xml.insert_attribute(txn, key, value.0);
+            xml.insert_attribute(txn, key, value);
         }
         for value in self.children {
             xml.push_back(txn, value);
@@ -92,7 +92,7 @@ impl Prelim for NifXmlElementPrelim {
 #[derive(NifStruct)]
 #[module = "Yex.XmlTextPrelim"]
 pub struct NifXmlTextPrelim {
-    attributes: HashMap<String, NifAny>,
+    attributes: HashMap<String, NifYInput>,
     delta: NifYInputDelta,
 }
 
@@ -107,7 +107,7 @@ impl Prelim for NifXmlTextPrelim {
     fn integrate(self, txn: &mut TransactionMut, inner_ref: BranchPtr) {
         let text_ref = XmlTextRef::from(inner_ref);
         for (key, value) in self.attributes {
-            text_ref.insert_attribute(txn, key, value.0);
+            text_ref.insert_attribute(txn, key, value);
         }
         text_ref.apply_delta(txn, self.delta.0);
     }

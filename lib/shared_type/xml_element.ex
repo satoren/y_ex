@@ -443,7 +443,8 @@ defmodule Yex.XmlElement do
   @doc """
   Converts the element, including its attributes and children, into a `Yex.XmlElementPrelim`.
 
-  The result can be inserted elsewhere to copy the element.
+  The result can be inserted elsewhere to copy the element. Attribute values that are
+  shared types are copied as prelims too, like the values of `Yex.Map.as_prelim/1`.
   """
   @spec as_prelim(t) :: Yex.XmlElementPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = xml_element) do
@@ -452,11 +453,10 @@ defmodule Yex.XmlElement do
         children(xml_element)
         |> Enum.map(fn child -> Yex.Output.as_prelim(child) end)
 
-      Yex.XmlElementPrelim.new(
-        get_tag(xml_element),
-        c,
-        get_attributes(xml_element)
-      )
+      attributes =
+        Map.new(get_attributes(xml_element), fn {k, v} -> {k, Yex.Output.as_prelim(v)} end)
+
+      Yex.XmlElementPrelim.new(get_tag(xml_element), c, attributes)
     end
   end
 
@@ -500,7 +500,7 @@ defmodule Yex.XmlElementPrelim do
 
   @type t :: %__MODULE__{
           tag: String.t(),
-          attributes: %{String.t() => String.t() | Yex.PrelimType.t()},
+          attributes: %{binary() => Yex.input_type()},
           children: [Yex.XmlElementPrelim.t() | Yex.XmlTextPrelim.t()]
         }
 
