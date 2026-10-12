@@ -256,18 +256,25 @@ impl Prelim for NifYInput {
                 // document into itself or into one of its own subdocuments would deadlock
                 // (the latter on the next Doc.destroy), and into_content cannot return an
                 // error, so both panic. The walk stops at an ancestor whose store is locked.
+                // It also stops when it revisits a document, so an existing cycle elsewhere
+                // cannot make it loop.
                 let inserted = &doc.reference.doc;
                 if Doc::ptr_eq(inserted, txn.doc()) {
                     panic!("cannot insert a document into itself");
                 }
                 let mut ancestor = txn.parent_doc();
+                let mut seen = vec![txn.doc().clone()];
                 while let Some(d) = ancestor {
                     if Doc::ptr_eq(inserted, &d) {
                         panic!("cannot insert a document into one of its own subdocuments");
                     }
+                    if seen.iter().any(|s| Doc::ptr_eq(s, &d)) {
+                        break; // an existing cycle that does not pass through the inserted document
+                    }
                     ancestor = yrs::Transact::try_transact(&d)
                         .ok()
                         .and_then(|t| t.parent_doc());
+                    seen.push(d);
                 }
                 (ItemContent::Doc(None, doc.reference.doc.clone()), None)
             }
