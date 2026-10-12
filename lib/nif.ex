@@ -37,6 +37,13 @@ defmodule Yex.Nif do
   def dirty_encode_items(), do: 16_384
   def dirty_json_items(), do: 1_024
 
+  # map_clear deletes every entry and nested item, and its auto-commit builds one
+  # observer event entry per removed key, so it also costs what the document costs. Its
+  # normal NIF returns :dirty above this many doc items. With observe and observe_deep
+  # attached, the smallest item count whose normal-scheduler median passes 1 ms is about
+  # 500 (about 2_250 with no observers). See benchmark/dirty_map_clear.exs.
+  def dirty_clear_items(), do: 256
+
   def doc_new(), do: :erlang.nif_error(:nif_not_loaded)
   def doc_with_options(_option), do: :erlang.nif_error(:nif_not_loaded)
   def doc_get_or_insert_text(_doc, _cur_txn, _name), do: :erlang.nif_error(:nif_not_loaded)
@@ -132,7 +139,8 @@ defmodule Yex.Nif do
   def map_get(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_contains_key(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_delete(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
-  def map_clear(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  def map_clear(_map, _cur_txn, _item_limit), do: :erlang.nif_error(:nif_not_loaded)
+  def map_clear_dirty(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_map(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_keys(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_values(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)

@@ -119,9 +119,14 @@ defmodule Yex.Map do
   """
   @spec clear(t) :: :ok
   def clear(%__MODULE__{doc: doc} = map) do
-    Doc.run_in_worker_process(doc,
-      do: Yex.Nif.map_clear(map, cur_txn(map))
-    )
+    Doc.run_in_worker_process doc do
+      txn = cur_txn(map)
+
+      case Yex.Nif.map_clear(map, txn, Yex.Nif.dirty_clear_items()) do
+        :dirty -> Yex.Nif.map_clear_dirty(map, txn)
+        :ok -> :ok
+      end
+    end
   end
 
   @doc """

@@ -215,6 +215,51 @@ defmodule Yex.MapTest do
       assert Map.to_map(Doc.get_map(remote, "map")) == %{}
     end
 
+    test "above the item limit runs on a dirty scheduler and emits one update", %{
+      doc: doc,
+      map: map
+    } do
+      n = Yex.Nif.dirty_clear_items() + 1
+      Doc.transaction(doc, fn -> for i <- 1..n, do: Map.set(map, "k#{i}", i) end)
+      assert :dirty = Yex.Nif.map_clear(map, nil, Yex.Nif.dirty_clear_items())
+      assert Map.size(map) == n
+
+      {:ok, _} = Doc.monitor_update(doc)
+      ref = Yex.SharedType.observe(map)
+      assert :ok = Map.clear(map)
+      assert Map.size(map) == 0
+      assert_received {:update_v1, _, _, _}
+      refute_received {:update_v1, _, _, _}
+      assert_received {:observe_event, ^ref, %Yex.MapEvent{keys: keys}, _, _}
+      assert map_size(keys) == n
+    end
+
+    test "above the item limit joins an open transaction", %{doc: doc, map: map} do
+      n = Yex.Nif.dirty_clear_items() + 1
+      Doc.transaction(doc, fn -> for i <- 1..n, do: Map.set(map, "k#{i}", i) end)
+
+      Doc.transaction(doc, fn ->
+        Map.set(map, "a", 1)
+        assert :ok = Map.clear(map)
+        assert Map.size(map) == 0
+        Map.set(map, "b", 2)
+      end)
+
+      assert Map.to_map(map) == %{"b" => 2}
+    end
+
+    test "on a deleted map above the item limit raises", %{doc: doc, map: map} do
+      n = Yex.Nif.dirty_clear_items() + 1
+      Doc.transaction(doc, fn -> for i <- 1..n, do: Map.set(map, "k#{i}", i) end)
+      Map.set(map, "child", MapPrelim.from(%{"k" => "v"}))
+      child = Map.fetch!(map, "child")
+      Map.delete(map, "child")
+
+      assert_raise Yex.DeletedSharedTypeError, "Map has been deleted", fn ->
+        Map.clear(child)
+      end
+    end
+
     test "on a deleted map raises like delete/2", %{map: map} do
       Map.set(map, "child", MapPrelim.from(%{"k" => "v"}))
       child = Map.fetch!(map, "child")
