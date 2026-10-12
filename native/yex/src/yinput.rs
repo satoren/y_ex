@@ -4,7 +4,8 @@ use crate::{
     any::{NifAny, NifAttr},
     array::NifArray,
     atoms,
-    doc::NifDoc,
+    doc::{try_parent_doc, NifDoc},
+    error::ArgumentError,
     map::NifMap,
     text::NifText,
     weak::NifWeakLink,
@@ -16,8 +17,8 @@ use yrs::{
     block::{ItemContent, Prelim, Unused},
     branch::{Branch, BranchPtr},
     types::{xml::XmlPrelim, Delta, TypeRef},
-    Any, Array, ArrayRef, Map, MapRef, ReadTxn, Text, TextRef, TransactionMut, WeakPrelim, Xml,
-    XmlElementRef, XmlFragment, XmlFragmentRef, XmlTextRef,
+    Any, Array, ArrayRef, Doc, Map, MapRef, ReadTxn, Text, TextRef, TransactionMut, WeakPrelim,
+    Xml, XmlElementRef, XmlFragment, XmlFragmentRef, XmlTextRef,
 };
 
 #[derive(NifStruct)]
@@ -132,7 +133,6 @@ impl NifWeakPrelim {
     }
 }
 
-#[derive(NifUntaggedEnum)]
 pub enum NifYInput {
     Any(NifAny),
     MapPrelim(NifMapPrelim),
@@ -143,6 +143,65 @@ pub enum NifYInput {
     XmlFragmentPrelim(NifXmlFragmentPrelim),
     WeakPrelim(NifWeakPrelim),
     Doc(NifDoc),
+}
+
+// Written by hand instead of derived with NifUntaggedEnum, which turns every variant's
+// error into `invalid_variant`: a document that cannot be inserted has to raise its own
+// error. Variants are tried in the order the derive used.
+impl<'a> Decoder<'a> for NifYInput {
+    fn decode(term: Term<'a>) -> NifResult<Self> {
+        if let Ok(v) = NifAny::decode(term) {
+            return Ok(NifYInput::Any(v));
+        }
+        if let Ok(v) = NifMapPrelim::decode(term) {
+            return Ok(NifYInput::MapPrelim(v));
+        }
+        if let Ok(v) = NifArrayPrelim::decode(term) {
+            return Ok(NifYInput::ArrayPrelim(v));
+        }
+        if let Ok(v) = NifTextPrelim::decode(term) {
+            return Ok(NifYInput::TextPrelim(v));
+        }
+        if let Ok(v) = NifXmlTextPrelim::decode(term) {
+            return Ok(NifYInput::XmlTextPrelim(v));
+        }
+        if let Ok(v) = NifXmlElementPrelim::decode(term) {
+            return Ok(NifYInput::XmlElementPrelim(v));
+        }
+        if let Ok(v) = NifXmlFragmentPrelim::decode(term) {
+            return Ok(NifYInput::XmlFragmentPrelim(v));
+        }
+        if let Ok(v) = NifWeakPrelim::decode(term) {
+            return Ok(NifYInput::WeakPrelim(v));
+        }
+        if let Ok(doc) = NifDoc::decode(term) {
+            // A document can be integrated into one parent only. Fails instead of blocking
+            // when the document has an open transaction.
+            if try_parent_doc(&doc)?.is_some() {
+                return Err(ArgumentError::raise(
+                    "document is already a subdocument; create a second Yex.Doc with the same guid",
+                ));
+            }
+            return Ok(NifYInput::Doc(doc));
+        }
+        Err(Error::RaiseAtom("invalid_variant"))
+    }
+}
+
+impl Encoder for NifYInput {
+    fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
+        match self {
+            NifYInput::Any(v) => v.encode(env),
+            NifYInput::MapPrelim(v) => v.encode(env),
+            NifYInput::ArrayPrelim(v) => v.encode(env),
+            NifYInput::TextPrelim(v) => v.encode(env),
+            NifYInput::XmlTextPrelim(v) => v.encode(env),
+            NifYInput::XmlElementPrelim(v) => v.encode(env),
+            NifYInput::XmlFragmentPrelim(v) => v.encode(env),
+            NifYInput::WeakPrelim(v) => v.encode(env),
+            NifYInput::Doc(v) => v.encode(env),
+        }
+    }
 }
 
 //Array(ArrayPrelim),
@@ -193,8 +252,22 @@ impl Prelim for NifYInput {
                 (ItemContent::Type(inner), Some(self))
             }
             NifYInput::Doc(doc) => {
-                if txn.parent_doc().is_some() {
-                    panic!("Cannot integrate the document, because it's already being used as a sub-document elsewhere");
+                // Decoding already rejected a document that is a subdocument. Inserting a
+                // document into itself or into one of its own subdocuments would deadlock
+                // (the latter on the next Doc.destroy), and into_content cannot return an
+                // error, so both panic. The walk stops at an ancestor whose store is locked.
+                let inserted = &doc.reference.doc;
+                if Doc::ptr_eq(inserted, txn.doc()) {
+                    panic!("cannot insert a document into itself");
+                }
+                let mut ancestor = txn.parent_doc();
+                while let Some(d) = ancestor {
+                    if Doc::ptr_eq(inserted, &d) {
+                        panic!("cannot insert a document into one of its own subdocuments");
+                    }
+                    ancestor = yrs::Transact::try_transact(&d)
+                        .ok()
+                        .and_then(|t| t.parent_doc());
                 }
                 (ItemContent::Doc(None, doc.reference.doc.clone()), None)
             }

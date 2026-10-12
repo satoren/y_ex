@@ -1115,7 +1115,7 @@ fn doc_force_gc(
 
 /// Returns the parent of a subdocument, failing instead of blocking when the document is
 /// locked by an open transaction.
-fn try_parent_doc(doc: &NifDoc) -> NifResult<Option<Doc>> {
+pub(crate) fn try_parent_doc(doc: &NifDoc) -> NifResult<Option<Doc>> {
     let txn = yrs::Transact::try_transact(&doc.reference.doc).map_err(Error::from)?;
     Ok(txn.parent_doc())
 }
