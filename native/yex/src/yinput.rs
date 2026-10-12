@@ -377,3 +377,21 @@ pub enum NifSharedTypeInput {
     XmlFragment(NifXmlFragment),
     WeakLink(NifWeakLink),
 }
+
+/// Matches a `NifSharedTypeInput`, binds the inner shared type of every variant to
+/// `$t` and evaluates `$body` for it. A new variant goes here and every dispatch site
+/// built on this macro picks it up.
+macro_rules! with_shared_type {
+    ($input:expr, $t:ident => $body:expr) => {
+        match $input {
+            $crate::yinput::NifSharedTypeInput::Text($t) => $body,
+            $crate::yinput::NifSharedTypeInput::Map($t) => $body,
+            $crate::yinput::NifSharedTypeInput::Array($t) => $body,
+            $crate::yinput::NifSharedTypeInput::XmlText($t) => $body,
+            $crate::yinput::NifSharedTypeInput::XmlElement($t) => $body,
+            $crate::yinput::NifSharedTypeInput::XmlFragment($t) => $body,
+            $crate::yinput::NifSharedTypeInput::WeakLink($t) => $body,
+        }
+    };
+}
+pub(crate) use with_shared_type;

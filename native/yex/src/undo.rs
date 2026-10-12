@@ -7,7 +7,7 @@ use crate::{
     term_box::TermBox,
     utils::{origin_to_term, term_to_origin_binary},
     wrap::NifWrap,
-    yinput::NifSharedTypeInput,
+    yinput::{with_shared_type, NifSharedTypeInput},
     Error, NifDoc, ENV,
 };
 
@@ -220,15 +220,10 @@ pub fn undo_manager_new(
     doc: NifDoc,
     scope: NifSharedTypeInput,
 ) -> NifResult<(Atom, NifUndoManager)> {
-    ENV.set(&mut env.clone(), || match scope {
-        NifSharedTypeInput::Text(text) => create_undo_manager(env, doc, text),
-        NifSharedTypeInput::Array(array) => create_undo_manager(env, doc, array),
-        NifSharedTypeInput::Map(map) => create_undo_manager(env, doc, map),
-        NifSharedTypeInput::XmlText(text) => create_undo_manager(env, doc, text),
-        NifSharedTypeInput::XmlElement(element) => create_undo_manager(env, doc, element),
-        NifSharedTypeInput::XmlFragment(fragment) => create_undo_manager(env, doc, fragment),
-        NifSharedTypeInput::WeakLink(weak_link) => create_undo_manager(env, doc, weak_link),
-    })
+    ENV.set(
+        &mut env.clone(),
+        || with_shared_type!(scope, t => create_undo_manager(env, doc, t)),
+    )
 }
 
 fn create_undo_manager<T: NifSharedType>(
@@ -274,10 +269,9 @@ fn expand_scope<T: NifSharedType>(
     manager: &mut YexUndoManager,
     doc: &NifDoc,
     scope: &T,
-    message: &str,
 ) -> NifResult<()> {
     ensure_same_doc(doc, scope)?;
-    let branch = branch_ref(scope, message)?;
+    let branch = branch_ref(scope, "Failed to get branch reference")?;
     manager.expand_scope(doc.deref(), &branch);
     Ok(())
 }
@@ -327,25 +321,7 @@ pub fn undo_manager_new_with_options(
     // will return an error tuple if it is not
     let _doc_ref = doc.reference.deref();
 
-    match scope {
-        NifSharedTypeInput::Text(text) => create_undo_manager_with_options(env, doc, text, options),
-        NifSharedTypeInput::Array(array) => {
-            create_undo_manager_with_options(env, doc, array, options)
-        }
-        NifSharedTypeInput::Map(map) => create_undo_manager_with_options(env, doc, map, options),
-        NifSharedTypeInput::XmlText(text) => {
-            create_undo_manager_with_options(env, doc, text, options)
-        }
-        NifSharedTypeInput::XmlElement(element) => {
-            create_undo_manager_with_options(env, doc, element, options)
-        }
-        NifSharedTypeInput::XmlFragment(fragment) => {
-            create_undo_manager_with_options(env, doc, fragment, options)
-        }
-        NifSharedTypeInput::WeakLink(weak_link) => {
-            create_undo_manager_with_options(env, doc, weak_link, options)
-        }
-    }
+    with_shared_type!(scope, t => create_undo_manager_with_options(env, doc, t, options))
 }
 
 #[rustler::nif]
@@ -445,41 +421,7 @@ pub fn undo_manager_expand_scope(
         let mut wrapper = undo_manager.reference.write()?;
         let manager = &mut wrapper.manager;
         let doc = &undo_manager.doc;
-        match scope {
-            NifSharedTypeInput::Text(text) => {
-                expand_scope(manager, doc, &text, "Failed to get text branch reference")
-            }
-            NifSharedTypeInput::Array(array) => {
-                expand_scope(manager, doc, &array, "Failed to get array branch reference")
-            }
-            NifSharedTypeInput::Map(map) => {
-                expand_scope(manager, doc, &map, "Failed to get map branch reference")
-            }
-            NifSharedTypeInput::XmlText(text) => expand_scope(
-                manager,
-                doc,
-                &text,
-                "Failed to get xml text branch reference",
-            ),
-            NifSharedTypeInput::XmlElement(element) => expand_scope(
-                manager,
-                doc,
-                &element,
-                "Failed to get xml element branch reference",
-            ),
-            NifSharedTypeInput::XmlFragment(fragment) => expand_scope(
-                manager,
-                doc,
-                &fragment,
-                "Failed to get xml fragment branch reference",
-            ),
-            NifSharedTypeInput::WeakLink(weak_link) => expand_scope(
-                manager,
-                doc,
-                &weak_link,
-                "Failed to get weak link branch reference",
-            ),
-        }?;
+        with_shared_type!(scope, t => expand_scope(manager, doc, &t))?;
 
         Ok(atoms::ok())
     })

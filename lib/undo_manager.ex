@@ -80,9 +80,9 @@ defmodule Yex.UndoManager do
   A scope must belong to the manager's document; one from another document raises
   `ArgumentError`. A scope from another `Yex.Doc` of the same subdocument (for example
   the struct a parent's `Yex.Map.fetch/2` returns) is accepted. Calls are serialized
-  only through the manager's `Yex.Doc`, so when another process has a transaction open
-  through the scope's `Yex.Doc`, the call raises `Yex.TransactionAcqError` instead of
-  waiting for it.
+  only through the manager's `Yex.Doc`, so when a transaction is open through the
+  scope's `Yex.Doc`, in this process or another, the call raises
+  `Yex.TransactionAcqError` instead of waiting for it.
 
   ## Tracked origins
 
@@ -319,7 +319,7 @@ defmodule Yex.UndoManager do
   See "Scope" in the module documentation for the accepted scopes.
 
   Returns `:ok`, or `{:error, message}` such as
-  `{:error, "Failed to get text branch reference"}` when the scope cannot be accessed.
+  `{:error, "Failed to get branch reference"}` when the scope cannot be accessed.
   Raises `Yex.TransactionAcqError` when a transaction on the document is open, and
   `ArgumentError` when `scope` belongs to a document other than the manager's.
   """
