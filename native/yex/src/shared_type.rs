@@ -167,7 +167,12 @@ fn shared_type_resolve(
         Ok(match id.0.get_branch(txn) {
             Some(branch) if branch.is_deleted() => Err(atoms::deleted()),
             Some(branch) => match branch.into() {
-                Out::UndefinedRef(_) => Err(atoms::untyped()),
+                // A root waits for a typed getter to claim it. A nested branch has a
+                // type yrs maps to no struct (such as an XmlHook), so no getter helps.
+                Out::UndefinedRef(_) => Err(match &id.0 {
+                    BranchID::Root(_) => atoms::untyped(),
+                    BranchID::Nested(_) => atoms::unsupported(),
+                }),
                 out => Ok(NifYOut::from_native(out, &doc)),
             },
             // The state vector stops at the first skipped range, so a type integrated

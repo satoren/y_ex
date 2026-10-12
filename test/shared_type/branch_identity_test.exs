@@ -108,6 +108,18 @@ defmodule Yex.BranchIdentityTest do
         SharedType.branch_id(untyped(TextPrelim.from("x")))
       end
     end
+
+    test "rejects a struct with a doc field that is not a shared type" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      Text.insert(text, 0, "a")
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+
+      for value <- [undo_manager, Yex.StickyIndex.new(text, 0, :after)] do
+        assert_raise FunctionClauseError, fn -> SharedType.branch_id(untyped(value)) end
+        assert_raise FunctionClauseError, fn -> SharedType.alive?(untyped(value)) end
+      end
+    end
   end
 
   describe "alive?/1" do
@@ -317,6 +329,16 @@ defmodule Yex.BranchIdentityTest do
       Doc.get_map(doc_b, "m")
       assert {:ok, %Map{} = map} = SharedType.resolve(doc_b, {:root, "m"})
       assert Map.to_map(map) == %{"k" => "v"}
+    end
+
+    test "a nested type Yex has no struct for is unsupported" do
+      # v1 update by client 1 at clock 0: root map "m" sets key "h" to a Y.XmlHook
+      # (type ref 5), encoded as yrs writes it.
+      doc = Doc.new()
+      :ok = Yex.apply_update(doc, <<1, 1, 1, 0, 0x27, 1, 1, "m", 1, "h", 5, 0>>)
+      assert {:ok, %{__struct__: Yex.UndefinedRef}} = Map.fetch(Doc.get_map(doc, "m"), "h")
+
+      assert SharedType.resolve(doc, {:nested, 1, 0}) == {:error, :unsupported}
     end
 
     test "a type whose update is still pending is not found" do

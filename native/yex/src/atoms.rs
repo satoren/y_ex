@@ -30,6 +30,7 @@ rustler::atoms! {
     nested,
     deleted,
     untyped,
+    unsupported,
 
 // messages types
   sync,

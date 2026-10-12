@@ -128,6 +128,12 @@ defmodule Yex.SharedType do
     unsubscribe(observe_ref)
   end
 
+  defguardp is_shared_type(shared_type)
+            when is_struct(shared_type, Yex.Text) or is_struct(shared_type, Yex.Map) or
+                   is_struct(shared_type, Yex.Array) or is_struct(shared_type, Yex.XmlText) or
+                   is_struct(shared_type, Yex.XmlElement) or
+                   is_struct(shared_type, Yex.XmlFragment) or is_struct(shared_type, Yex.WeakLink)
+
   @doc """
   Returns the logical identifier of `shared_type`.
 
@@ -141,7 +147,8 @@ defmodule Yex.SharedType do
       {:root, "text"}
   """
   @spec branch_id(t) :: branch_id
-  def branch_id(%{doc: %Doc{}} = shared_type), do: Yex.Nif.shared_type_branch_id(shared_type)
+  def branch_id(shared_type) when is_shared_type(shared_type),
+    do: Yex.Nif.shared_type_branch_id(shared_type)
 
   @doc """
   Returns `true` while `shared_type` can still be used.
@@ -163,7 +170,7 @@ defmodule Yex.SharedType do
       false
   """
   @spec alive?(t) :: boolean()
-  def alive?(%{doc: %Doc{} = doc} = shared_type) do
+  def alive?(%{doc: doc} = shared_type) when is_shared_type(shared_type) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.shared_type_alive(shared_type, cur_txn(shared_type))
     )
@@ -189,6 +196,8 @@ defmodule Yex.SharedType do
       that produced the id may answer `:deleted` for a foreign id.
     * `:untyped` - a root that only a remote update created and nothing has claimed yet. Claim
       it with the getter for its kind, such as `Yex.Doc.get_map/2`, and resolve again.
+    * `:unsupported` - a nested type of a kind Yex has no struct for, such as an XmlHook.
+      Resolving again does not change the answer.
 
   Raises `ArgumentError` for a malformed id: another shape, a name that is not UTF-8, a
   client of 2^53 or more, or a clock of 2^32 or more.
@@ -201,7 +210,8 @@ defmodule Yex.SharedType do
       iex> Yex.SharedType.resolve(doc, {:root, "missing"})
       {:error, :not_found}
   """
-  @spec resolve(Doc.t(), branch_id) :: {:ok, t} | {:error, :not_found | :deleted | :untyped}
+  @spec resolve(Doc.t(), branch_id) ::
+          {:ok, t} | {:error, :not_found | :deleted | :untyped | :unsupported}
   def resolve(%Doc{} = doc, branch_id) do
     Doc.run_in_worker_process(doc,
       do: Yex.Nif.shared_type_resolve(doc, cur_txn(doc), branch_id)
