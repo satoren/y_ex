@@ -338,9 +338,11 @@ defmodule Yex do
   """
   @spec diff_update_v1(binary(), binary()) :: {:ok, binary()} | {:error, term()}
   def diff_update_v1(update, state_vector) when is_binary(update) and is_binary(state_vector) do
-    if byte_size(update) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.diff_update_v1_dirty(update, state_vector),
-      else: Yex.Nif.diff_update_v1(update, state_vector)
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.diff_update_v1(update, state_vector) end,
+      fn -> Yex.Nif.diff_update_v1_dirty(update, state_vector) end
+    )
   end
 
   @doc """
@@ -354,9 +356,11 @@ defmodule Yex do
   """
   @spec diff_update_v2(binary(), binary()) :: {:ok, binary()} | {:error, term()}
   def diff_update_v2(update, state_vector) when is_binary(update) and is_binary(state_vector) do
-    if byte_size(update) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.diff_update_v2_dirty(update, state_vector),
-      else: Yex.Nif.diff_update_v2(update, state_vector)
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.diff_update_v2(update, state_vector) end,
+      fn -> Yex.Nif.diff_update_v2_dirty(update, state_vector) end
+    )
   end
 
   @doc """
@@ -386,9 +390,11 @@ defmodule Yex do
   """
   @spec encode_state_vector_from_update_v1(binary()) :: {:ok, binary()} | {:error, term()}
   def encode_state_vector_from_update_v1(update) when is_binary(update) do
-    if byte_size(update) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.encode_state_vector_from_update_v1_dirty(update),
-      else: Yex.Nif.encode_state_vector_from_update_v1(update)
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.encode_state_vector_from_update_v1(update) end,
+      fn -> Yex.Nif.encode_state_vector_from_update_v1_dirty(update) end
+    )
   end
 
   @doc """
@@ -400,9 +406,11 @@ defmodule Yex do
   """
   @spec encode_state_vector_from_update_v2(binary()) :: {:ok, binary()} | {:error, term()}
   def encode_state_vector_from_update_v2(update) when is_binary(update) do
-    if byte_size(update) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.encode_state_vector_from_update_v2_dirty(update),
-      else: Yex.Nif.encode_state_vector_from_update_v2(update)
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.encode_state_vector_from_update_v2(update) end,
+      fn -> Yex.Nif.encode_state_vector_from_update_v2_dirty(update) end
+    )
   end
 
   @doc """
@@ -414,9 +422,11 @@ defmodule Yex do
   """
   @spec convert_update_format_v1_to_v2(binary()) :: {:ok, binary()} | {:error, term()}
   def convert_update_format_v1_to_v2(update) when is_binary(update) do
-    if byte_size(update) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.convert_update_format_v1_to_v2_dirty(update),
-      else: Yex.Nif.convert_update_format_v1_to_v2(update)
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.convert_update_format_v1_to_v2(update) end,
+      fn -> Yex.Nif.convert_update_format_v1_to_v2_dirty(update) end
+    )
   end
 
   @doc """
@@ -426,9 +436,11 @@ defmodule Yex do
   """
   @spec convert_update_format_v2_to_v1(binary()) :: {:ok, binary()} | {:error, term()}
   def convert_update_format_v2_to_v1(update) when is_binary(update) do
-    if byte_size(update) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.convert_update_format_v2_to_v1_dirty(update),
-      else: Yex.Nif.convert_update_format_v2_to_v1(update)
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.convert_update_format_v2_to_v1(update) end,
+      fn -> Yex.Nif.convert_update_format_v2_to_v1_dirty(update) end
+    )
   end
 
   @doc """
@@ -468,9 +480,11 @@ defmodule Yex do
            }}
           | {:error, term()}
   def parse_update_meta_v1(update) when is_binary(update) do
-    if byte_size(update) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.parse_update_meta_v1_dirty(update),
-      else: Yex.Nif.parse_update_meta_v1(update)
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.parse_update_meta_v1(update) end,
+      fn -> Yex.Nif.parse_update_meta_v1_dirty(update) end
+    )
   end
 
   @doc """
@@ -486,9 +500,11 @@ defmodule Yex do
            }}
           | {:error, term()}
   def parse_update_meta_v2(update) when is_binary(update) do
-    if byte_size(update) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.parse_update_meta_v2_dirty(update),
-      else: Yex.Nif.parse_update_meta_v2(update)
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.parse_update_meta_v2(update) end,
+      fn -> Yex.Nif.parse_update_meta_v2_dirty(update) end
+    )
   end
 
   @doc """
@@ -509,6 +525,11 @@ defmodule Yex do
           {:ok, %{non_neg_integer() => non_neg_integer()}} | {:error, term()}
   def decode_state_vector(state_vector) when is_binary(state_vector) do
     Yex.Nif.decode_state_vector(state_vector)
+  end
+
+  # Large inputs go to the DirtyCpu twin of a NIF, as in apply_update_v1/2.
+  defp dirty_dispatch(input, fun, dirty_fun) do
+    if byte_size(input) > Yex.Nif.dirty_cutoff(), do: dirty_fun.(), else: fun.()
   end
 
   @doc """
