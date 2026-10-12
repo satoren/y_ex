@@ -1,11 +1,12 @@
 use rustler::{Atom, Decoder, Encoder, Env, NifException, NifResult, ResourceArc, Term};
 use std::ops::Deref;
-use yrs::{BranchID, ClientID, Hook, Out, ReadTxn, SharedRef, TransactionMut, ID};
+use yrs::{BranchID, Hook, Out, ReadTxn, SharedRef, TransactionMut, ID};
 
 use crate::{
     atoms,
     doc::NifDoc,
     transaction::{ReadTransaction, TransactionResource},
+    utils,
     wrap::SliceIntoBinary,
     yinput::NifSharedTypeInput,
     youtput::NifYOut,
@@ -127,13 +128,11 @@ impl<'a> Decoder<'a> for NifBranchId {
             }
         }
         let (tag, client, clock): (Atom, u64, u32) = term.decode()?;
-        // ClientID::new keeps only 53 bits in release builds, so a wider client
-        // would alias another one.
-        if tag != atoms::nested() || client >= 1 << 53 {
+        if tag != atoms::nested() {
             return Err(rustler::Error::BadArg);
         }
         Ok(NifBranchId(BranchID::Nested(ID::new(
-            ClientID::new(client),
+            utils::client_id(client)?,
             clock,
         ))))
     }
@@ -172,7 +171,9 @@ fn shared_type_resolve(
                 out => Ok(NifYOut::from_native(out, &doc)),
             },
             // The state vector stops at the first skipped range, so a type integrated
-            // past a gap, then deleted and collected, reports not_found.
+            // past a gap, then deleted and collected, reports not_found. yrs 0.28 has no
+            // public per-client clock that honours skips (BlockStore is pub(crate), and
+            // its get_clock ignores skips), so this builds the state vector on a miss.
             None => match &id.0 {
                 BranchID::Nested(nid) if txn.state_vector().get(&nid.client) > nid.clock => {
                     Err(atoms::deleted())
