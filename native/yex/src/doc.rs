@@ -1187,6 +1187,8 @@ fn doc_destroy(env: Env<'_>, doc: NifDoc) -> NifResult<Atom> {
         let parent = try_parent_doc(&doc)?;
         // Doc::destroy blocks on the document lock and on each subdocument's lock, so fail
         // first if any of them is held.
+        // This closes the same-process case; another process can still take one of these
+        // locks before Doc::destroy re-acquires them (see the Yex.Doc moduledoc).
         drop(yrs::Transact::try_transact_mut(&doc.reference.doc).map_err(Error::from)?);
         try_probe_subdocs(&doc.reference.doc)?;
         match parent {
