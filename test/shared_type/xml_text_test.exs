@@ -416,6 +416,14 @@ defmodule YexXmlTextTest do
       assert :ok == XmlText.remove_attribute(text, "missing")
     end
 
+    test "has_attribute?", %{xml_text: text} do
+      XmlText.insert_attribute(text, "n", nil)
+      assert XmlText.has_attribute?(text, "n")
+      refute XmlText.has_attribute?(text, "missing")
+      XmlText.remove_attribute(text, "n")
+      refute XmlText.has_attribute?(text, "n")
+    end
+
     test "node attributes are independent of formatting", %{xml_text: text} do
       XmlText.format(text, 0, 5, %{"bold" => true})
       XmlText.insert_attribute(text, "bold", "node")

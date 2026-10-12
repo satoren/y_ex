@@ -1,7 +1,7 @@
 use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
 use yrs::{
     types::text::YChange, GetString, SharedRef as _, Text, Xml, XmlElementRef, XmlFragment,
-    XmlFragmentRef, XmlTextRef,
+    XmlFragmentRef, XmlOut, XmlTextRef,
 };
 
 use crate::{
@@ -260,6 +260,59 @@ fn xml_element_tree_walker(
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
         Ok(tree_walker(&xml, txn, doc))
+    })
+}
+
+/// Collects the descendant elements of `xml` whose tag equals `tag` ignoring case, in document
+/// order. With `first_only`, stops at the first match.
+fn query_selector<X: XmlFragment>(
+    xml: &X,
+    txn: &ReadTransaction,
+    doc: &NifDoc,
+    tag: &str,
+    first_only: bool,
+) -> Vec<NifYOut> {
+    let tag = tag.to_uppercase();
+    let matches = xml.successors(txn).filter_map(|node| match node {
+        XmlOut::Element(element) => {
+            let own = element.try_tag().map(|t| t.to_uppercase());
+            (own.unwrap_or_default() == tag)
+                .then(|| NifYOut::YXmlElement(NifXmlElement::new(doc.clone(), element)))
+        }
+        _ => None,
+    });
+    if first_only {
+        matches.take(1).collect()
+    } else {
+        matches.collect()
+    }
+}
+
+#[rustler::nif]
+fn xml_fragment_query_selector(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    tag: &str,
+    first_only: bool,
+) -> NifResult<Vec<NifYOut>> {
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(query_selector(&xml, txn, doc, tag, first_only))
+    })
+}
+
+#[rustler::nif]
+fn xml_element_query_selector(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    tag: &str,
+    first_only: bool,
+) -> NifResult<Vec<NifYOut>> {
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(query_selector(&xml, txn, doc, tag, first_only))
     })
 }
 

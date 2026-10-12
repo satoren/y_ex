@@ -221,6 +221,14 @@ defmodule Yex.XmlText do
   end
 
   @doc """
+  Returns true when the text node has the node attribute `key`, even if its value is nil.
+  """
+  @spec has_attribute?(t, binary()) :: boolean()
+  def has_attribute?(%__MODULE__{} = xml_text, key) do
+    Map.has_key?(get_attributes(xml_text), key)
+  end
+
+  @doc """
   Converts the XML text node to a preliminary representation.
   This is useful when you need to serialize or transfer the text node's content,
   formatting and node attributes.
