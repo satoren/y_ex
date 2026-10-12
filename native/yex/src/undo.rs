@@ -247,21 +247,39 @@ fn create_undo_manager<T: NifSharedType>(
     )
 }
 
-// Raises TransactionAcqError when a transaction is open, instead of folding it
-// into the generic lookup failure message. Raises ArgumentError when `scope` belongs to
-// a document other than `doc`: the manager observes only `doc`, so yrs would accept the
-// scope and never capture its changes. Compares the yrs document, not the wrapper: one
-// subdocument can have several `Yex.Doc` wrappers.
-fn branch_ref<T: NifSharedType>(doc: &NifDoc, scope: &T, message: &str) -> NifResult<T::RefType> {
-    if !yrs::Doc::ptr_eq(&doc.reference.doc, &scope.doc().reference.doc) {
-        return Err(ArgumentError::raise(
+// Raises ArgumentError when `scope` belongs to a document other than `doc`: the manager
+// observes only `doc`, so yrs would accept the scope and never capture its changes.
+// Compares the yrs document, not the wrapper: one subdocument can have several `Yex.Doc`
+// wrappers.
+fn ensure_same_doc<T: NifSharedType>(doc: &NifDoc, scope: &T) -> NifResult<()> {
+    if yrs::Doc::ptr_eq(&doc.reference.doc, &scope.doc().reference.doc) {
+        Ok(())
+    } else {
+        Err(ArgumentError::raise(
             "scope belongs to a different document",
-        ));
+        ))
     }
+}
+
+// Raises TransactionAcqError when a transaction is open, instead of folding it
+// into the generic lookup failure message.
+fn branch_ref<T: NifSharedType>(scope: &T, message: &str) -> NifResult<T::RefType> {
     let txn = yrs::Transact::try_transact(&scope.doc().reference.doc).map_err(Error::from)?;
     scope
         .get_ref(&txn)
         .map_err(|_| Error::Message(message.to_string()).into())
+}
+
+fn expand_scope<T: NifSharedType>(
+    manager: &mut YexUndoManager,
+    doc: &NifDoc,
+    scope: &T,
+    message: &str,
+) -> NifResult<()> {
+    ensure_same_doc(doc, scope)?;
+    let branch = branch_ref(scope, message)?;
+    manager.expand_scope(doc.deref(), &branch);
+    Ok(())
 }
 
 fn create_undo_manager_with_options<T: NifSharedType>(
@@ -270,7 +288,8 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     scope: T,
     options: NifUndoOptions<'_>,
 ) -> NifResult<(Atom, NifUndoManager)> {
-    let branch = branch_ref(&doc, &scope, "Failed to get branch reference")?;
+    ensure_same_doc(&doc, &scope)?;
+    let branch = branch_ref(&scope, "Failed to get branch reference")?;
 
     let mut undo_options = UndoOptions {
         capture_timeout_millis: options.capture_timeout,
@@ -424,43 +443,43 @@ pub fn undo_manager_expand_scope(
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         let mut wrapper = undo_manager.reference.write()?;
-        let doc = undo_manager.doc;
+        let manager = &mut wrapper.manager;
+        let doc = &undo_manager.doc;
         match scope {
             NifSharedTypeInput::Text(text) => {
-                let branch = branch_ref(&doc, &text, "Failed to get text branch reference")?;
-                wrapper.manager.expand_scope(doc.deref(), &branch);
+                expand_scope(manager, doc, &text, "Failed to get text branch reference")
             }
             NifSharedTypeInput::Array(array) => {
-                let branch = branch_ref(&doc, &array, "Failed to get array branch reference")?;
-                wrapper.manager.expand_scope(doc.deref(), &branch);
+                expand_scope(manager, doc, &array, "Failed to get array branch reference")
             }
             NifSharedTypeInput::Map(map) => {
-                let branch = branch_ref(&doc, &map, "Failed to get map branch reference")?;
-                wrapper.manager.expand_scope(doc.deref(), &branch);
+                expand_scope(manager, doc, &map, "Failed to get map branch reference")
             }
-            NifSharedTypeInput::XmlText(text) => {
-                let branch = branch_ref(&doc, &text, "Failed to get xml text branch reference")?;
-                wrapper.manager.expand_scope(doc.deref(), &branch);
-            }
-            NifSharedTypeInput::XmlElement(element) => {
-                let branch =
-                    branch_ref(&doc, &element, "Failed to get xml element branch reference")?;
-                wrapper.manager.expand_scope(doc.deref(), &branch);
-            }
-            NifSharedTypeInput::XmlFragment(fragment) => {
-                let branch = branch_ref(
-                    &doc,
-                    &fragment,
-                    "Failed to get xml fragment branch reference",
-                )?;
-                wrapper.manager.expand_scope(doc.deref(), &branch);
-            }
-            NifSharedTypeInput::WeakLink(weak_link) => {
-                let branch =
-                    branch_ref(&doc, &weak_link, "Failed to get weak link branch reference")?;
-                wrapper.manager.expand_scope(doc.deref(), &branch);
-            }
-        }
+            NifSharedTypeInput::XmlText(text) => expand_scope(
+                manager,
+                doc,
+                &text,
+                "Failed to get xml text branch reference",
+            ),
+            NifSharedTypeInput::XmlElement(element) => expand_scope(
+                manager,
+                doc,
+                &element,
+                "Failed to get xml element branch reference",
+            ),
+            NifSharedTypeInput::XmlFragment(fragment) => expand_scope(
+                manager,
+                doc,
+                &fragment,
+                "Failed to get xml fragment branch reference",
+            ),
+            NifSharedTypeInput::WeakLink(weak_link) => expand_scope(
+                manager,
+                doc,
+                &weak_link,
+                "Failed to get weak link branch reference",
+            ),
+        }?;
 
         Ok(atoms::ok())
     })
