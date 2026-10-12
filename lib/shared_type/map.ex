@@ -101,6 +101,35 @@ defmodule Yex.Map do
   end
 
   @doc """
+  Removes all entries from the map.
+  Nested shared types stored in the map are deleted along with their contents.
+
+  ## Parameters
+    * `map` - The map to clear
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> map = Yex.Doc.get_map(doc, "map")
+      iex> Yex.Map.set(map, "plane", ["Hello", "World"])
+      iex> Yex.Map.set(map, "car", "Hello")
+      iex> Yex.Map.clear(map)
+      :ok
+      iex> Yex.Map.size(map)
+      0
+  """
+  @spec clear(t) :: :ok
+  def clear(%__MODULE__{doc: doc} = map) do
+    Doc.run_in_worker_process doc do
+      txn = cur_txn(map)
+
+      case Yex.Nif.map_clear(map, txn, Yex.Nif.dirty_clear_items()) do
+        :dirty -> Yex.Nif.map_clear_dirty(map, txn)
+        :ok -> :ok
+      end
+    end
+  end
+
+  @doc """
   get a key from the map.
     ## Examples
       iex> doc = Yex.Doc.new()

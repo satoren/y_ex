@@ -3,7 +3,7 @@ use crate::doc::NifDoc;
 use crate::event::{NifMapEvent, NifSharedTypeDeepObservable, NifSharedTypeObservable};
 use crate::shared_type::NifSharedType;
 use crate::shared_type::SharedTypeId;
-use crate::transaction::TransactionResource;
+use crate::transaction::{exceeds_item_limit, TransactionResource};
 use crate::wrap::{NifMapPairs, NifStr};
 use crate::yinput::NifWeakPrelim;
 use crate::{yinput::NifYInput, youtput::NifYOut, NifAny};
@@ -106,6 +106,41 @@ fn map_delete(
         map.remove(txn, key);
         Ok(atoms::ok())
     })
+}
+fn map_clear_impl(
+    env: Env<'_>,
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    item_limit: Option<u64>,
+) -> NifResult<Atom> {
+    map.mutably(env, current_transaction, |txn| {
+        let map = map.get_ref(txn)?;
+        if exceeds_item_limit(txn, item_limit) {
+            return Ok(atoms::dirty());
+        }
+        map.clear(txn);
+        Ok(atoms::ok())
+    })
+}
+
+/// Returns `:dirty` without clearing when the doc holds more than `item_limit` items.
+#[rustler::nif]
+fn map_clear(
+    env: Env<'_>,
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    item_limit: Option<u64>,
+) -> NifResult<Atom> {
+    map_clear_impl(env, map, current_transaction, item_limit)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn map_clear_dirty(
+    env: Env<'_>,
+    map: NifMap,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Atom> {
+    map_clear_impl(env, map, current_transaction, None)
 }
 #[rustler::nif]
 fn map_to_map(
