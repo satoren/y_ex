@@ -229,7 +229,7 @@ defmodule Yex.Doc do
 
   A root claimed by a typed getter reports its declared type: `:map`, `:array`,
   `:text` or `:xml_fragment`. `:xml_element`, `:xml_text` and `:weak_link` cover the
-  remaining yrs types.
+  remaining yrs types that can be a root.
 
   A root no typed getter has claimed reports `:undefined`, whatever it holds. Every
   root a remote update created starts this way, and keeps it until something calls
