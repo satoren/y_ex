@@ -339,7 +339,7 @@ defmodule Yex do
   @spec diff_update_v1(binary(), binary()) :: {:ok, binary()} | {:error, term()}
   def diff_update_v1(update, state_vector) when is_binary(update) and is_binary(state_vector) do
     dirty_dispatch(
-      update,
+      [update, state_vector],
       fn -> Yex.Nif.diff_update_v1(update, state_vector) end,
       fn -> Yex.Nif.diff_update_v1_dirty(update, state_vector) end
     )
@@ -357,7 +357,7 @@ defmodule Yex do
   @spec diff_update_v2(binary(), binary()) :: {:ok, binary()} | {:error, term()}
   def diff_update_v2(update, state_vector) when is_binary(update) and is_binary(state_vector) do
     dirty_dispatch(
-      update,
+      [update, state_vector],
       fn -> Yex.Nif.diff_update_v2(update, state_vector) end,
       fn -> Yex.Nif.diff_update_v2_dirty(update, state_vector) end
     )
@@ -524,12 +524,17 @@ defmodule Yex do
   @spec decode_state_vector(binary()) ::
           {:ok, %{non_neg_integer() => non_neg_integer()}} | {:error, term()}
   def decode_state_vector(state_vector) when is_binary(state_vector) do
-    Yex.Nif.decode_state_vector(state_vector)
+    dirty_dispatch(
+      state_vector,
+      fn -> Yex.Nif.decode_state_vector(state_vector) end,
+      fn -> Yex.Nif.decode_state_vector_dirty(state_vector) end
+    )
   end
 
-  # Large inputs go to the DirtyCpu twin of a NIF, as in apply_update_v1/2.
+  # Large inputs go to the DirtyCpu twin of a NIF, as in apply_update_v1/2. `input` is
+  # a binary or a list of the binaries the NIF decodes.
   defp dirty_dispatch(input, fun, dirty_fun) do
-    if byte_size(input) > Yex.Nif.dirty_cutoff(), do: dirty_fun.(), else: fun.()
+    if IO.iodata_length(input) > Yex.Nif.dirty_cutoff(), do: dirty_fun.(), else: fun.()
   end
 
   @doc """
