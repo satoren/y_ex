@@ -165,6 +165,8 @@ defmodule Yex.UndoManager do
   ## Errors
   - Returns `{:error, "Invalid scope: expected a struct"}` if scope is not a struct
   - Returns `{:error, "Failed to get branch reference"}` if there's an error accessing the scope
+  - Raises `Yex.TransactionAcqError` when a transaction on the document is open,
+    for example inside `Yex.Doc.transaction/3`
   - Raises `ArgumentError` if `scope` belongs to a document other than `doc`
   """
   @spec new(Yex.Doc.t(), struct()) ::
@@ -301,7 +303,7 @@ defmodule Yex.UndoManager do
 
   @doc """
   Expands the scope of the UndoManager to include additional shared types.
-  The scope can be a Text, Array, or Map type.
+  The scope can be a Text, Array, Map, XmlText, XmlElement, XmlFragment, or WeakLink type.
 
   Raises `Yex.TransactionAcqError` when a transaction on the document is open, and
   `ArgumentError` when `scope` belongs to a document other than the manager's.
