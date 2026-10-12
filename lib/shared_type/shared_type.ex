@@ -48,7 +48,7 @@ defmodule Yex.SharedType do
   """
   @type branch_id ::
           {:root, String.t()}
-          | {:nested, client :: non_neg_integer(), clock :: non_neg_integer()}
+          | {:nested, client :: 0..9_007_199_254_740_991, clock :: 0..4_294_967_295}
 
   @spec observe(t, keyword()) :: reference()
   def observe(%{doc: doc} = shared_type, opt \\ []) do
@@ -163,9 +163,9 @@ defmodule Yex.SharedType do
       false
   """
   @spec alive?(t) :: boolean()
-  def alive?(%{doc: %Doc{reference: doc_ref} = doc} = shared_type) do
+  def alive?(%{doc: %Doc{} = doc} = shared_type) do
     Doc.run_in_worker_process(doc,
-      do: Yex.Nif.shared_type_alive(shared_type, Process.get(doc_ref, nil))
+      do: Yex.Nif.shared_type_alive(shared_type, cur_txn(shared_type))
     )
   end
 
@@ -181,15 +181,14 @@ defmodule Yex.SharedType do
 
     * `:not_found` - `doc` has no such type: a root that was never created, or a nested type
       whose update `doc` has not integrated yet (including one still pending on a missing
-      predecessor).
+      predecessor). It is not always transient: a nested type that `doc` integrated while an
+      earlier range of the same client was still missing, and that was then deleted and
+      garbage collected, stays `:not_found` until the missing range arrives.
     * `:deleted` - `doc` has integrated the id and no live shared type is there: the type was
       deleted, or the id names other content. A document sharing the client id with the one
       that produced the id may answer `:deleted` for a foreign id.
     * `:untyped` - a root that only a remote update created and nothing has claimed yet. Claim
-      it with the getter for its kind, such as `Yex.Doc.get_map/2`, and resolve again. When
-      the kind is not known from the application's own schema, the `root_refs` listing in
-      `Yex.Doc` reports it from the root's content; it reports `:other` for an empty root,
-      whose kind cannot be inferred.
+      it with the getter for its kind, such as `Yex.Doc.get_map/2`, and resolve again.
 
   Raises `ArgumentError` for a malformed id: another shape, a name that is not UTF-8, a
   client of 2^53 or more, or a clock of 2^32 or more.
@@ -203,9 +202,9 @@ defmodule Yex.SharedType do
       {:error, :not_found}
   """
   @spec resolve(Doc.t(), branch_id) :: {:ok, t} | {:error, :not_found | :deleted | :untyped}
-  def resolve(%Doc{reference: doc_ref} = doc, branch_id) do
+  def resolve(%Doc{} = doc, branch_id) do
     Doc.run_in_worker_process(doc,
-      do: Yex.Nif.shared_type_resolve(doc, Process.get(doc_ref, nil), branch_id)
+      do: Yex.Nif.shared_type_resolve(doc, cur_txn(doc), branch_id)
     )
   end
 

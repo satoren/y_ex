@@ -335,6 +335,32 @@ defmodule Yex.BranchIdentityTest do
       assert SharedType.resolve(doc_b, id) == {:error, :not_found}
     end
 
+    test "a type integrated past a gap, then deleted and collected, is not found until the gap fills" do
+      doc_a = doc_with_client(1)
+      text = Doc.get_text(doc_a, "t")
+      map = Doc.get_map(doc_a, "m")
+
+      Text.insert(text, 0, "a")
+      first = Yex.encode_state_as_update!(doc_a)
+      Text.insert(text, 1, "b")
+      sv = Yex.encode_state_vector!(doc_a)
+      nested = Map.set_and_get(map, "nested", MapPrelim.from(%{}))
+      id = SharedType.branch_id(nested)
+      Map.delete(map, "nested")
+      last = Yex.encode_state_as_update!(doc_a, sv)
+
+      # Merging clocks 0 and 2 leaves a skipped range at clock 1.
+      {:ok, merged} = Yex.merge_updates([first, last])
+      doc_b = Doc.new()
+      :ok = Yex.apply_update(doc_b, merged)
+      # Nothing is pending: clock 2 and its deletion were integrated past the gap.
+      assert Yex.get_pending_update(doc_b) == {:ok, nil}
+      assert SharedType.resolve(doc_b, id) == {:error, :not_found}
+
+      sync(doc_a, doc_b)
+      assert SharedType.resolve(doc_b, id) == {:error, :deleted}
+    end
+
     test "a type deleted by a remote update is deleted on the receiving side" do
       doc_a = Doc.new()
       map_a = Doc.get_map(doc_a, "m")
