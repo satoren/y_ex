@@ -313,6 +313,17 @@ defmodule Yex.DocServerTest do
            }
   end
 
+  test "doc_option without a client id gives each server a random client id" do
+    ids =
+      for _ <- 1..8 do
+        {:ok, pid} = DocServerTestModule.start_link(doc_option: %Yex.Doc.Options{guid: "x"})
+        Yex.Doc.client_id(GenServer.call(pid, :get_doc))
+      end
+
+    # Any single random id may be 0 or repeat; eight equal ids would not.
+    assert length(Enum.uniq(ids)) > 1
+  end
+
   describe "incvalid message" do
     test "invalid message" do
       {:ok, pid} = DocServerTestModule.start_link(assigns: %{initial_assigns_key: "value"})

@@ -15,8 +15,23 @@ defmodule Yex.Doc do
   defmodule Options do
     @moduledoc """
     Document options.
+
+    `client_id` defaults to `nil`, which picks a random client id in
+    `0..9007199254740991`, the same as `Yex.Doc.new/0`. Collaborating replicas
+    must not share a client id.
+
+    > #### Breaking change {: .warning}
+    >
+    > Up to 0.12.1 `client_id` defaulted to `0`, so every document built from
+    > these options, including every `Yex.DocServer` started with a
+    > `:doc_option`, wrote its items under client `0`. Code that seeds content
+    > on start (for example in `c:Yex.DocServer.init/2`) wrote the same item
+    > ids on every restart, and peers holding the old state deduplicated them.
+    > With a random client id each restart writes the seed under a new client,
+    > and those peers see the seeded content twice. Pass an explicit
+    > `client_id` to keep the old behaviour.
     """
-    defstruct client_id: 0,
+    defstruct client_id: nil,
               guid: nil,
               collection_id: nil,
               offset_kind: :bytes,
@@ -25,7 +40,7 @@ defmodule Yex.Doc do
               should_load: true
 
     @type t :: %__MODULE__{
-            client_id: integer(),
+            client_id: non_neg_integer() | nil,
             guid: String.t() | nil,
             collection_id: String.t(),
             offset_kind: :bytes | :utf16,
@@ -112,6 +127,8 @@ defmodule Yex.Doc do
 
   @doc """
   Create a new document with options.
+
+  A random client id is used when `client_id` is `nil` (the default).
 
   Raises `ArgumentError` when `client_id` is outside `0..9007199254740991`
   (`2^53 - 1`), the range of yjs client ids.

@@ -112,8 +112,8 @@ pub struct NifOptions {
     /// Globally unique client identifier. This value must be unique across all active collaborating
     /// peers, otherwise a update collisions will happen, causing document store state to be corrupted.
     ///
-    /// Default value: randomly generated.
-    pub client_id: u64,
+    /// Default value: randomly generated (`None`).
+    pub client_id: Option<u64>,
     /// A globally unique identifier for this document.
     ///
     /// Default value: randomly generated UUID v4.
@@ -157,7 +157,10 @@ impl TryFrom<NifOptions> for Options {
             uuid_v4()
         };
         Ok(Options {
-            client_id: client_id(w.client_id)?,
+            client_id: match w.client_id {
+                Some(id) => client_id(id)?,
+                None => ClientID::random(),
+            },
             guid,
             collection_id: w.collection_id.map(|s| s.into()),
             offset_kind,
