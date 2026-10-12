@@ -204,9 +204,11 @@ defmodule Yex do
   @spec apply_update_v1(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v1(%Yex.Doc{} = doc, update) do
     Yex.Doc.run_in_worker_process doc do
-      if byte_size(update) > Yex.Nif.dirty_cutoff(),
-        do: Yex.Nif.apply_update_v1_dirty(doc, cur_txn(doc), update),
-        else: Yex.Nif.apply_update_v1(doc, cur_txn(doc), update)
+      dirty_dispatch(
+        update,
+        fn -> Yex.Nif.apply_update_v1(doc, cur_txn(doc), update) end,
+        fn -> Yex.Nif.apply_update_v1_dirty(doc, cur_txn(doc), update) end
+      )
     end
   end
 
@@ -228,9 +230,11 @@ defmodule Yex do
   @spec apply_update_v2(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v2(%Yex.Doc{} = doc, update) do
     Yex.Doc.run_in_worker_process doc do
-      if byte_size(update) > Yex.Nif.dirty_cutoff(),
-        do: Yex.Nif.apply_update_v2_dirty(doc, cur_txn(doc), update),
-        else: Yex.Nif.apply_update_v2(doc, cur_txn(doc), update)
+      dirty_dispatch(
+        update,
+        fn -> Yex.Nif.apply_update_v2(doc, cur_txn(doc), update) end,
+        fn -> Yex.Nif.apply_update_v2_dirty(doc, cur_txn(doc), update) end
+      )
     end
   end
 
@@ -270,9 +274,11 @@ defmodule Yex do
   """
   @spec merge_updates_v1([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v1(updates) when is_list(updates) do
-    if IO.iodata_length(updates) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.merge_updates_v1_dirty(updates),
-      else: Yex.Nif.merge_updates_v1(updates)
+    dirty_dispatch(
+      updates,
+      fn -> Yex.Nif.merge_updates_v1(updates) end,
+      fn -> Yex.Nif.merge_updates_v1_dirty(updates) end
+    )
   end
 
   @doc """
@@ -282,9 +288,11 @@ defmodule Yex do
   """
   @spec merge_updates_v2([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v2(updates) when is_list(updates) do
-    if IO.iodata_length(updates) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.merge_updates_v2_dirty(updates),
-      else: Yex.Nif.merge_updates_v2(updates)
+    dirty_dispatch(
+      updates,
+      fn -> Yex.Nif.merge_updates_v2(updates) end,
+      fn -> Yex.Nif.merge_updates_v2_dirty(updates) end
+    )
   end
 
   @doc """
@@ -531,8 +539,8 @@ defmodule Yex do
     )
   end
 
-  # Large inputs go to the DirtyCpu twin of a NIF, as in apply_update_v1/2. `input` is
-  # a binary or a list of the binaries the NIF decodes.
+  # Large inputs go to the DirtyCpu twin of a NIF. `input` is a binary or a list of the
+  # binaries the NIF decodes.
   defp dirty_dispatch(input, fun, dirty_fun) do
     if IO.iodata_length(input) > Yex.Nif.dirty_cutoff(), do: dirty_fun.(), else: fun.()
   end
