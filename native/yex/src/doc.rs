@@ -639,11 +639,22 @@ fn update_debug_v2<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> 
 /// byte, which the v1 decoder reads as an empty update before stopping, so the leftover
 /// bytes are what tell a v2 update passed by mistake from a real empty one.
 fn decode_update_v1(update: &[u8]) -> Result<Update, Error> {
-    let mut decoder = DecoderV1::from(update);
-    let decoded = Update::decode(&mut decoder)?;
+    decode_v1_exact(update, "update")
+}
+
+/// Decodes a v1 state vector and rejects input left unread. The yrs v2 framing of a
+/// state vector (`encode_state_vector_v2/1`) starts with a zero byte too, which the v1
+/// decoder would otherwise read as the empty state vector.
+fn decode_state_vector_v1(state_vector: &[u8]) -> Result<StateVector, Error> {
+    decode_v1_exact(state_vector, "state vector")
+}
+
+fn decode_v1_exact<T: Decode>(bytes: &[u8], what: &str) -> Result<T, Error> {
+    let mut decoder = DecoderV1::from(bytes);
+    let decoded = T::decode(&mut decoder)?;
     if decoder.read_u8().is_ok() {
         return Err(Error::Encoding(yrs::encoding::read::Error::Custom(
-            "update has trailing bytes".to_string(),
+            format!("{what} has trailing bytes"),
         )));
     }
     Ok(decoded)
@@ -658,6 +669,11 @@ fn diff_update_v1_impl<'a>(
     update: Binary<'a>,
     state_vector: Binary<'a>,
 ) -> NifResult<Term<'a>> {
+    // yrs diff_updates_v1 decodes both inputs without a leftover-byte check, so a v2
+    // update or state vector would come back as an empty or meaningless diff. Update has
+    // no public diff method, so the inputs are validated here and decoded again by yrs.
+    decode_state_vector_v1(state_vector.as_slice())?;
+    decode_update_v1(update.as_slice())?;
     let diff =
         yrs::diff_updates_v1(update.as_slice(), state_vector.as_slice()).map_err(Error::from)?;
     ok_binary(env, diff)
@@ -689,9 +705,7 @@ fn diff_update_v2_impl<'a>(
     // yjs reads the state vector in v1 encoding for both update formats. yrs
     // diff_updates_v2 expects the yrs v2 framing and Update::encode_diff is not public,
     // so the (small) state vector is re-framed.
-    let state_vector = StateVector::decode_v1(state_vector.as_slice())
-        .map_err(Error::from)?
-        .encode_v2();
+    let state_vector = decode_state_vector_v1(state_vector.as_slice())?.encode_v2();
     let diff = catch_decode_v2(|| yrs::diff_updates_v2(update.as_slice(), &state_vector))?;
     ok_binary(env, diff)
 }
@@ -857,7 +871,7 @@ fn parse_update_meta_v2_dirty(update: Binary) -> NifResult<(Atom, NifUpdateMeta)
 
 #[rustler::nif]
 fn decode_state_vector(state_vector: Binary) -> NifResult<(Atom, HashMap<u64, u32>)> {
-    let state_vector = StateVector::decode_v1(state_vector.as_slice()).map_err(Error::from)?;
+    let state_vector = decode_state_vector_v1(state_vector.as_slice())?;
     let clocks = state_vector
         .iter()
         .map(|(client, clock)| (client.get(), *clock))

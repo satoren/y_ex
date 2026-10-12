@@ -105,19 +105,30 @@ defmodule Yex.UpdateUtilsTest do
       assert from == %{} and to == %{}
     end
 
-    test "a v2-framed state vector from encode_state_vector_v2 reads as empty" do
+    test "a v2-framed state vector from encode_state_vector_v2 is rejected" do
       doc = text_doc(1, "abc")
       {:ok, sv_v2} = Yex.encode_state_vector_v2(doc)
-      {:ok, update} = Yex.encode_state_as_update_v2(doc)
-      {:ok, diff} = Yex.diff_update_v2(update, sv_v2)
-      assert text_of(diff, &Yex.apply_update_v2/2) == "abc"
+      {:ok, update_v1} = Yex.encode_state_as_update_v1(doc)
+      {:ok, update_v2} = Yex.encode_state_as_update_v2(doc)
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v2(update_v2, sv_v2)
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v1(update_v1, sv_v2)
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update(update_v1, sv_v2)
     end
 
-    test "keeps yrs behaviour for v2 bytes passed to the v1 form" do
-      # Not rejected: yrs diff_updates_v1 decodes the column headers as v1 structs.
-      assert {:ok, garbage} = Yex.diff_update_v1(@fmt_v2, <<0>>)
-      assert garbage != @fmt_v2
-      assert {:ok, <<0, 0>>} = Yex.diff_update_v1(@u2, <<0>>)
+    test "a state vector with trailing bytes is rejected" do
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v1(@u1, @sv_a <> <<0>>)
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v2(@u2, @sv_a <> <<0>>)
+    end
+
+    test "v2 bytes passed to the v1 form are rejected" do
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v1(@fmt_v2, <<0>>)
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v1(@u2, <<0>>)
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update(@u2, @sv_a)
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v1(@u1 <> <<0>>, @sv_a)
+    end
+
+    test "the empty update diffs to the empty update" do
+      assert {:ok, <<0, 0>>} = Yex.diff_update_v1(<<0, 0>>, <<0>>)
     end
 
     test "malformed input returns an encoding exception" do
@@ -260,6 +271,12 @@ defmodule Yex.UpdateUtilsTest do
       assert {:ok, %{}} = Yex.decode_state_vector(<<0>>)
       assert {:error, {:encoding_exception, _}} = Yex.decode_state_vector(<<>>)
       assert {:error, {:encoding_exception, _}} = Yex.decode_state_vector(<<2, 1, 3>>)
+      assert {:error, {:encoding_exception, _}} = Yex.decode_state_vector(<<1, 1, 3, 0>>)
+    end
+
+    test "rejects the v2 framing of a non-empty doc's state vector" do
+      {:ok, sv_v2} = Yex.encode_state_vector_v2(text_doc(9, "Hello"))
+      assert {:error, {:encoding_exception, _}} = Yex.decode_state_vector(sv_v2)
     end
   end
 
@@ -281,6 +298,7 @@ defmodule Yex.UpdateUtilsTest do
 
     test "the dirty twins return what the normal NIFs return", %{v1: v1, v2: v2} do
       assert Yex.diff_update_v1(v1, @sv_a) == Yex.Nif.diff_update_v1(v1, @sv_a)
+      assert {:ok, _} = Yex.diff_update_v1(v1, @sv_a)
       assert Yex.diff_update_v2(v2, @sv_a) == Yex.Nif.diff_update_v2(v2, @sv_a)
 
       assert Yex.encode_state_vector_from_update_v1(v1) ==
@@ -295,6 +313,14 @@ defmodule Yex.UpdateUtilsTest do
       assert Yex.parse_update_meta_v2(v2) == Yex.Nif.parse_update_meta_v2(v2)
       assert {:ok, %{from: from}} = Yex.parse_update_meta_v1(v1)
       assert map_size(from) == 1
+    end
+
+    test "the dirty twins reject a v2 update or state vector passed to the v1 form",
+         %{v1: v1, v2: v2} do
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v1(v2, <<0>>)
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v1(v1, @sv_a <> <<0>>)
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v2(v2, @sv_a <> <<0>>)
+      assert {:error, {:encoding_exception, _}} = Yex.parse_update_meta_v1(v2)
     end
   end
 
