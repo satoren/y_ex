@@ -87,14 +87,21 @@ defmodule Yex.BufferTest do
       assert ^riff = Yex.XmlElement.get_attribute(element, "bytes")
     end
 
-    test "is accepted in a text's formatting attributes", %{doc: doc} do
+    test "in a text's formatting attributes or an embed reads as a list after a sync",
+         %{doc: doc} do
       text = Doc.get_text(doc, "text")
-      riff = Buffer.from("RIFF")
 
-      :ok = Text.insert(text, 0, "hi", %{"bold" => true, "blob" => riff})
+      :ok = Text.insert(text, 0, "hi", %{"bold" => true, "blob" => Buffer.from("RIFF")})
+      :ok = Text.insert_embed(text, 2, Buffer.from("EMB"))
 
-      assert [%{insert: "hi", attributes: %{"bold" => true, "blob" => ^riff}}] =
-               Text.to_delta(text)
+      {:ok, update} = Yex.encode_state_as_update(doc)
+      other = Doc.new()
+      :ok = Yex.apply_update(other, update)
+
+      assert [
+               %{insert: "hi", attributes: %{"bold" => true, "blob" => [82.0, 73.0, 70.0, 70.0]}},
+               %{insert: [69.0, 77.0, 66.0]}
+             ] = Text.to_delta(Doc.get_text(other, "text"))
     end
 
     test "refuses data that is not a binary", %{map: map} do

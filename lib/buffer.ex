@@ -5,10 +5,15 @@ defmodule Yex.Buffer do
   Elixir has one type for text and bytes, so a bare binary is stored as a
   string when it is valid UTF-8 and as a buffer only when it is not. Wrap the
   bytes in a `Yex.Buffer` to store them as a buffer whatever they contain, in
-  a map, an array, a text's formatting attributes, an XML attribute or a prelim.
+  a map, an array, an XML attribute or a prelim.
 
   A buffer is always read back as a `Yex.Buffer`, so a value that is read and
   written again keeps its type.
+
+  A buffer in a text's formatting attributes or in a text embed is not kept as
+  a buffer: Yjs stores those as JSON, so after a sync the bytes read back as a
+  list of numbers, both in another `Yex.Doc` and in a Yjs client. Only the
+  document that wrote it reads it as a `Yex.Buffer` until then.
 
   ## Examples
       iex> doc = Yex.Doc.new()
