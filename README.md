@@ -37,6 +37,7 @@ end
 | YArray & YText quotations               | &#x2705; <br/> <small>(weak links branch)</small> |                  &#x2705;                  | &#x2705;<br/> <small>(experimental)</small>|
 | XML Element, Fragment and Text          |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Sub-documents                           |                     &#x2705;                      |                  &#x2705;                  | &#x2705;<br/> <small>(experimental)</small>|
+| Binary values (Uint8Array)              |                     &#x2705;                      |                  &#x2705;                  |     &#x2705; <br/> <small>(Yex.Buffer)</small>     |
 | Shared collections: observers           |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Shared collections: recursive nesting   |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | Document observers                      |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |

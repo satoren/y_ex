@@ -1,11 +1,32 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::wrap::{NifStr, NifWrap, SliceIntoBinary};
+use crate::wrap::{NifStr, NifWrap};
 use rustler::dynamic::TermType;
 use rustler::types;
-use rustler::{Decoder, Encoder, Env, Error, ListIterator, MapIterator, NifResult, Term};
+use rustler::{
+    Binary, Decoder, Encoder, Env, Error, ListIterator, MapIterator, NewBinary, NifResult,
+    NifStruct, Term,
+};
 use yrs::*;
+
+/// `%Yex.Buffer{data: bytes}`: how a buffer reads back, and how bytes are written as one
+/// whatever they contain. Strings are binaries too, so a bare binary can only be guessed
+/// at (a string when it is valid UTF-8, a buffer otherwise); the struct says which is meant
+/// and keeps a value that is read and written again a buffer.
+#[derive(NifStruct)]
+#[module = "Yex.Buffer"]
+struct NifBuffer<'a> {
+    data: Binary<'a>,
+}
+
+impl<'a> NifBuffer<'a> {
+    fn from_slice(env: Env<'a>, bytes: &[u8]) -> Self {
+        let mut data = NewBinary::new(env, bytes.len());
+        data.as_mut_slice().copy_from_slice(bytes);
+        NifBuffer { data: data.into() }
+    }
+}
 
 fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
     match any {
@@ -21,7 +42,7 @@ fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
         }
         Any::Number(Number::Int(n)) => n.encode(env),
         Any::String(s) => encode_str(env, s),
-        Any::Buffer(b) => SliceIntoBinary::new(b).encode(env),
+        Any::Buffer(b) => NifBuffer::from_slice(env, b).encode(env),
         Any::Array(a) => {
             let list: Vec<Term<'a>> = a.iter().map(|item| encode(env, item)).collect();
             list.encode(env)
@@ -76,8 +97,9 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
                 return Ok(Any::String(v.into()));
             }
 
-            // Binaries that are not valid UTF-8 become a Buffer, which reads back as a binary.
-            term.decode::<rustler::Binary>()
+            // Binaries that are not valid UTF-8 cannot be strings, so they are taken as a
+            // Buffer, which reads back as `%Yex.Buffer{}`.
+            term.decode::<Binary>()
                 .map(|v| Any::Buffer(v.as_slice().into()))
         }
         TermType::List => {
@@ -88,6 +110,10 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
             Ok(Any::from(values))
         }
         TermType::Map => {
+            if let Ok(buffer) = term.decode::<NifBuffer>() {
+                return Ok(Any::Buffer(buffer.data.as_slice().into()));
+            }
+
             let iter = term.decode::<MapIterator<'a>>()?;
             let values = iter
                 .map(|(k, v)| Ok((k.decode::<String>()?, decode(v)?)))
