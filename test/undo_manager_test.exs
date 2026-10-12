@@ -1536,36 +1536,49 @@ defmodule Yex.UndoManagerTest do
   describe "scope from another document" do
     setup do
       other_doc = Doc.new()
+      other_text = Doc.get_text(other_doc, "text")
+      Text.insert(other_text, 0, "abcd")
+      other_xml = Doc.get_xml_fragment(other_doc, "xml")
+      other_array = Doc.get_array(other_doc, "array")
 
       scopes = [
-        Doc.get_text(other_doc, "text"),
-        Doc.get_array(other_doc, "array"),
+        other_text,
+        other_array,
         Doc.get_map(other_doc, "map"),
-        Doc.get_xml_fragment(other_doc, "xml")
+        other_xml,
+        XmlFragment.insert_and_get(other_xml, 0, XmlTextPrelim.from("text")),
+        XmlFragment.insert_and_get(other_xml, 0, XmlElementPrelim.empty("div"))
       ]
 
-      %{other_doc: other_doc, scopes: scopes}
+      weak_link = Array.insert_and_get(other_array, 0, Text.quote(other_text, 1, 2))
+
+      %{other_text: other_text, scopes: scopes, weak_link: weak_link}
     end
 
-    test "expand_scope raises ArgumentError and leaves the manager unchanged", %{
+    test "expand_scope raises ArgumentError and the manager keeps its scope", %{
       doc: doc,
       text: text,
-      scopes: scopes
+      other_text: other_text,
+      scopes: scopes,
+      weak_link: weak_link
     } do
       {:ok, undo_manager} = UndoManager.new(doc, text)
 
-      for scope <- scopes do
+      for scope <- [weak_link | scopes] do
         assert_raise ArgumentError, "scope belongs to a different document", fn ->
           UndoManager.expand_scope(undo_manager, scope)
         end
       end
 
-      other_text = hd(scopes)
+      # Neither the other document nor an untracked type of this one was added.
       Text.insert(other_text, 0, "other")
+      Text.insert(Doc.get_text(doc, "untracked"), 0, "untracked")
+      refute UndoManager.can_undo?(undo_manager)
+
       Text.insert(text, 0, "own")
       assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
       assert Text.to_string(text) == ""
-      assert Text.to_string(other_text) == "other"
+      assert Text.to_string(other_text) == "otherabcd"
     end
 
     test "new and new_with_options raise ArgumentError", %{doc: doc, scopes: scopes} do
@@ -1581,17 +1594,31 @@ defmodule Yex.UndoManagerTest do
     end
   end
 
-  test "accepts a scope from another wrapper of the same subdocument", %{doc: doc} do
-    subdoc = Doc.new()
-    Yex.Map.set(Doc.get_map(doc, "subdocs"), "sub", subdoc)
-    {:ok, fetched} = Yex.Map.fetch(Doc.get_map(doc, "subdocs"), "sub")
-    refute fetched.reference == subdoc.reference
+  describe "scope from another wrapper of the same subdocument" do
+    setup %{doc: doc} do
+      subdoc = Doc.new()
+      Yex.Map.set(Doc.get_map(doc, "subdocs"), "sub", subdoc)
+      {:ok, fetched} = Yex.Map.fetch(Doc.get_map(doc, "subdocs"), "sub")
+      refute fetched.reference == subdoc.reference
+      %{subdoc: subdoc, fetched: fetched}
+    end
 
-    text = Doc.get_text(subdoc, "text")
-    {:ok, undo_manager} = UndoManager.new(fetched, text)
-    Text.insert(text, 0, "sub")
-    assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
-    assert Text.to_string(text) == ""
+    test "new accepts it", %{subdoc: subdoc, fetched: fetched} do
+      text = Doc.get_text(subdoc, "text")
+      {:ok, undo_manager} = UndoManager.new(fetched, text)
+      Text.insert(text, 0, "sub")
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
+    end
+
+    test "expand_scope accepts it", %{subdoc: subdoc, fetched: fetched} do
+      {:ok, undo_manager} = UndoManager.new(fetched, Doc.get_map(fetched, "map"))
+      text = Doc.get_text(subdoc, "text")
+      assert :ok = UndoManager.expand_scope(undo_manager, text)
+      Text.insert(text, 0, "sub")
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
+    end
   end
 
   test "new_with_options handles NIF errors" do
