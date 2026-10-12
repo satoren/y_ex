@@ -19,6 +19,17 @@ defmodule Yex.Doc do
     `client_id` defaults to `nil`, which picks a random client id in
     `0..9007199254740991`, the same as `Yex.Doc.new/0`. Collaborating replicas
     must not share a client id.
+
+    > #### Breaking change {: .warning}
+    >
+    > Up to 0.12.1 `client_id` defaulted to `0`, so every document built from
+    > these options, including every `Yex.DocServer` started with a
+    > `:doc_option`, wrote its items under client `0`. Code that seeds content
+    > on start (for example in `c:Yex.DocServer.init/2`) wrote the same item
+    > ids on every restart, and peers holding the old state deduplicated them.
+    > With a random client id each restart writes the seed under a new client,
+    > and those peers see the seeded content twice. Pass an explicit
+    > `client_id` to keep the old behaviour.
     """
     defstruct client_id: nil,
               guid: nil,

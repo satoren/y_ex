@@ -614,14 +614,13 @@ defmodule Yex.DocTest do
     end
 
     test "with_options picks a random client id when none is given" do
+      # Any single random id may be 0 or repeat; eight equal ids would not.
       ids =
-        for _ <- 1..2 do
+        for _ <- 1..8 do
           Doc.with_options(%Doc.Options{guid: "x"}) |> Doc.client_id()
         end
 
-      assert [a, b] = ids
-      assert a != b
-      assert a != 0 and b != 0
+      assert length(Enum.uniq(ids)) > 1
       assert Enum.all?(ids, &(&1 in 0..(Bitwise.bsl(1, 53) - 1)))
     end
 
