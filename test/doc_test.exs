@@ -430,7 +430,7 @@ defmodule Yex.DocTest do
              ]
     end
 
-    test "reports :undefined for roots a remote update created, whatever they hold" do
+    test "reports :untyped for roots a remote update created, whatever they hold" do
       source = Doc.new()
       Yex.Map.set(Doc.get_map(source, "m"), "k", "v")
       Yex.Array.push(Doc.get_array(source, "a"), Yex.XmlElementPrelim.empty("p"))
@@ -447,11 +447,11 @@ defmodule Yex.DocTest do
       Yex.Map.delete(emptied, "k")
 
       assert Enum.sort(Doc.root_refs(remote_copy(source))) == [
-               {"a", :undefined},
-               {"emptied", :undefined},
-               {"m", :undefined},
-               {"t", :undefined},
-               {"x", :undefined}
+               {"a", :untyped},
+               {"emptied", :untyped},
+               {"m", :untyped},
+               {"t", :untyped},
+               {"x", :untyped}
              ]
     end
 
@@ -463,7 +463,7 @@ defmodule Yex.DocTest do
 
       Doc.get_map(remote, "m")
 
-      assert Enum.sort(Doc.root_refs(remote)) == [{"m", :map}, {"t", :undefined}]
+      assert Enum.sort(Doc.root_refs(remote)) == [{"m", :map}, {"t", :untyped}]
     end
 
     test "joins the open transaction" do

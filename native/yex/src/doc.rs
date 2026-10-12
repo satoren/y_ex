@@ -412,7 +412,7 @@ fn doc_get_or_insert_xml_fragment(
 
 /// Lists every root type the store holds, with its declared type. A root that
 /// no typed getter has claimed, which is every root a remote update created,
-/// has no declared type in yrs and reports `undefined`.
+/// has no declared type in yrs and reports `untyped`.
 #[rustler::nif]
 fn doc_root_refs(
     doc: NifDoc,
@@ -436,7 +436,7 @@ fn root_kind(value: &Out) -> Atom {
         Out::YXmlText(_) => atoms::xml_text(),
         Out::YWeakLink(_) => atoms::weak_link(),
         // A root branch never converts to `Any` or `YDoc`.
-        Out::UndefinedRef(_) | Out::Any(_) | Out::YDoc(_) => atoms::undefined(),
+        Out::UndefinedRef(_) | Out::Any(_) | Out::YDoc(_) => atoms::untyped(),
     }
 }
 

@@ -25,7 +25,7 @@ rustler::atoms! {
     xml_element,
     xml_text,
     weak_link,
-    undefined,
+    untyped,
 
 // messages types
   sync,
