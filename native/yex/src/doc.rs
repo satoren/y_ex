@@ -841,32 +841,34 @@ fn update_meta(update: &Update) -> NifUpdateMeta {
     NifUpdateMeta { from, to }
 }
 
+fn parse_update_meta_v1_impl(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
+    let update = decode_update_v1(update.as_slice())?;
+    Ok((atoms::ok(), update_meta(&update)))
+}
+
 #[rustler::nif]
 fn parse_update_meta_v1(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
-    Ok((
-        atoms::ok(),
-        update_meta(&decode_update_v1(update.as_slice())?),
-    ))
+    parse_update_meta_v1_impl(update)
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn parse_update_meta_v1_dirty(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
-    Ok((
-        atoms::ok(),
-        update_meta(&decode_update_v1(update.as_slice())?),
-    ))
+    parse_update_meta_v1_impl(update)
+}
+
+fn parse_update_meta_v2_impl(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
+    let update = decode_update_v2(update.as_slice())?;
+    Ok((atoms::ok(), update_meta(&update)))
 }
 
 #[rustler::nif]
 fn parse_update_meta_v2(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
-    let update = decode_update_v2(update.as_slice())?;
-    Ok((atoms::ok(), update_meta(&update)))
+    parse_update_meta_v2_impl(update)
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
 fn parse_update_meta_v2_dirty(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
-    let update = decode_update_v2(update.as_slice())?;
-    Ok((atoms::ok(), update_meta(&update)))
+    parse_update_meta_v2_impl(update)
 }
 
 #[rustler::nif]
