@@ -225,16 +225,17 @@ defmodule Yex.Doc do
   end
 
   @doc """
-  Lists every root type the document holds as `{name, kind}`.
+  Lists every root type the document holds as `{name, kind}`. Order is unspecified.
 
-  A root created by a remote update has no declared type until a typed getter
-  claims it, so its kind is read from its live content: live keys report
-  `:map`, text or embeds `:text`, XML children `:xml_fragment` and any other
-  sequence content `:array`. A root with no live content, or of a type not
-  listed, reports `:other`. Order is unspecified.
+  A root claimed by a typed getter reports its declared type: `:map`, `:array`,
+  `:text` or `:xml_fragment`. `:xml_element`, `:xml_text` and `:weak_link` cover the
+  remaining yrs types.
 
-  A text root whose only content is embedded shared types cannot be told
-  apart from an array of shared types, and reports `:array`.
+  A root no typed getter has claimed reports `:undefined`, whatever it holds. Every
+  root a remote update created starts this way, and keeps it until something calls
+  a typed getter with its name. The kind is not guessed from content: an XML
+  fragment and an array of XML nodes, or a text and an array of strings, can hold
+  the same items.
 
   ## Examples
       iex> doc = Yex.Doc.new()
@@ -242,7 +243,17 @@ defmodule Yex.Doc do
       iex> Yex.Doc.root_refs(doc)
       [{"text", :text}]
   """
-  @spec root_refs(t) :: [{String.t(), :map | :array | :text | :xml_fragment | :other}]
+  @spec root_refs(t) :: [
+          {String.t(),
+           :map
+           | :array
+           | :text
+           | :xml_fragment
+           | :xml_element
+           | :xml_text
+           | :weak_link
+           | :undefined}
+        ]
   def root_refs(%__MODULE__{} = doc) do
     run_in_worker_process(doc, do: Yex.Nif.doc_root_refs(doc, cur_txn(doc)))
   end

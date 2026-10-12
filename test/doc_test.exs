@@ -409,6 +409,12 @@ defmodule Yex.DocTest do
   end
 
   describe "root_refs" do
+    defp remote_copy(source) do
+      remote = Doc.new()
+      :ok = Yex.apply_update(remote, Yex.encode_state_as_update!(source))
+      remote
+    end
+
     test "lists typed roots with their declared kind" do
       doc = Doc.new()
       Doc.get_map(doc, "m")
@@ -424,12 +430,12 @@ defmodule Yex.DocTest do
              ]
     end
 
-    test "reads the kind of roots a remote update created from their content" do
+    test "reports :undefined for roots a remote update created, whatever they hold" do
       source = Doc.new()
       Yex.Map.set(Doc.get_map(source, "m"), "k", "v")
-      Yex.Array.push(Doc.get_array(source, "a"), 1)
+      Yex.Array.push(Doc.get_array(source, "a"), Yex.XmlElementPrelim.empty("p"))
       Text.insert(Doc.get_text(source, "t"), 0, "hello")
-      Text.insert_embed(Doc.get_text(source, "embeds"), 0, %{"img" => "x"})
+      Yex.Map.set(Doc.get_map(source, "t"), "bold", true)
 
       Yex.XmlFragment.push(
         Doc.get_xml_fragment(source, "x"),
@@ -440,17 +446,24 @@ defmodule Yex.DocTest do
       Yex.Map.set(emptied, "k", "v")
       Yex.Map.delete(emptied, "k")
 
-      remote = Doc.new()
-      :ok = Yex.apply_update(remote, Yex.encode_state_as_update!(source))
-
-      assert Enum.sort(Doc.root_refs(remote)) == [
-               {"a", :array},
-               {"embeds", :text},
-               {"emptied", :other},
-               {"m", :map},
-               {"t", :text},
-               {"x", :xml_fragment}
+      assert Enum.sort(Doc.root_refs(remote_copy(source))) == [
+               {"a", :undefined},
+               {"emptied", :undefined},
+               {"m", :undefined},
+               {"t", :undefined},
+               {"x", :undefined}
              ]
+    end
+
+    test "reports the declared kind once a typed getter claims a remote root" do
+      source = Doc.new()
+      Yex.Map.set(Doc.get_map(source, "m"), "k", "v")
+      Text.insert(Doc.get_text(source, "t"), 0, "hello")
+      remote = remote_copy(source)
+
+      Doc.get_map(remote, "m")
+
+      assert Enum.sort(Doc.root_refs(remote)) == [{"m", :map}, {"t", :undefined}]
     end
 
     test "joins the open transaction" do

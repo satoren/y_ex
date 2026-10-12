@@ -22,7 +22,10 @@ rustler::atoms! {
     array,
     text,
     xml_fragment,
-    other,
+    xml_element,
+    xml_text,
+    weak_link,
+    undefined,
 
 // messages types
   sync,
