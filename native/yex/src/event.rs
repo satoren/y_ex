@@ -32,7 +32,7 @@ use crate::{
     wrap::NifMapPairs,
     wrap::NifWrap,
     xml::NifXmlText,
-    yinput::NifSharedTypeInput,
+    yinput::{with_shared_type, NifSharedTypeInput},
     youtput::NifYOut,
     ENV,
 };
@@ -503,27 +503,7 @@ fn shared_type_observe(
     ref_term: Term<'_>,
     metadata: Term<'_>,
 ) -> NifResult<NifSubscription> {
-    match shared_type {
-        NifSharedTypeInput::Map(map) => map.observe(current_transaction, pid, ref_term, metadata),
-        NifSharedTypeInput::Array(array) => {
-            array.observe(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::Text(text) => {
-            text.observe(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::XmlText(xml_text) => {
-            xml_text.observe(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::XmlFragment(xml_fragment) => {
-            xml_fragment.observe(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::XmlElement(xml_element) => {
-            xml_element.observe(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::WeakLink(weak_link) => {
-            weak_link.observe(current_transaction, pid, ref_term, metadata)
-        }
-    }
+    with_shared_type!(shared_type, t => t.observe(current_transaction, pid, ref_term, metadata))
 }
 
 #[rustler::nif]
@@ -534,29 +514,7 @@ fn shared_type_observe_deep(
     ref_term: Term<'_>,
     metadata: Term<'_>,
 ) -> NifResult<NifSubscription> {
-    match shared_type {
-        NifSharedTypeInput::Map(map) => {
-            map.observe_deep(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::Array(array) => {
-            array.observe_deep(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::Text(text) => {
-            text.observe_deep(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::XmlText(xml_text) => {
-            xml_text.observe_deep(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::XmlFragment(xml_fragment) => {
-            xml_fragment.observe_deep(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::XmlElement(xml_element) => {
-            xml_element.observe_deep(current_transaction, pid, ref_term, metadata)
-        }
-        NifSharedTypeInput::WeakLink(weak_link) => {
-            weak_link.observe_deep(current_transaction, pid, ref_term, metadata)
-        }
-    }
+    with_shared_type!(shared_type, t => t.observe_deep(current_transaction, pid, ref_term, metadata))
 }
 
 #[derive(NifStruct)]

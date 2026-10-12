@@ -100,15 +100,10 @@ pub fn undo_manager_new(
     doc: NifDoc,
     scope: NifSharedTypeInput,
 ) -> NifResult<(Atom, NifUndoManager)> {
-    ENV.set(&mut env.clone(), || match scope {
-        NifSharedTypeInput::Text(text) => create_undo_manager(env, doc, text),
-        NifSharedTypeInput::Array(array) => create_undo_manager(env, doc, array),
-        NifSharedTypeInput::Map(map) => create_undo_manager(env, doc, map),
-        NifSharedTypeInput::XmlText(text) => create_undo_manager(env, doc, text),
-        NifSharedTypeInput::XmlElement(element) => create_undo_manager(env, doc, element),
-        NifSharedTypeInput::XmlFragment(fragment) => create_undo_manager(env, doc, fragment),
-        NifSharedTypeInput::WeakLink(weak_link) => create_undo_manager(env, doc, weak_link),
-    })
+    ENV.set(
+        &mut env.clone(),
+        || crate::yinput::with_shared_type!(scope, t => create_undo_manager(env, doc, t)),
+    )
 }
 
 fn create_undo_manager<T: NifSharedType>(
@@ -180,25 +175,7 @@ pub fn undo_manager_new_with_options(
     // will return an error tuple if it is not
     let _doc_ref = doc.reference.deref();
 
-    match scope {
-        NifSharedTypeInput::Text(text) => create_undo_manager_with_options(env, doc, text, options),
-        NifSharedTypeInput::Array(array) => {
-            create_undo_manager_with_options(env, doc, array, options)
-        }
-        NifSharedTypeInput::Map(map) => create_undo_manager_with_options(env, doc, map, options),
-        NifSharedTypeInput::XmlText(text) => {
-            create_undo_manager_with_options(env, doc, text, options)
-        }
-        NifSharedTypeInput::XmlElement(element) => {
-            create_undo_manager_with_options(env, doc, element, options)
-        }
-        NifSharedTypeInput::XmlFragment(fragment) => {
-            create_undo_manager_with_options(env, doc, fragment, options)
-        }
-        NifSharedTypeInput::WeakLink(weak_link) => {
-            create_undo_manager_with_options(env, doc, weak_link, options)
-        }
-    }
+    crate::yinput::with_shared_type!(scope, t => create_undo_manager_with_options(env, doc, t, options))
 }
 
 #[rustler::nif]
