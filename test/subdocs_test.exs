@@ -167,4 +167,39 @@ defmodule Yex.SubdocsTest do
       end
     end
   end
+
+  test "replacing a subdoc with another doc of the same guid hands out the new doc" do
+    root_doc = Doc.new()
+    folder = Doc.get_map(root_doc, "folder")
+    {:ok, monitor_ref} = Doc.monitor_subdocs(root_doc)
+
+    first = Doc.with_options(%Doc.Options{guid: "same"})
+    Text.insert(Doc.get_text(first, "text"), 0, "first")
+    :ok = Map.set(folder, "a", first)
+
+    assert_receive {:subdocs, %{added: [added_first]}, _, ^root_doc}
+    first_ref = Map.get(folder, "a").reference
+    assert added_first.reference == first_ref
+
+    second = Doc.with_options(%Doc.Options{guid: "same"})
+    Text.insert(Doc.get_text(second, "text"), 0, "second")
+
+    # Deleting and re-adding in one transaction keeps the guid among the parent's
+    # subdocs, so a cache keyed only by guid would keep returning the first doc.
+    Doc.transaction(root_doc, fn ->
+      :ok = Map.delete(folder, "a")
+      :ok = Map.set(folder, "a", second)
+    end)
+
+    assert_receive {:subdocs, %{added: [added_second], removed: [removed]}, _, ^root_doc}
+    assert Doc.guid(added_second) == "same"
+    assert removed.reference == first_ref
+    assert added_second.reference != first_ref
+
+    from_map = Map.get(folder, "a")
+    assert from_map.reference == added_second.reference
+    assert Text.to_string(Doc.get_text(from_map, "text")) == "second"
+
+    :ok = Yex.Subscription.unsubscribe(monitor_ref)
+  end
 end

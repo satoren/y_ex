@@ -212,8 +212,12 @@ impl NifDoc {
         if let Ok(mut cache) = self.reference.subdocs.lock() {
             self.prune_subdoc_cache(&mut cache, &subdoc_guid, active_subdoc_guids);
 
-            // A destroyed subdoc is replaced in its parent by a new Doc with the same guid,
-            // so only reuse the cached resource when it still wraps the same Doc.
+            // A guid can outlive the doc it was cached for: a destroyed subdoc is replaced in
+            // its parent by a new Doc with the same guid, and a map entry can be replaced by
+            // another doc with that guid, so only reuse the cached resource when it still wraps
+            // the same Doc.
+            // ponytail: two live subdocs sharing a guid evict each other's entry; each lookup
+            // is still correct, but the resource reference returned is not stable.
             if let Some(reference) = cache.get(&subdoc_guid) {
                 if Doc::ptr_eq(&reference.doc, &subdoc) {
                     return reference.clone();
