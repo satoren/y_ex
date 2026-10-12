@@ -23,7 +23,9 @@ defmodule Yex.Sync do
 
   @doc """
   Decodes a binary message into a recognized protocol format, returning `{:ok, message}`
-  if decoding is successful, or `{:error, reason}` otherwise.
+  if decoding is successful, or `{:error, reason}` otherwise: `reason` is
+  `{:encoding_exception, message}` when the bytes are malformed, and a string for an
+  unknown sync message tag.
 
   ## Examples
 
@@ -77,6 +79,9 @@ defmodule Yex.Sync do
 
   @doc """
   Decodes a binary message using the v1 encoding. Same as `message_decode/1`.
+
+  Returns `{:error, {:encoding_exception, reason}}` when the bytes are malformed, and
+  `{:error, reason}` with a string reason for an unknown sync message tag.
   """
   @spec message_decode_v1(binary) :: {:ok, message} | {:error, term}
   def message_decode_v1(message), do: Yex.Nif.sync_message_decode_v1(message)
@@ -89,6 +94,9 @@ defmodule Yex.Sync do
 
   @doc """
   Decodes a binary message whose sync payloads are encoded with the v2 update format.
+
+  Returns `{:error, {:encoding_exception, reason}}` when the bytes are malformed, and
+  `{:error, reason}` with a string reason for an unknown sync message tag.
   """
   @spec message_decode_v2(binary) :: {:ok, message} | {:error, term}
   def message_decode_v2(message), do: Yex.Nif.sync_message_decode_v2(message)

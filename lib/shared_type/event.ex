@@ -83,9 +83,9 @@ defmodule Yex.XmlEvent do
 
   @type t :: %__MODULE__{
           path: list(number() | String.t()),
-          target: Yex.Map.t(),
-          delta: Yex.Text.delta(),
-          keys: %{insert: list()} | %{delete: number()} | %{}
+          target: Yex.XmlFragment.t() | Yex.XmlElement.t(),
+          delta: [%{insert: list()} | %{delete: number()} | %{retain: number()}],
+          keys: Yex.MapEvent.keys()
         }
 end
 
@@ -100,12 +100,14 @@ defmodule Yex.XmlTextEvent do
   defstruct [
     :path,
     :target,
-    :delta
+    :delta,
+    :keys
   ]
 
   @type t :: %__MODULE__{
           path: list(number() | String.t()),
           target: Yex.XmlText.t(),
-          delta: Yex.Text.delta()
+          delta: Yex.Text.delta(),
+          keys: Yex.MapEvent.keys()
         }
 end

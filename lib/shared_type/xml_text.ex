@@ -170,12 +170,69 @@ defmodule Yex.XmlText do
   end
 
   @doc """
+  Sets the node attribute `key` to `value`, replacing any previous value.
+
+  Node attributes belong to the text node itself (yjs `setAttribute`), separate from
+  the inline formatting attributes used by `insert/4`, `format/4` and `to_delta/1`.
+  """
+  @spec insert_attribute(t, binary(), Yex.input_type()) :: :ok
+  def insert_attribute(%__MODULE__{doc: doc} = xml_text, key, value) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_text_insert_attribute(xml_text, cur_txn(xml_text), key, value)
+    )
+  end
+
+  @doc """
+  Removes the node attribute `key`. Removing a missing key is a no-op.
+  """
+  @spec remove_attribute(t, binary()) :: :ok
+  def remove_attribute(%__MODULE__{doc: doc} = xml_text, key) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_text_remove_attribute(xml_text, cur_txn(xml_text), key)
+    )
+  end
+
+  @doc """
+  Returns the value of the node attribute `key`, or nil when it is not set.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
+      iex> text = Yex.XmlFragment.push_and_get(xml, Yex.XmlTextPrelim.from("hi"))
+      iex> Yex.XmlText.insert_attribute(text, "lang", "en")
+      iex> Yex.XmlText.get_attribute(text, "lang")
+      "en"
+  """
+  @spec get_attribute(t, binary()) :: term()
+  def get_attribute(%__MODULE__{doc: doc} = xml_text, key) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_text_get_attribute(xml_text, cur_txn(xml_text), key)
+    )
+  end
+
+  @doc """
+  Returns all node attributes of this text node as a map.
+  """
+  @spec get_attributes(t) :: %{binary() => term()}
+  def get_attributes(%__MODULE__{doc: doc} = xml_text) do
+    Doc.run_in_worker_process(doc,
+      do: Yex.Nif.xml_text_get_attributes(xml_text, cur_txn(xml_text))
+    )
+  end
+
+  @doc """
   Converts the XML text node to a preliminary representation.
-  This is useful when you need to serialize or transfer the text node's content and formatting.
+  This is useful when you need to serialize or transfer the text node's content,
+  formatting and node attributes.
+
+  A node attribute whose value is a shared type cannot be copied: inserting the
+  returned prelim raises. Plain values copy as they are.
   """
   @spec as_prelim(t) :: Yex.XmlTextPrelim.t()
-  def as_prelim(%__MODULE__{} = xml_text) do
-    Yex.XmlTextPrelim.from(to_delta(xml_text))
+  def as_prelim(%__MODULE__{doc: doc} = xml_text) do
+    Doc.run_in_worker_process doc do
+      %{Yex.XmlTextPrelim.from(to_delta(xml_text)) | attributes: get_attributes(xml_text)}
+    end
   end
 
   @doc """
@@ -213,6 +270,8 @@ defmodule Yex.XmlText do
     defdelegate prev_sibling(xml), to: Yex.XmlText
     defdelegate parent(xml), to: Yex.XmlText
     defdelegate to_string(xml), to: Yex.XmlText
+    defdelegate get_attribute(xml, key), to: Yex.XmlText
+    defdelegate get_attributes(xml), to: Yex.XmlText
   end
 
   defimpl String.Chars do
@@ -244,7 +303,7 @@ defmodule Yex.XmlTextPrelim do
 
   @type t :: %__MODULE__{
           delta: Yex.Text.delta(),
-          attributes: %{binary() => binary()}
+          attributes: %{binary() => term()}
         }
 
   @doc """

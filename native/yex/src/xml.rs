@@ -11,7 +11,7 @@ use crate::{
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifXmlEvent, NifXmlTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
     text::encode_diffs,
-    transaction::TransactionResource,
+    transaction::{ReadTransaction, TransactionResource},
     utils::{capped_index_and_length, normalize_index, normalize_index_for_insert},
     wrap::NifMapPairs,
     yinput::{NifWeakPrelim, NifXmlIn, NifYInput, NifYInputDelta},
@@ -229,6 +229,37 @@ fn xml_fragment_parent(
         let xml = xml.get_ref(txn)?;
 
         Ok(xml.parent().map(|b| NifYOut::from_xml_out(b, doc.clone())))
+    })
+}
+
+/// Collects every descendant of `xml` in document order (depth-first, pre-order).
+fn tree_walker<X: XmlFragment>(xml: &X, txn: &ReadTransaction, doc: &NifDoc) -> Vec<NifYOut> {
+    xml.successors(txn)
+        .map(|node| NifYOut::from_xml_out(node, doc.clone()))
+        .collect()
+}
+
+#[rustler::nif]
+fn xml_fragment_tree_walker(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Vec<NifYOut>> {
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(tree_walker(&xml, txn, doc))
+    })
+}
+
+#[rustler::nif]
+fn xml_element_tree_walker(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Vec<NifYOut>> {
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(tree_walker(&xml, txn, doc))
     })
 }
 
@@ -666,5 +697,63 @@ fn xml_text_quote(
         }
 
         Err(rustler::Error::Term(Box::new(atoms::out_of_bounds())))
+    })
+}
+
+#[rustler::nif]
+fn xml_text_insert_attribute(
+    env: Env<'_>,
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    key: &str,
+    value: NifYInput,
+) -> NifResult<Atom> {
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        xml.insert_attribute(txn, key, value);
+        Ok(atoms::ok())
+    })
+}
+
+#[rustler::nif]
+fn xml_text_remove_attribute(
+    env: Env<'_>,
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    key: &str,
+) -> NifResult<Atom> {
+    xml.mutably(env, current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        xml.remove_attribute(txn, &key);
+        Ok(atoms::ok())
+    })
+}
+
+#[rustler::nif]
+fn xml_text_get_attribute(
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    key: &str,
+) -> NifResult<Option<NifYOut>> {
+    xml.readonly(current_transaction, |txn| {
+        let doc = xml.doc();
+        let xml = xml.get_ref(txn)?;
+        let attr = xml.get_attribute(txn, key);
+        Ok(attr.map(|b| NifYOut::from_native(b, doc)))
+    })
+}
+
+#[rustler::nif]
+fn xml_text_get_attributes(
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<NifMapPairs<NifYOut>> {
+    xml.readonly(current_transaction, |txn| {
+        let doc = xml.doc();
+        let xml = xml.get_ref(txn)?;
+        Ok(xml
+            .attributes(txn)
+            .map(|(key, value)| (key.into(), NifYOut::from_native(value, doc)))
+            .collect())
     })
 }

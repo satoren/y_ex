@@ -504,4 +504,16 @@ defmodule Yex.StickyIndexTest do
       assert offset.assoc == :before
     end)
   end
+
+  test "decode_v2 with a truncated v2 header returns an encoding error" do
+    doc = Doc.new()
+    assert {:error, {:encoding_exception, _}} = StickyIndex.decode_v2(doc, <<0, 128>>)
+    assert {:error, {:encoding_exception, _}} = StickyIndex.decode_v2(doc, <<255, 255, 255>>)
+  end
+
+  test "decode and decode_v1 return an encoding error for malformed bytes" do
+    doc = Doc.new()
+    assert {:error, {:encoding_exception, _}} = StickyIndex.decode(doc, <<>>)
+    assert {:error, {:encoding_exception, _}} = StickyIndex.decode_v1(doc, <<255>>)
+  end
 end

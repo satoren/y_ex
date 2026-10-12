@@ -16,6 +16,45 @@ defmodule Yex.UndoManager.Options do
         }
 end
 
+defmodule Yex.UndoManager.StackItemEvent do
+  @moduledoc """
+  A stack item was added, updated or popped. Delivered by `Yex.UndoManager.observe/2`.
+
+  * `:type` - `:added` when a captured change created a new item, `:updated` when it was
+    merged into the last item (within `capture_timeout`), `:popped` when `undo/1` or
+    `redo/1` applied the item.
+  * `:kind` - for `:added` and `:updated`, the stack the item is on: `:redo` when the
+    change came from an undo, `:undo` otherwise. For `:popped`, `:undo` when popped by
+    `undo/1` and `:redo` when popped by `redo/1`.
+  * `:item` - the item's id, stable for its whole life. Use it with
+    `Yex.UndoManager.put_meta/3` and `Yex.UndoManager.get_meta/2`.
+  * `:origin` - the origin of the transaction that caused the event: the term given to
+    `Yex.Doc.transaction/3`, `nil`, or the `%Yex.UndoManager{}` for undo and redo.
+  * `:meta` - the item's meta at the time of the event, `nil` until set.
+  """
+  defstruct [:type, :kind, :item, :origin, :meta]
+
+  @type t :: %__MODULE__{
+          type: :added | :updated | :popped,
+          kind: :undo | :redo,
+          item: pos_integer(),
+          origin: term(),
+          meta: term()
+        }
+end
+
+defmodule Yex.UndoManager.StackClearedEvent do
+  @moduledoc """
+  `Yex.UndoManager.clear/1` emptied the stacks. Delivered by `Yex.UndoManager.observe/2`
+  only when at least one stack held items.
+
+  Each flag is `true` when that stack held items before the clear.
+  """
+  defstruct [:undo_stack_cleared, :redo_stack_cleared]
+
+  @type t :: %__MODULE__{undo_stack_cleared: boolean(), redo_stack_cleared: boolean()}
+end
+
 defmodule Yex.UndoManager do
   alias Yex.UndoManager.Options
   alias Yex.Doc
@@ -63,6 +102,54 @@ defmodule Yex.UndoManager do
       receive do
         {:update_v1, _update, ^undo_manager, _doc} -> :undo_or_redo
       end
+
+  ## Stack events and meta
+
+  `observe/2` subscribes the calling process to changes of the undo and redo stacks.
+  Each captured transaction produces one `Yex.UndoManager.StackItemEvent` (`:added` or
+  `:updated`), each undo or redo that changes the document produces an `:added` event
+  for the item pushed onto the other stack followed by a `:popped` event, and `clear/1`
+  produces a `Yex.UndoManager.StackClearedEvent`. Events for one manager arrive in
+  commit order, and they are in the mailbox of a subscriber when the call that caused
+  them returns to it.
+
+  Every stack item has an id (`:item`) and a meta term, `nil` until set with
+  `put_meta/3`. Applications store state to restore on undo, such as a cursor as a
+  `Yex.StickyIndex`, when an item is added, and read it back from the `:popped` event:
+
+      ref = Yex.UndoManager.observe(undo_manager)
+      cursor = Yex.StickyIndex.new(text, 0, :after)
+      Yex.Text.insert(text, 0, "a")
+
+      receive do
+        {:undo_manager_event, ^ref, %Yex.UndoManager.StackItemEvent{type: :added, item: id}, _} ->
+          Yex.UndoManager.put_meta(undo_manager, id, cursor)
+      end
+
+  Yjs sets meta synchronously inside the event handler. Here the subscriber sets it
+  after the event arrives, so:
+
+  * An undo issued before `put_meta/3` runs pops the item without its meta: the
+    `:popped` event carries `nil` and `put_meta/3` returns `{:error, :not_found}`. This
+    happens when another process issues the undo, and when the subscriber is the
+    document's worker and a call delegated to it runs before it handles the event. Set
+    meta in the process that issues undo and redo.
+  * The state to store is the state before the change, which may have moved on by the
+    time the event is handled (for example, a second edit arrived first). Since there
+    is exactly one `:added` or `:updated` event per captured transaction, in commit
+    order, keep a queue of the state before each edit and take one entry per event.
+
+  Meta lives in the stack item and is freed with it. A meta term that holds the undo
+  manager, directly or through another term such as a `Yex.Subscription`, keeps the
+  manager alive forever.
+  Meta that holds the document, such as a `Yex.StickyIndex`, is freed when the manager
+  is, so it does not keep the document alive.
+
+  A subscription keeps its manager alive and capturing until it is removed with
+  `unobserve/1` or its process exits.
+
+  Unlike Yjs, dropping the redo stack because of a new change emits no
+  `Yex.UndoManager.StackClearedEvent`; `redo_stack_size/1` reports it.
   """
   defstruct [:reference, :doc]
 
@@ -256,6 +343,9 @@ defmodule Yex.UndoManager do
       UndoManager.clear(undo_manager)
       # All undo/redo history is now cleared
 
+  Subscribers from `observe/2` receive a `Yex.UndoManager.StackClearedEvent` when
+  either stack held items.
+
   Raises `Yex.TransactionAcqError` instead of blocking when a write
   transaction on the document is open, for example inside
   `Yex.Doc.transaction/3`.
@@ -266,6 +356,90 @@ defmodule Yex.UndoManager do
       ensure_no_transaction!(doc)
       Yex.Nif.undo_manager_clear(undo_manager)
     end
+  end
+
+  @doc """
+  Subscribes the calling process to stack events of the undo manager.
+
+  Messages have the shape:
+
+      {:undo_manager_event, ref, event, metadata}
+
+  where `ref` is the returned reference, `event` is a `Yex.UndoManager.StackItemEvent`
+  or a `Yex.UndoManager.StackClearedEvent`, and `metadata` is the `:metadata` option
+  (default `nil`). See "Stack events and meta" in the module documentation.
+
+  Can be called inside `Yex.Doc.transaction/3`; the changes of that transaction are
+  delivered when it commits.
+
+  ## Options
+    * `:metadata` - a term attached to every message of this subscription.
+  """
+  @spec observe(t, keyword()) :: reference()
+  def observe(%__MODULE__{doc: doc} = undo_manager, opts \\ []) do
+    ref = make_ref()
+    notify_pid = self()
+
+    sub =
+      Doc.run_in_worker_process(doc,
+        do:
+          Yex.Nif.undo_manager_observe(
+            undo_manager,
+            notify_pid,
+            ref,
+            Keyword.get(opts, :metadata)
+          )
+      )
+
+    Yex.Subscription.register(sub, ref)
+  end
+
+  @doc """
+  Removes a subscription created with `observe/2`. Returns `:ok` also when it was
+  already removed.
+  """
+  @spec unobserve(reference()) :: :ok
+  def unobserve(ref), do: Yex.Subscription.unsubscribe(ref)
+
+  @doc """
+  Returns the number of items on the undo stack.
+
+  Changes of a transaction that is still open are captured when it commits, so they
+  are not counted yet.
+  """
+  @spec undo_stack_size(t) :: non_neg_integer()
+  def undo_stack_size(%__MODULE__{doc: doc} = undo_manager) do
+    Doc.run_in_worker_process(doc, do: Yex.Nif.undo_manager_undo_stack_size(undo_manager))
+  end
+
+  @doc """
+  Returns the number of items on the redo stack.
+  """
+  @spec redo_stack_size(t) :: non_neg_integer()
+  def redo_stack_size(%__MODULE__{doc: doc} = undo_manager) do
+    Doc.run_in_worker_process(doc, do: Yex.Nif.undo_manager_redo_stack_size(undo_manager))
+  end
+
+  @doc """
+  Sets the meta of the stack item `item`, an id from a
+  `Yex.UndoManager.StackItemEvent`, replacing the previous value.
+
+  Returns `{:error, :not_found}` when the item is no longer on either stack: it was
+  popped, cleared, or dropped from the redo stack by a new change.
+  """
+  @spec put_meta(t, pos_integer(), term()) :: :ok | {:error, :not_found}
+  def put_meta(%__MODULE__{doc: doc} = undo_manager, item, meta) when is_integer(item) do
+    Doc.run_in_worker_process(doc, do: Yex.Nif.undo_manager_put_meta(undo_manager, item, meta))
+  end
+
+  @doc """
+  Returns the meta of the stack item `item`, `nil` when none was set.
+
+  Returns `{:error, :not_found}` under the same conditions as `put_meta/3`.
+  """
+  @spec get_meta(t, pos_integer()) :: {:ok, term()} | {:error, :not_found}
+  def get_meta(%__MODULE__{doc: doc} = undo_manager, item) when is_integer(item) do
+    Doc.run_in_worker_process(doc, do: Yex.Nif.undo_manager_get_meta(undo_manager, item))
   end
 
   # Must be called inside `Doc.run_in_worker_process/2`: the open transaction is

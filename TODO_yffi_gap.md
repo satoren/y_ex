@@ -24,4 +24,4 @@
 
 - [ ] Add low-level iterator APIs for Array/Map (yarray_iter* / ymap_iter*)
 - [ ] Add direct C-ABI APIs for YInput/YOutput (yinput_* / youtput_read_* / youtput_destroy)
-- [ ] Add supporting APIs (ytext_chunks / ychunks_destroy / ymap_remove_all / ydoc_observe_after_transaction)
+- [ ] Add supporting APIs (ytext_chunks / ychunks_destroy / ydoc_observe_after_transaction)

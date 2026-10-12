@@ -59,6 +59,10 @@ defmodule Yex do
   @doc """
   Computes the state vector and encodes it with the v2 format.
 
+  This is the yrs v2 framing, which yjs peers cannot read. `encode_state_as_update_v2/2`
+  takes it; the update utilities such as `diff_update_v2/2` take the v1 encoding from
+  `encode_state_vector_v1/1` and reject this one.
+
   ## Examples
       iex> doc = Yex.Doc.new()
       iex> {:ok, _binary} = Yex.encode_state_vector_v2(doc)
@@ -72,6 +76,9 @@ defmodule Yex do
 
   @doc """
   Encode the document state as a single update message that can be applied on the remote document. Optionally, specify the target state vector to only write the missing differences to the update message.
+
+  Returns `{:error, {:encoding_exception, message}}` when `encoded_state_vector` cannot be
+  decoded.
 
   ## Examples
       iex> doc = Yex.Doc.new()
@@ -98,6 +105,9 @@ defmodule Yex do
   Encodes the document state as a v1 update.
 
   Same as `encode_state_as_update/2`. `encoded_state_vector` must be v1 encoded.
+
+  Returns `{:error, {:encoding_exception, message}}` when `encoded_state_vector` cannot be
+  decoded.
   """
   @spec encode_state_as_update_v1(Yex.Doc.t(), binary() | nil) ::
           {:ok, binary()} | {:error, term()}
@@ -136,8 +146,12 @@ defmodule Yex do
   @doc """
   Encodes the document state as a v2 update.
 
-  Optionally, pass a v2 encoded state vector (see `encode_state_vector_v2/1`)
-  to only write the missing differences.
+  Optionally, pass a state vector in the yrs v2 encoding (see `encode_state_vector_v2/1`)
+  to only write the missing differences. The v1 state vectors that the update utilities
+  return, such as `encode_state_vector_from_update_v2/1`, are a different encoding.
+
+  Returns `{:error, {:encoding_exception, message}}` when `encoded_state_vector` cannot be
+  decoded.
 
   ## Examples
       iex> doc = Yex.Doc.new()
@@ -164,6 +178,8 @@ defmodule Yex do
   @doc """
   Apply a document update on the shared document.
 
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
+
   ## Examples syncs two clients by exchanging the complete document structure
       iex> doc1 = Yex.Doc.new()
       iex> doc2 = Yex.Doc.new()
@@ -183,18 +199,24 @@ defmodule Yex do
   Applies a v1 encoded update to the document.
 
   Same as `apply_update/2`.
+
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
   """
   @spec apply_update_v1(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v1(%Yex.Doc{} = doc, update) do
     Yex.Doc.run_in_worker_process doc do
-      if byte_size(update) > Yex.Nif.dirty_cutoff(),
-        do: Yex.Nif.apply_update_v1_dirty(doc, cur_txn(doc), update),
-        else: Yex.Nif.apply_update_v1(doc, cur_txn(doc), update)
+      dirty_dispatch(
+        update,
+        fn -> Yex.Nif.apply_update_v1(doc, cur_txn(doc), update) end,
+        fn -> Yex.Nif.apply_update_v1_dirty(doc, cur_txn(doc), update) end
+      )
     end
   end
 
   @doc """
   Applies a v2 encoded update to the document.
+
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
 
   ## Examples
       iex> doc1 = Yex.Doc.new()
@@ -209,9 +231,11 @@ defmodule Yex do
   @spec apply_update_v2(Yex.Doc.t(), binary()) :: :ok | {:error, term()}
   def apply_update_v2(%Yex.Doc{} = doc, update) do
     Yex.Doc.run_in_worker_process doc do
-      if byte_size(update) > Yex.Nif.dirty_cutoff(),
-        do: Yex.Nif.apply_update_v2_dirty(doc, cur_txn(doc), update),
-        else: Yex.Nif.apply_update_v2(doc, cur_txn(doc), update)
+      dirty_dispatch(
+        update,
+        fn -> Yex.Nif.apply_update_v2(doc, cur_txn(doc), update) end,
+        fn -> Yex.Nif.apply_update_v2_dirty(doc, cur_txn(doc), update) end
+      )
     end
   end
 
@@ -220,6 +244,8 @@ defmodule Yex do
 
   The result is equivalent to applying all updates in order, without needing a document.
   Same as `merge_updates_v1/1`.
+
+  Returns `{:error, {:encoding_exception, message}}` when an update cannot be decoded.
 
   ## Examples
       iex> doc = Yex.Doc.new()
@@ -244,26 +270,36 @@ defmodule Yex do
   Merges multiple v1 encoded updates into a single v1 update.
 
   Same as `merge_updates/1`.
+
+  Returns `{:error, {:encoding_exception, message}}` when an update cannot be decoded.
   """
   @spec merge_updates_v1([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v1(updates) when is_list(updates) do
-    if IO.iodata_length(updates) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.merge_updates_v1_dirty(updates),
-      else: Yex.Nif.merge_updates_v1(updates)
+    dirty_dispatch(
+      updates,
+      fn -> Yex.Nif.merge_updates_v1(updates) end,
+      fn -> Yex.Nif.merge_updates_v1_dirty(updates) end
+    )
   end
 
   @doc """
   Merges multiple v2 encoded updates into a single v2 update.
+
+  Returns `{:error, {:encoding_exception, message}}` when an update cannot be decoded.
   """
   @spec merge_updates_v2([binary()]) :: {:ok, binary()} | {:error, term()}
   def merge_updates_v2(updates) when is_list(updates) do
-    if IO.iodata_length(updates) > Yex.Nif.dirty_cutoff(),
-      do: Yex.Nif.merge_updates_v2_dirty(updates),
-      else: Yex.Nif.merge_updates_v2(updates)
+    dirty_dispatch(
+      updates,
+      fn -> Yex.Nif.merge_updates_v2(updates) end,
+      fn -> Yex.Nif.merge_updates_v2_dirty(updates) end
+    )
   end
 
   @doc """
   Parses an update payload encoded in lib0 v1 format and returns a human-readable debug string.
+
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
   """
   @spec update_debug_v1(binary()) :: {:ok, String.t()} | {:error, term()}
   def update_debug_v1(update) when is_binary(update) do
@@ -272,10 +308,242 @@ defmodule Yex do
 
   @doc """
   Parses an update payload encoded in lib0 v2 format and returns a human-readable debug string.
+
+  Returns `{:error, {:encoding_exception, message}}` when `update` cannot be decoded.
   """
   @spec update_debug_v2(binary()) :: {:ok, String.t()} | {:error, term()}
   def update_debug_v2(update) when is_binary(update) do
     Yex.Nif.update_debug_v2(update)
+  end
+
+  @doc """
+  Returns the part of a v1 `update` that a peer with `state_vector` has not seen yet.
+
+  `state_vector` is v1 encoded, as produced by `encode_state_vector_v1/1`,
+  `encode_state_vector_from_update/1` or yjs `encodeStateVector`. The delete set of
+  `update` is carried over whole. Same as `diff_update_v1/2`, and as yjs `diffUpdate`
+  byte for byte.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> text = Yex.Doc.get_text(doc, "text")
+      iex> Yex.Text.insert(text, 0, "Hello")
+      iex> {:ok, state_vector} = Yex.encode_state_vector(doc)
+      iex> Yex.Text.insert(text, 5, " World")
+      iex> {:ok, update} = Yex.encode_state_as_update(doc)
+      iex> {:ok, diff} = Yex.diff_update(update, state_vector)
+      iex> byte_size(diff) < byte_size(update)
+      true
+  """
+  @spec diff_update(binary(), binary()) :: {:ok, binary()} | {:error, term()}
+  def diff_update(update, state_vector), do: diff_update_v1(update, state_vector)
+
+  @doc """
+  Returns the part of a v1 `update` that a peer with the v1 `state_vector` has not seen yet.
+
+  Same as `diff_update/2`. Input left over after the update or after the state vector,
+  such as a v2 update or the output of `encode_state_vector_v2/1` passed by mistake,
+  returns `{:error, {:encoding_exception, _}}`; yjs does not check this.
+  """
+  @spec diff_update_v1(binary(), binary()) :: {:ok, binary()} | {:error, term()}
+  def diff_update_v1(update, state_vector) when is_binary(update) and is_binary(state_vector) do
+    dirty_dispatch(
+      [update, state_vector],
+      fn -> Yex.Nif.diff_update_v1(update, state_vector) end,
+      fn -> Yex.Nif.diff_update_v1_dirty(update, state_vector) end
+    )
+  end
+
+  @doc """
+  Returns the part of a v2 `update` that a peer with `state_vector` has not seen yet,
+  as a v2 update.
+
+  `state_vector` is v1 encoded, as in yjs `diffUpdateV2` and the sync protocol: use
+  `encode_state_vector_v1/1` or `encode_state_vector_from_update_v2/1`. The output of
+  `encode_state_vector_v2/1` is a different encoding and returns
+  `{:error, {:encoding_exception, _}}`.
+  """
+  @spec diff_update_v2(binary(), binary()) :: {:ok, binary()} | {:error, term()}
+  def diff_update_v2(update, state_vector) when is_binary(update) and is_binary(state_vector) do
+    dirty_dispatch(
+      [update, state_vector],
+      fn -> Yex.Nif.diff_update_v2(update, state_vector) end,
+      fn -> Yex.Nif.diff_update_v2_dirty(update, state_vector) end
+    )
+  end
+
+  @doc """
+  Returns the v1 encoded state vector of a v1 `update`.
+
+  A client counts only up to the first gap in its clocks: a client whose structs do not
+  start at clock 0 is left out, as in yjs `encodeStateVectorFromUpdate`. Same as
+  `encode_state_vector_from_update_v1/1`.
+
+  ## Examples
+      iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 1})
+      iex> Yex.Text.insert(Yex.Doc.get_text(doc, "text"), 0, "Hello")
+      iex> {:ok, update} = Yex.encode_state_as_update(doc)
+      iex> {:ok, state_vector} = Yex.encode_state_vector_from_update(update)
+      iex> Yex.decode_state_vector(state_vector)
+      {:ok, %{1 => 5}}
+  """
+  @spec encode_state_vector_from_update(binary()) :: {:ok, binary()} | {:error, term()}
+  def encode_state_vector_from_update(update), do: encode_state_vector_from_update_v1(update)
+
+  @doc """
+  Returns the v1 encoded state vector of a v1 `update`.
+
+  Same as `encode_state_vector_from_update/1`. Input left over after the update, such as
+  a v2 update passed by mistake, returns `{:error, {:encoding_exception, _}}`; yjs does
+  not check this.
+  """
+  @spec encode_state_vector_from_update_v1(binary()) :: {:ok, binary()} | {:error, term()}
+  def encode_state_vector_from_update_v1(update) when is_binary(update) do
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.encode_state_vector_from_update_v1(update) end,
+      fn -> Yex.Nif.encode_state_vector_from_update_v1_dirty(update) end
+    )
+  end
+
+  @doc """
+  Returns the state vector of a v2 `update`, v1 encoded.
+
+  The result is v1 encoded like yjs `encodeStateVectorFromUpdateV2`, so it can be passed
+  to `diff_update_v2/2` and to yjs peers. It is not the encoding `encode_state_vector_v2/1`
+  returns, so `encode_state_as_update_v2/2` does not take it.
+  """
+  @spec encode_state_vector_from_update_v2(binary()) :: {:ok, binary()} | {:error, term()}
+  def encode_state_vector_from_update_v2(update) when is_binary(update) do
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.encode_state_vector_from_update_v2(update) end,
+      fn -> Yex.Nif.encode_state_vector_from_update_v2_dirty(update) end
+    )
+  end
+
+  @doc """
+  Re-encodes a v1 update as a v2 update without changing its content.
+
+  The output matches yjs `convertUpdateFormatV1ToV2` byte for byte. Input left over after
+  the update, such as a v2 update passed by mistake, returns
+  `{:error, {:encoding_exception, _}}` instead of an empty update.
+  """
+  @spec convert_update_format_v1_to_v2(binary()) :: {:ok, binary()} | {:error, term()}
+  def convert_update_format_v1_to_v2(update) when is_binary(update) do
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.convert_update_format_v1_to_v2(update) end,
+      fn -> Yex.Nif.convert_update_format_v1_to_v2_dirty(update) end
+    )
+  end
+
+  @doc """
+  Re-encodes a v2 update as a v1 update without changing its content.
+
+  The output matches yjs `convertUpdateFormatV2ToV1` byte for byte.
+  """
+  @spec convert_update_format_v2_to_v1(binary()) :: {:ok, binary()} | {:error, term()}
+  def convert_update_format_v2_to_v1(update) when is_binary(update) do
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.convert_update_format_v2_to_v1(update) end,
+      fn -> Yex.Nif.convert_update_format_v2_to_v1_dirty(update) end
+    )
+  end
+
+  @doc """
+  Returns the clock range each client's structs cover in a v1 `update`.
+
+  `from` maps each client to the clock of its first struct and `to` to the end (exclusive)
+  of its last one, as in yjs `parseUpdateMeta`. The delete set is not counted, so an
+  update that only deletes returns empty maps. Same as `parse_update_meta_v1/1`.
+
+  ## Examples
+      iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 1})
+      iex> Yex.Text.insert(Yex.Doc.get_text(doc, "text"), 0, "Hello")
+      iex> {:ok, update} = Yex.encode_state_as_update(doc)
+      iex> Yex.parse_update_meta(update)
+      {:ok, %{from: %{1 => 0}, to: %{1 => 5}}}
+  """
+  @spec parse_update_meta(binary()) ::
+          {:ok,
+           %{
+             from: %{non_neg_integer() => non_neg_integer()},
+             to: %{non_neg_integer() => non_neg_integer()}
+           }}
+          | {:error, term()}
+  def parse_update_meta(update), do: parse_update_meta_v1(update)
+
+  @doc """
+  Returns the clock range each client's structs cover in a v1 `update`.
+
+  Same as `parse_update_meta/1`. Input left over after the update, such as a v2 update
+  passed by mistake, returns `{:error, {:encoding_exception, _}}`.
+  """
+  @spec parse_update_meta_v1(binary()) ::
+          {:ok,
+           %{
+             from: %{non_neg_integer() => non_neg_integer()},
+             to: %{non_neg_integer() => non_neg_integer()}
+           }}
+          | {:error, term()}
+  def parse_update_meta_v1(update) when is_binary(update) do
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.parse_update_meta_v1(update) end,
+      fn -> Yex.Nif.parse_update_meta_v1_dirty(update) end
+    )
+  end
+
+  @doc """
+  Returns the clock range each client's structs cover in a v2 `update`.
+
+  See `parse_update_meta/1`.
+  """
+  @spec parse_update_meta_v2(binary()) ::
+          {:ok,
+           %{
+             from: %{non_neg_integer() => non_neg_integer()},
+             to: %{non_neg_integer() => non_neg_integer()}
+           }}
+          | {:error, term()}
+  def parse_update_meta_v2(update) when is_binary(update) do
+    dirty_dispatch(
+      update,
+      fn -> Yex.Nif.parse_update_meta_v2(update) end,
+      fn -> Yex.Nif.parse_update_meta_v2_dirty(update) end
+    )
+  end
+
+  @doc """
+  Decodes a v1 encoded state vector into a map of client id to clock.
+
+  Accepts the output of `encode_state_vector_v1/1`, `encode_state_vector_from_update/1`
+  and yjs `encodeStateVector`, like yjs `decodeStateVector`. Input left over after the
+  state vector, such as the output of `encode_state_vector_v2/1`, returns
+  `{:error, {:encoding_exception, _}}`.
+
+  ## Examples
+      iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 1})
+      iex> Yex.Text.insert(Yex.Doc.get_text(doc, "text"), 0, "Hello")
+      iex> Yex.decode_state_vector(Yex.encode_state_vector!(doc))
+      {:ok, %{1 => 5}}
+  """
+  @spec decode_state_vector(binary()) ::
+          {:ok, %{non_neg_integer() => non_neg_integer()}} | {:error, term()}
+  def decode_state_vector(state_vector) when is_binary(state_vector) do
+    dirty_dispatch(
+      state_vector,
+      fn -> Yex.Nif.decode_state_vector(state_vector) end,
+      fn -> Yex.Nif.decode_state_vector_dirty(state_vector) end
+    )
+  end
+
+  # Large inputs go to the DirtyCpu twin of a NIF. `input` is a binary or a list of the
+  # binaries the NIF decodes.
+  defp dirty_dispatch(input, fun, dirty_fun) do
+    if IO.iodata_length(input) > Yex.Nif.dirty_cutoff(), do: dirty_fun.(), else: fun.()
   end
 
   @doc """

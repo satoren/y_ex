@@ -326,6 +326,7 @@ pub struct NifXmlTextEvent {
     pub path: NifPath,
     pub target: NifXmlText,
     pub delta: NifYTextDelta,
+    pub keys: NifYMapChange,
 }
 
 impl NifEventConstructor<XmlTextEvent> for NifXmlTextEvent {
@@ -336,6 +337,10 @@ impl NifEventConstructor<XmlTextEvent> for NifXmlTextEvent {
             delta: NifYTextDelta {
                 doc: doc.clone(),
                 delta: event.delta(txn).to_vec(),
+            },
+            keys: NifYMapChange {
+                doc: doc.clone(),
+                change: event.keys(txn).clone(),
             },
         }
     }
@@ -573,13 +578,15 @@ impl NifSubdocsEvent {
         doc: &NifDoc,
         active_subdoc_guids: &HashSet<String>,
     ) -> Self {
-        let added = event
-            .added()
-            .map(|subdoc| doc.with_cached_subdoc(subdoc.clone(), Some(active_subdoc_guids)))
-            .collect();
+        // `removed` first: when a doc is replaced by another with the same guid, the `added`
+        // lookup replaces the cache entry, and the removed doc must still find its own.
         let removed = event
             .removed()
             .map(|subdoc| doc.with_subdoc_reference(subdoc.clone(), Some(active_subdoc_guids)))
+            .collect();
+        let added = event
+            .added()
+            .map(|subdoc| doc.with_cached_subdoc(subdoc.clone(), Some(active_subdoc_guids)))
             .collect();
         let loaded = event
             .loaded()

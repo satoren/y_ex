@@ -480,4 +480,55 @@ defmodule YexXmlFragmentTest do
       assert frag |> Yex.Output.as_prelim() == prelim
     end
   end
+
+  describe "non-XML child written by yjs" do
+    # Built with yjs 13.6 (client id 1): a fragment holding <a>x</a>, a Y.Map with
+    # "k" => "v", and <b></b>, in that order. yjs does not stop a peer from putting a
+    # non-XML type into an XmlFragment.
+    @map_child_update Base.decode64!(
+                        "AQYBAAcBA3htbAMBYYcBAAGHAQEDAWIoAAEBAWsBdwF2BwABAAYEAAEEAXgA"
+                      )
+
+    # The same tree with a Y.XmlHook("h") in place of the Y.Map.
+    @hook_child_update Base.decode64!(
+                         "AQYBAAcBA3htbAMBYYcBAAUBaIcBAQMBYigAAQEBawF3AXYHAAEABgQAAQQBeAA="
+                       )
+
+    setup do
+      doc = Doc.new()
+      :ok = Yex.apply_update_v1(doc, @map_child_update)
+      %{doc: doc, frag: Doc.get_xml_fragment(doc, "xml")}
+    end
+
+    # yrs TreeWalker and Siblings end at the first child that is not an XML node,
+    # so <b> is not returned; yjs returns all four nodes. If this starts failing,
+    # yrs fixed it: update the tree_walker/2 and children/1 docs.
+    test "tree_walker stops at the non-XML child", %{frag: frag} do
+      assert [%XmlElement{} = a, %XmlText{} = x] = XmlFragment.tree_walker(frag)
+      assert "a" == XmlElement.get_tag(a)
+      assert "x" == XmlText.to_string(x)
+    end
+
+    test "children stops at the non-XML child", %{frag: frag} do
+      assert [%XmlElement{} = a] = Enum.to_list(XmlFragment.children(frag))
+      assert "a" == XmlElement.get_tag(a)
+      assert 3 == XmlFragment.length(frag)
+    end
+
+    test "the non-XML child survives an update round trip", %{doc: doc} do
+      {:ok, update} = Yex.encode_state_as_update_v1(doc)
+      doc2 = Doc.new()
+      :ok = Yex.apply_update_v1(doc2, update)
+      {:ok, update2} = Yex.encode_state_as_update_v1(doc2)
+      assert update == update2
+      assert 3 == XmlFragment.length(Doc.get_xml_fragment(doc2, "xml"))
+    end
+
+    # yrs 0.28 decodes the XmlHook type ref without the hook name that yjs writes
+    # after it, so the whole update is rejected. If this starts failing, yrs fixed it.
+    test "an update holding a yjs XmlHook is rejected by yrs" do
+      assert {:error, {:encoding_exception, _}} =
+               Yex.apply_update_v1(Doc.new(), @hook_child_update)
+    end
+  end
 end

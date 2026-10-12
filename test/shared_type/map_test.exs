@@ -102,6 +102,180 @@ defmodule Yex.MapTest do
     end
   end
 
+  describe "clear/1" do
+    test "removes all keys", %{map: map} do
+      Map.set(map, "a", 1)
+      Map.set(map, "b", "two")
+      Map.set(map, "c", [3])
+
+      assert :ok = Map.clear(map)
+      assert Map.size(map) == 0
+      assert Map.to_map(map) == %{}
+      assert :error = Map.fetch(map, "a")
+    end
+
+    test "on an empty map emits no update", %{doc: doc, map: map} do
+      {:ok, _} = Doc.monitor_update(doc)
+      assert :ok = Map.clear(map)
+      assert Map.size(map) == 0
+      refute_received {:update_v1, _, _, _}
+    end
+
+    test "on a map whose keys were all deleted emits no update", %{doc: doc, map: map} do
+      Map.set(map, "a", "one")
+      Map.delete(map, "a")
+      {:ok, _} = Doc.monitor_update(doc)
+      assert :ok = Map.clear(map)
+      assert Map.size(map) == 0
+      refute_received {:update_v1, _, _, _}
+    end
+
+    test "on a non-empty map emits an update", %{doc: doc, map: map} do
+      Map.set(map, "a", "one")
+      {:ok, _} = Doc.monitor_update(doc)
+      assert :ok = Map.clear(map)
+      assert_receive {:update_v1, _, _, _}
+    end
+
+    test "deletes nested shared types", %{doc: doc, map: map} do
+      Map.set(map, "child", MapPrelim.from(%{"nested_key" => "nested_value"}))
+      Map.set(map, "list", ArrayPrelim.from(["nested_element"]))
+      child = Map.fetch!(map, "child")
+      list = Map.fetch!(map, "list")
+      {:ok, before} = Yex.encode_state_as_update(doc)
+      assert :binary.match(before, "nested_value") != :nomatch
+      assert :binary.match(before, "nested_element") != :nomatch
+
+      assert :ok = Map.clear(map)
+
+      # GC drops only deleted items, so nested content left live would still be encoded.
+      {:ok, update} = Yex.encode_state_as_update(doc)
+      assert :binary.match(update, "nested_value") == :nomatch
+      assert :binary.match(update, "nested_key") == :nomatch
+      assert :binary.match(update, "nested_element") == :nomatch
+
+      remote = Doc.new()
+      :ok = Yex.apply_update(remote, update)
+      assert Map.to_map(Doc.get_map(remote, "map")) == %{}
+
+      assert_raise Yex.DeletedSharedTypeError, "Map has been deleted", fn ->
+        Map.set(child, "k", "v2")
+      end
+
+      assert_raise Yex.DeletedSharedTypeError, "Array has been deleted", fn ->
+        Yex.Array.push(list, 3)
+      end
+    end
+
+    test "emits a delete action with old_value for every key", %{doc: doc, map: map} do
+      Map.set(map, "a", "one")
+      Map.set(map, "b", "two")
+      ref = Yex.SharedType.observe(map)
+      deep_ref = Yex.SharedType.observe_deep(map)
+
+      Doc.transaction(doc, "origin", fn -> Map.clear(map) end)
+
+      expected_keys = %{
+        "a" => %{action: :delete, old_value: "one"},
+        "b" => %{action: :delete, old_value: "two"}
+      }
+
+      assert_receive {:observe_event, ^ref,
+                      %Yex.MapEvent{path: [], target: ^map, keys: ^expected_keys}, "origin", _}
+
+      assert_receive {:observe_deep_event, ^deep_ref,
+                      [%Yex.MapEvent{path: [], target: ^map, keys: ^expected_keys}], "origin", _}
+    end
+
+    test "joins an open transaction", %{doc: doc, map: map} do
+      Map.set(map, "a", 1)
+
+      Doc.transaction(doc, fn ->
+        Map.set(map, "b", 2)
+        assert :ok = Map.clear(map)
+        assert Map.size(map) == 0
+        Map.set(map, "c", 3)
+      end)
+
+      assert Map.to_map(map) == %{"c" => 3}
+    end
+
+    test "syncs to another doc", %{doc: doc, map: map} do
+      Map.set(map, "a", 1)
+      Map.set(map, "b", 2)
+      remote = Doc.new()
+      {:ok, update} = Yex.encode_state_as_update(doc)
+      :ok = Yex.apply_update(remote, update)
+      assert Map.size(Doc.get_map(remote, "map")) == 2
+
+      {:ok, sv} = Yex.encode_state_vector(remote)
+      Map.clear(map)
+      {:ok, diff} = Yex.encode_state_as_update(doc, sv)
+      :ok = Yex.apply_update(remote, diff)
+
+      assert Map.to_map(Doc.get_map(remote, "map")) == %{}
+    end
+
+    test "above the item limit runs on a dirty scheduler and emits one update", %{
+      doc: doc,
+      map: map
+    } do
+      n = Yex.Nif.dirty_clear_items() + 1
+      Doc.transaction(doc, fn -> for i <- 1..n, do: Map.set(map, "k#{i}", i) end)
+      assert :dirty = Yex.Nif.map_clear(map, nil, Yex.Nif.dirty_clear_items())
+      assert Map.size(map) == n
+
+      {:ok, _} = Doc.monitor_update(doc)
+      ref = Yex.SharedType.observe(map)
+      assert :ok = Map.clear(map)
+      assert Map.size(map) == 0
+      assert_received {:update_v1, _, _, _}
+      refute_received {:update_v1, _, _, _}
+      assert_received {:observe_event, ^ref, %Yex.MapEvent{keys: keys}, _, _}
+      assert map_size(keys) == n
+    end
+
+    test "above the item limit joins an open transaction", %{doc: doc, map: map} do
+      n = Yex.Nif.dirty_clear_items() + 1
+      Doc.transaction(doc, fn -> for i <- 1..n, do: Map.set(map, "k#{i}", i) end)
+
+      Doc.transaction(doc, fn ->
+        Map.set(map, "a", 1)
+        assert :ok = Map.clear(map)
+        assert Map.size(map) == 0
+        Map.set(map, "b", 2)
+      end)
+
+      assert Map.to_map(map) == %{"b" => 2}
+    end
+
+    test "on a deleted map above the item limit raises", %{doc: doc, map: map} do
+      n = Yex.Nif.dirty_clear_items() + 1
+      Doc.transaction(doc, fn -> for i <- 1..n, do: Map.set(map, "k#{i}", i) end)
+      Map.set(map, "child", MapPrelim.from(%{"k" => "v"}))
+      child = Map.fetch!(map, "child")
+      Map.delete(map, "child")
+
+      assert_raise Yex.DeletedSharedTypeError, "Map has been deleted", fn ->
+        Map.clear(child)
+      end
+    end
+
+    test "on a deleted map raises like delete/2", %{map: map} do
+      Map.set(map, "child", MapPrelim.from(%{"k" => "v"}))
+      child = Map.fetch!(map, "child")
+      Map.delete(map, "child")
+
+      assert_raise Yex.DeletedSharedTypeError, "Map has been deleted", fn ->
+        Map.delete(child, "k")
+      end
+
+      assert_raise Yex.DeletedSharedTypeError, "Map has been deleted", fn ->
+        Map.clear(child)
+      end
+    end
+  end
+
   describe "access operations" do
     test "fetch/2 gets value by key", %{map: map} do
       Map.set(map, "key", "value")

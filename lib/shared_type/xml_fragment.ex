@@ -36,6 +36,10 @@ defmodule Yex.XmlFragment do
 
   @doc """
   Returns a stream of all child nodes of the XML fragment.
+
+  A child that is not an XML node (for example a `Y.Map` a yjs peer inserted into
+  the fragment) ends the stream: yrs `Xml::siblings` stops there, so later children
+  are not returned.
   """
   @spec children(t) :: Enumerable.t(Yex.XmlElement.t() | Yex.XmlText.t())
   def children(%__MODULE__{doc: doc} = xml_fragment) do
@@ -47,6 +51,69 @@ defmodule Yex.XmlFragment do
         end)
     )
   end
+
+  @typedoc "A node returned by `tree_walker/2`."
+  @type xml_node :: Yex.XmlElement.t() | Yex.XmlText.t() | Yex.XmlFragment.t()
+
+  @doc """
+  Returns every descendant node of this fragment as a list, in document order
+  (depth-first, pre-order), excluding the fragment itself. Unlike `children/1`,
+  which returns a lazy `Stream`, this reads the whole subtree at once.
+
+  The nodes are read in a single read transaction, or inside the open
+  `Yex.Doc.transaction/2` if there is one, so the result is a consistent snapshot.
+
+  When `filter` is given, only nodes for which it returns a truthy value are
+  returned. The filter does not prune: descendants of a rejected element are
+  still visited, as with yjs `createTreeWalker(filter)`. The filter runs in the
+  document's worker process (`doc.worker_pid`) when that is another process, so
+  `self()` inside it is the worker, as with the function given to `Yex.Doc.transaction/3`.
+
+  A child that is not an XML node (for example a `Y.Map` a yjs peer inserted into
+  the fragment) ends the walk: yrs `XmlFragment::successors` (`TreeWalker`) stops
+  there, so later nodes are not returned.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> xml = Yex.Doc.get_xml_fragment(doc, "xml")
+      iex> Yex.XmlFragment.tree_walker(xml) |> Enum.map(&to_string/1)
+      []
+  """
+  @spec tree_walker(t) :: [xml_node()]
+  @spec tree_walker(t, (xml_node() -> as_boolean(term()))) :: [xml_node()]
+  def tree_walker(%__MODULE__{doc: doc} = xml_fragment, filter \\ fn _ -> true end) do
+    Doc.run_in_worker_process doc do
+      xml_fragment
+      |> Yex.Nif.xml_fragment_tree_walker(cur_txn(xml_fragment))
+      |> Enum.filter(filter)
+    end
+  end
+
+  @doc """
+  Returns the first descendant `Yex.XmlElement` whose tag equals `tag`, compared
+  case-insensitively, in document order, or `nil`. Only tag names are supported,
+  as in yjs `querySelector`.
+  """
+  @spec query_selector(t, String.t()) :: Yex.XmlElement.t() | nil
+  def query_selector(%__MODULE__{} = xml_fragment, tag) do
+    xml_fragment |> query_selector_all(tag) |> List.first()
+  end
+
+  @doc """
+  Returns every descendant `Yex.XmlElement` whose tag equals `tag`, compared
+  case-insensitively, in document order. Only tag names are supported, as in yjs
+  `querySelectorAll`.
+  """
+  @spec query_selector_all(t, String.t()) :: [Yex.XmlElement.t()]
+  def query_selector_all(%__MODULE__{} = xml_fragment, tag) do
+    tag = String.upcase(tag)
+    tree_walker(xml_fragment, &tag_matches?(&1, tag))
+  end
+
+  defp tag_matches?(%Yex.XmlElement{} = element, tag),
+    do: String.upcase(Yex.XmlElement.get_tag(element) || "") == tag
+
+  defp tag_matches?(_node, _tag), do: false
 
   @doc """
   Returns the parent node of this fragment.

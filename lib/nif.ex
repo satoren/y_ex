@@ -37,6 +37,13 @@ defmodule Yex.Nif do
   def dirty_encode_items(), do: 16_384
   def dirty_json_items(), do: 1_024
 
+  # map_clear deletes every entry and nested item, and its auto-commit builds one
+  # observer event entry per removed key, so it also costs what the document costs. Its
+  # normal NIF returns :dirty above this many doc items. With observe and observe_deep
+  # attached, the smallest item count whose normal-scheduler median passes 1 ms is about
+  # 500 (about 2_250 with no observers). See benchmark/dirty_map_clear.exs.
+  def dirty_clear_items(), do: 256
+
   def doc_new(), do: :erlang.nif_error(:nif_not_loaded)
   def doc_with_options(_option), do: :erlang.nif_error(:nif_not_loaded)
   def doc_get_or_insert_text(_doc, _cur_txn, _name), do: :erlang.nif_error(:nif_not_loaded)
@@ -132,6 +139,8 @@ defmodule Yex.Nif do
   def map_get(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_contains_key(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_delete(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
+  def map_clear(_map, _cur_txn, _item_limit), do: :erlang.nif_error(:nif_not_loaded)
+  def map_clear_dirty(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_map(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_keys(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_values(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -151,6 +160,18 @@ defmodule Yex.Nif do
   def xml_fragment_get(_xml_fragment, _cur_txn, _index), do: :erlang.nif_error(:nif_not_loaded)
   def xml_fragment_to_string(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_fragment_length(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_fragment_tree_walker(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_element_tree_walker(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_insert_attribute(_xml_text, _cur_txn, _key, _value),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_remove_attribute(_xml_text, _cur_txn, _key),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_text_get_attribute(_xml_text, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_text_get_attributes(_xml_text, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_parent(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
@@ -285,6 +306,31 @@ defmodule Yex.Nif do
   def merge_updates_v2_dirty(_updates), do: :erlang.nif_error(:nif_not_loaded)
   def update_debug_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
 
+  def diff_update_v1(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
+  def diff_update_v1_dirty(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
+  def diff_update_v2(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
+  def diff_update_v2_dirty(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
+  def encode_state_vector_from_update_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_state_vector_from_update_v1_dirty(_update),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_state_vector_from_update_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
+
+  def encode_state_vector_from_update_v2_dirty(_update),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def convert_update_format_v1_to_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def convert_update_format_v1_to_v2_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def convert_update_format_v2_to_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def convert_update_format_v2_to_v1_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def parse_update_meta_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def parse_update_meta_v1_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def parse_update_meta_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def parse_update_meta_v2_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
+  def decode_state_vector(_state_vector), do: :erlang.nif_error(:nif_not_loaded)
+  def decode_state_vector_dirty(_state_vector), do: :erlang.nif_error(:nif_not_loaded)
+
   def get_pending_update_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def get_pending_ds_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def prune_pending_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -361,6 +407,14 @@ defmodule Yex.Nif do
   def undo_manager_exclude_origin(_undo_manager, _origin), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_stop_capturing(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
   def undo_manager_clear(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
+
+  def undo_manager_observe(_undo_manager, _pid, _ref, _metadata),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def undo_manager_undo_stack_size(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_redo_stack_size(_undo_manager), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_get_meta(_undo_manager, _item), do: :erlang.nif_error(:nif_not_loaded)
+  def undo_manager_put_meta(_undo_manager, _item, _meta), do: :erlang.nif_error(:nif_not_loaded)
 
   def weak_string(_weak, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
