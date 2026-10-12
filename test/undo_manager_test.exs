@@ -1555,7 +1555,7 @@ defmodule Yex.UndoManagerTest do
       %{other_text: other_text, scopes: scopes, weak_link: weak_link}
     end
 
-    test "expand_scope raises ArgumentError and the manager keeps its scope", %{
+    test "expand_scope raises ArgumentError", %{
       doc: doc,
       text: text,
       other_text: other_text,
@@ -1570,7 +1570,9 @@ defmodule Yex.UndoManagerTest do
         end
       end
 
-      # Neither the other document nor an untracked type of this one was added.
+      # This checks only that the raise leaves the manager's own scope as it was. It
+      # cannot show the foreign branch stayed out of the yrs scope: the manager
+      # observes only `doc`, so it would never capture `other_text` either way.
       Text.insert(other_text, 0, "other")
       Text.insert(Doc.get_text(doc, "untracked"), 0, "untracked")
       refute UndoManager.can_undo?(undo_manager)
@@ -1592,6 +1594,21 @@ defmodule Yex.UndoManagerTest do
         end
       end
     end
+  end
+
+  test "guards prevent invalid scope in expand_scope/2 and WeakLink in new/2", %{
+    doc: doc,
+    text: text
+  } do
+    {:ok, undo_manager} = UndoManager.new(doc, text)
+    Text.insert(text, 0, "ab")
+    weak_link = Array.insert_and_get(Doc.get_array(doc, "array"), 0, Text.quote(text, 0, 1))
+
+    assert_raise FunctionClauseError, fn ->
+      apply(UndoManager, :expand_scope, [undo_manager, %{not: "a valid scope"}])
+    end
+
+    assert_raise FunctionClauseError, fn -> apply(UndoManager, :new, [doc, weak_link]) end
   end
 
   describe "scope from another wrapper of the same subdocument" do
