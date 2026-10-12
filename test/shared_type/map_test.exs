@@ -117,7 +117,7 @@ defmodule Yex.MapTest do
       {:ok, _} = Doc.monitor_update(doc)
       assert :ok = Map.clear(map)
       assert Map.size(map) == 0
-      refute_receive {:update_v1, _, _, _}, 10
+      refute_received {:update_v1, _, _, _}
     end
 
     test "on a map whose keys were all deleted emits no update", %{doc: doc, map: map} do
@@ -125,7 +125,8 @@ defmodule Yex.MapTest do
       Map.delete(map, "a")
       {:ok, _} = Doc.monitor_update(doc)
       assert :ok = Map.clear(map)
-      refute_receive {:update_v1, _, _, _}, 10
+      assert Map.size(map) == 0
+      refute_received {:update_v1, _, _, _}
     end
 
     test "on a non-empty map emits an update", %{doc: doc, map: map} do
@@ -135,13 +136,26 @@ defmodule Yex.MapTest do
       assert_receive {:update_v1, _, _, _}
     end
 
-    test "deletes nested shared types", %{map: map} do
-      Map.set(map, "child", MapPrelim.from(%{"k" => "v"}))
-      Map.set(map, "list", ArrayPrelim.from([1, 2]))
+    test "deletes nested shared types", %{doc: doc, map: map} do
+      Map.set(map, "child", MapPrelim.from(%{"nested_key" => "nested_value"}))
+      Map.set(map, "list", ArrayPrelim.from(["nested_element"]))
       child = Map.fetch!(map, "child")
       list = Map.fetch!(map, "list")
+      {:ok, before} = Yex.encode_state_as_update(doc)
+      assert :binary.match(before, "nested_value") != :nomatch
+      assert :binary.match(before, "nested_element") != :nomatch
 
       assert :ok = Map.clear(map)
+
+      # GC drops only deleted items, so nested content left live would still be encoded.
+      {:ok, update} = Yex.encode_state_as_update(doc)
+      assert :binary.match(update, "nested_value") == :nomatch
+      assert :binary.match(update, "nested_key") == :nomatch
+      assert :binary.match(update, "nested_element") == :nomatch
+
+      remote = Doc.new()
+      :ok = Yex.apply_update(remote, update)
+      assert Map.to_map(Doc.get_map(remote, "map")) == %{}
 
       assert_raise Yex.DeletedSharedTypeError, "Map has been deleted", fn ->
         Map.set(child, "k", "v2")
