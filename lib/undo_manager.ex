@@ -71,6 +71,19 @@ defmodule Yex.UndoManager do
   @moduledoc """
   Represents a Y.UndoManager instance.
 
+  ## Scope
+
+  `new/2` and `new_with_options/3` take a Text, Array, Map, XmlText, XmlElement or
+  XmlFragment. `expand_scope/2` also takes a WeakLink. Any other value raises
+  `FunctionClauseError`.
+
+  A scope must belong to the manager's document; one from another document raises
+  `ArgumentError`. A scope from another `Yex.Doc` of the same subdocument (for example
+  the struct a parent's `Yex.Map.fetch/2` returns) is accepted. Calls are serialized
+  only through the manager's `Yex.Doc`, so when another process has a transaction open
+  through the scope's `Yex.Doc`, the call raises `Yex.TransactionAcqError` instead of
+  waiting for it.
+
   ## Tracked origins
 
   A transaction's origin is the term passed to `Yex.Doc.transaction/3`, or `nil`
@@ -160,11 +173,11 @@ defmodule Yex.UndoManager do
 
   @doc """
   Creates a new UndoManager for the given document and scope with default options.
-  The scope can be a Text, Array, Map, XmlText, XmlElement, or XmlFragment type.
+  See "Scope" in the module documentation for the accepted scopes.
 
   ## Errors
-  - Returns `{:error, "Invalid scope: expected a struct"}` if scope is not a struct
-  - Returns `{:error, "Failed to get branch reference"}` if there's an error accessing the scope
+  - Returns `{:error, "NIF error: Failed to get branch reference"}` if there's an error
+    accessing the scope
   - Raises `Yex.TransactionAcqError` when a transaction on the document is open,
     for example inside `Yex.Doc.transaction/3`
   - Raises `ArgumentError` if `scope` belongs to a document other than `doc`
@@ -303,12 +316,15 @@ defmodule Yex.UndoManager do
 
   @doc """
   Expands the scope of the UndoManager to include additional shared types.
-  The scope can be a Text, Array, Map, XmlText, XmlElement, XmlFragment, or WeakLink type.
+  See "Scope" in the module documentation for the accepted scopes.
 
+  Returns `:ok`, or `{:error, message}` such as
+  `{:error, "Failed to get text branch reference"}` when the scope cannot be accessed.
   Raises `Yex.TransactionAcqError` when a transaction on the document is open, and
   `ArgumentError` when `scope` belongs to a document other than the manager's.
   """
-  def expand_scope(%{doc: doc} = undo_manager, scope) do
+  def expand_scope(%{doc: doc} = undo_manager, scope)
+      when is_valid_scope(scope) or is_struct(scope, Yex.WeakLink) do
     Doc.run_in_worker_process doc do
       ensure_no_transaction!(doc)
       Yex.Nif.undo_manager_expand_scope(undo_manager, scope)
