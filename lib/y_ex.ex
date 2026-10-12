@@ -58,8 +58,9 @@ defmodule Yex do
   @doc """
   Computes the state vector and encodes it with the v2 format.
 
-  This is the yrs v2 framing, which yjs peers cannot read. The update utilities such as
-  `diff_update_v2/2` take the v1 encoding from `encode_state_vector_v1/1`.
+  This is the yrs v2 framing, which yjs peers cannot read. `encode_state_as_update_v2/2`
+  takes it; the update utilities such as `diff_update_v2/2` take the v1 encoding from
+  `encode_state_vector_v1/1` and reject this one.
 
   ## Examples
       iex> doc = Yex.Doc.new()
@@ -144,8 +145,9 @@ defmodule Yex do
   @doc """
   Encodes the document state as a v2 update.
 
-  Optionally, pass a v2 encoded state vector (see `encode_state_vector_v2/1`)
-  to only write the missing differences.
+  Optionally, pass a state vector in the yrs v2 encoding (see `encode_state_vector_v2/1`)
+  to only write the missing differences. The v1 state vectors that the update utilities
+  return, such as `encode_state_vector_from_update_v2/1`, are a different encoding.
 
   Returns `{:error, {:encoding_exception, message}}` when `encoded_state_vector` cannot be
   decoded.
@@ -330,8 +332,9 @@ defmodule Yex do
   @doc """
   Returns the part of a v1 `update` that a peer with the v1 `state_vector` has not seen yet.
 
-  Same as `diff_update/2`. Unlike the other v1 update utilities, this one does not reject
-  a v2 update passed by mistake; like yjs, it may read it as an empty update.
+  Same as `diff_update/2`. Input left over after the update or after the state vector,
+  such as a v2 update or the output of `encode_state_vector_v2/1` passed by mistake,
+  returns `{:error, {:encoding_exception, _}}`; yjs does not check this.
   """
   @spec diff_update_v1(binary(), binary()) :: {:ok, binary()} | {:error, term()}
   def diff_update_v1(update, state_vector) when is_binary(update) and is_binary(state_vector) do
@@ -344,9 +347,10 @@ defmodule Yex do
   Returns the part of a v2 `update` that a peer with `state_vector` has not seen yet,
   as a v2 update.
 
-  `state_vector` is v1 encoded, as in yjs `diffUpdateV2` and the sync protocol. The output
-  of `encode_state_vector_v2/1` is a different encoding and reads here as the empty state
-  vector, so the whole update comes back; use `encode_state_vector_v1/1` instead.
+  `state_vector` is v1 encoded, as in yjs `diffUpdateV2` and the sync protocol: use
+  `encode_state_vector_v1/1` or `encode_state_vector_from_update_v2/1`. The output of
+  `encode_state_vector_v2/1` is a different encoding and returns
+  `{:error, {:encoding_exception, _}}`.
   """
   @spec diff_update_v2(binary(), binary()) :: {:ok, binary()} | {:error, term()}
   def diff_update_v2(update, state_vector) when is_binary(update) and is_binary(state_vector) do
@@ -392,7 +396,7 @@ defmodule Yex do
 
   The result is v1 encoded like yjs `encodeStateVectorFromUpdateV2`, so it can be passed
   to `diff_update_v2/2` and to yjs peers. It is not the encoding `encode_state_vector_v2/1`
-  returns.
+  returns, so `encode_state_as_update_v2/2` does not take it.
   """
   @spec encode_state_vector_from_update_v2(binary()) :: {:ok, binary()} | {:error, term()}
   def encode_state_vector_from_update_v2(update) when is_binary(update) do
@@ -491,7 +495,9 @@ defmodule Yex do
   Decodes a v1 encoded state vector into a map of client id to clock.
 
   Accepts the output of `encode_state_vector_v1/1`, `encode_state_vector_from_update/1`
-  and yjs `encodeStateVector`, like yjs `decodeStateVector`.
+  and yjs `encodeStateVector`, like yjs `decodeStateVector`. Input left over after the
+  state vector, such as the output of `encode_state_vector_v2/1`, returns
+  `{:error, {:encoding_exception, _}}`.
 
   ## Examples
       iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 1})
