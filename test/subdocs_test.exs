@@ -2,9 +2,13 @@ defmodule Yex.SubdocsTest do
   use ExUnit.Case, async: true
 
   alias Yex.{
+    Array,
     Doc,
+    Map,
     Text,
-    Map
+    XmlElement,
+    XmlElementPrelim,
+    XmlFragment
   }
 
   test "new" do
@@ -201,5 +205,172 @@ defmodule Yex.SubdocsTest do
     assert Text.to_string(Doc.get_text(from_map, "text")) == "second"
 
     :ok = Yex.Subscription.unsubscribe(monitor_ref)
+  end
+
+  describe "inserting a document" do
+    test "inserting a document into one of its own subdocuments raises" do
+      root_doc = Doc.new()
+      folder = Doc.get_map(root_doc, "folder")
+      :ok = Map.set(folder, "a", Doc.new())
+      sub_doc = Map.fetch!(folder, "a")
+
+      assert catch_error(Map.set(Doc.get_map(sub_doc, "map"), "root", root_doc)) ==
+               :nif_panicked
+
+      assert :ok = Doc.destroy(root_doc)
+    end
+
+    test "a subdocument nested in a prelim raises invalid_variant" do
+      root_doc = Doc.new()
+      folder = Doc.get_map(root_doc, "folder")
+      :ok = Map.set(folder, "a", Doc.new())
+      sub_doc = Map.fetch!(folder, "a")
+
+      # The derived struct decoders replace the nested ArgumentError. Known limit.
+      assert catch_error(Map.set(folder, "b", Yex.MapPrelim.from(%{"doc" => sub_doc}))) ==
+               :invalid_variant
+
+      assert catch_error(Map.set(folder, "b", Yex.ArrayPrelim.from([sub_doc]))) ==
+               :invalid_variant
+
+      assert Map.keys(folder) == ["a"]
+    end
+
+    test "nests a subdocument inside a subdocument" do
+      root_doc = Doc.new()
+      folder = Doc.get_map(root_doc, "folder")
+      :ok = Map.set(folder, "a", Doc.new())
+      middle = Map.fetch!(folder, "a")
+      {:ok, monitor_ref} = Doc.monitor_subdocs(middle)
+
+      inner = Doc.get_map(middle, "inner")
+      assert :ok = Map.set(inner, "b", Doc.new())
+
+      assert_receive {:subdocs, %{added: [added], removed: []}, _, ^middle}
+      nested = Map.fetch!(inner, "b")
+      assert %Doc{} = nested
+      assert Doc.guid(nested) == Doc.guid(added)
+
+      # A remote replica receives the middle doc unloaded, then its nested doc.
+      remote_root = Doc.new()
+      {:ok, root_update} = Yex.encode_state_as_update(root_doc)
+      :ok = Yex.apply_update(remote_root, root_update)
+      remote_middle = Map.fetch!(Doc.get_map(remote_root, "folder"), "a")
+      :ok = Doc.load(remote_middle)
+
+      {:ok, remote_ref} = Doc.monitor_subdocs(remote_middle)
+      {:ok, middle_update} = Yex.encode_state_as_update(middle)
+      :ok = Yex.apply_update(remote_middle, middle_update)
+      assert_receive {:subdocs, %{added: [_], loaded: []}, _, ^remote_middle}
+
+      remote_nested = Map.fetch!(Doc.get_map(remote_middle, "inner"), "b")
+      assert :ok = Doc.load(remote_nested)
+      assert_receive {:subdocs, %{added: [], removed: [], loaded: [loaded]}, _, ^remote_middle}
+      assert Doc.guid(loaded) == Doc.guid(nested)
+
+      assert :ok = Doc.destroy(root_doc)
+
+      :ok = Doc.demonitor_update(monitor_ref)
+      :ok = Doc.demonitor_update(remote_ref)
+    end
+
+    test "raises ArgumentError when the document is already a subdocument" do
+      root_doc = Doc.new()
+      folder = Doc.get_map(root_doc, "folder")
+      :ok = Map.set(folder, "a", Doc.new())
+      sub_doc = Map.fetch!(folder, "a")
+
+      assert_raise ArgumentError, ~r/already a subdocument/, fn ->
+        Map.set(folder, "b", sub_doc)
+      end
+
+      assert_raise ArgumentError, fn ->
+        Map.set(Doc.get_map(Doc.new(), "other"), "a", sub_doc)
+      end
+
+      assert_raise ArgumentError, fn ->
+        Array.insert(Doc.get_array(root_doc, "array"), 0, sub_doc)
+      end
+
+      assert_raise ArgumentError, fn ->
+        Text.insert_embed(Doc.get_text(root_doc, "text"), 0, sub_doc)
+      end
+
+      assert_raise ArgumentError, fn ->
+        Text.apply_delta(Doc.get_text(root_doc, "text"), [%{insert: sub_doc}])
+      end
+
+      element =
+        XmlFragment.push_and_get(
+          Doc.get_xml_fragment(root_doc, "xml"),
+          XmlElementPrelim.empty("div")
+        )
+
+      assert_raise ArgumentError, fn ->
+        XmlElement.insert_attribute(element, "doc", sub_doc)
+      end
+
+      assert Map.keys(folder) == ["a"]
+      assert Array.length(Doc.get_array(root_doc, "array")) == 0
+    end
+
+    test "raises Yex.TransactionAcqError while the inserted document has an open transaction" do
+      folder = Doc.get_map(Doc.new(), "folder")
+      sub_doc = Doc.new()
+
+      assert_raise Yex.TransactionAcqError, fn ->
+        Doc.transaction(sub_doc, fn -> Map.set(folder, "a", sub_doc) end)
+      end
+    end
+
+    test "raises Yex.TransactionAcqError while another process holds a transaction on the document" do
+      folder = Doc.get_map(Doc.new(), "folder")
+      test_pid = self()
+
+      # The holder creates the document so that it is its worker process.
+      holder =
+        spawn_link(fn ->
+          sub_doc = Doc.new()
+
+          Doc.transaction(sub_doc, fn ->
+            send(test_pid, {:locked, sub_doc})
+
+            receive do
+              :release -> :ok
+            after
+              5_000 -> :ok
+            end
+          end)
+
+          send(test_pid, :released)
+        end)
+
+      assert_receive {:locked, sub_doc}, 1_000
+
+      try do
+        assert_raise Yex.TransactionAcqError, fn -> Map.set(folder, "a", sub_doc) end
+      after
+        send(holder, :release)
+      end
+
+      assert_receive :released, 1_000
+      assert :ok = Map.set(folder, "a", sub_doc)
+    end
+
+    test "inserting a document into itself raises" do
+      doc = Doc.new()
+
+      assert catch_error(Map.set(Doc.get_map(doc, "map"), "me", doc)) == :nif_panicked
+    end
+
+    test "a destroyed subdocument can be inserted again" do
+      root_doc = Doc.new()
+      folder = Doc.get_map(root_doc, "folder")
+      :ok = Map.set(folder, "a", Doc.new())
+      sub_doc = Map.fetch!(folder, "a")
+      :ok = Doc.destroy(sub_doc)
+
+      assert :ok = Map.set(Doc.get_map(Doc.new(), "other"), "a", sub_doc)
+    end
   end
 end
