@@ -53,6 +53,8 @@ defmodule Yex.Nif do
   def doc_get_or_insert_xml_fragment(_doc, _cur_txn, _name),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def doc_root_refs(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
   def doc_monitor_update_v1(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
   def doc_monitor_update_v2(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
 

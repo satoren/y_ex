@@ -242,6 +242,40 @@ defmodule Yex.Doc do
   end
 
   @doc """
+  Lists every root type the document holds as `{name, kind}`. Order is unspecified.
+
+  A root claimed by a typed getter reports its declared type: `:map`, `:array`,
+  `:text` or `:xml_fragment`. `:xml_element`, `:xml_text` and `:weak_link` cover the
+  remaining yrs types that can be a root.
+
+  A root no typed getter has claimed reports `:untyped`, whatever it holds. Every
+  root a remote update created starts this way, and keeps it until something calls
+  a typed getter with its name. The kind is not guessed from content: an XML
+  fragment and an array of XML nodes, or a text and an array of strings, can hold
+  the same items.
+
+  ## Examples
+      iex> doc = Yex.Doc.new()
+      iex> Yex.Doc.get_text(doc, "text")
+      iex> Yex.Doc.root_refs(doc)
+      [{"text", :text}]
+  """
+  @spec root_refs(t) :: [
+          {String.t(),
+           :map
+           | :array
+           | :text
+           | :xml_fragment
+           | :xml_element
+           | :xml_text
+           | :weak_link
+           | :untyped}
+        ]
+  def root_refs(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_root_refs(doc, cur_txn(doc)))
+  end
+
+  @doc """
   Evaluates a JSONPath expression against the current document state.
 
   Returns all matched values as a list. The path grammar follows yrs JSONPath
