@@ -247,6 +247,12 @@ defmodule Yex.Nif do
   def shared_type_observe_deep(_map, _cur_txn, _pid, _ref, _metadata),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def shared_type_branch_id(_shared_type), do: :erlang.nif_error(:nif_not_loaded)
+  def shared_type_alive(_shared_type, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def shared_type_resolve(_doc, _cur_txn, _branch_id),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def sticky_index_new(_shared_type, _cur_txn, _index, _assoc),
     do: :erlang.nif_error(:nif_not_loaded)
 
