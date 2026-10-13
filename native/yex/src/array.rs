@@ -60,6 +60,7 @@ fn array_insert(
 
         let index = normalize_index_for_insert(array.len(txn), index);
 
+        value.ensure_insertable(txn)?;
         array.insert(txn, index, value);
         Ok(atoms::ok())
     })
@@ -92,6 +93,7 @@ fn array_insert_and_get(
     array.mutably(env, current_transaction, |txn| {
         let array = array.get_ref(txn)?;
         let index = normalize_index_for_insert(array.len(txn), index);
+        value.ensure_insertable(txn)?;
         array.insert(txn, index, value);
         Ok(NifYOut::from_native(array.get(txn, index).unwrap(), doc))
     })

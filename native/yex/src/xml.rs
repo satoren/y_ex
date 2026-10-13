@@ -420,6 +420,7 @@ fn xml_element_insert_attribute(
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
+        value.ensure_insertable(txn)?;
         xml.insert_attribute(txn, key, value);
         Ok(atoms::ok())
     })
@@ -568,6 +569,7 @@ fn xml_text_insert_embed(
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
+        embed.ensure_insertable(txn)?;
         let index = normalize_index_for_insert(xml.len(txn), index);
         let mut delta = Vec::with_capacity(2);
         if index > 0 {
@@ -590,6 +592,7 @@ fn xml_text_insert_embed_with_attributes(
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
+        embed.ensure_insertable(txn)?;
         let index = normalize_index_for_insert(xml.len(txn), index);
         let mut delta = Vec::with_capacity(2);
         if index > 0 {
@@ -659,6 +662,7 @@ fn xml_text_apply_delta(
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
+        delta.ensure_insertable(txn)?;
         xml.apply_delta(txn, delta.0);
         Ok(atoms::ok())
     })
@@ -763,6 +767,7 @@ fn xml_text_insert_attribute(
 ) -> NifResult<Atom> {
     xml.mutably(env, current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
+        value.ensure_insertable(txn)?;
         xml.insert_attribute(txn, key, value);
         Ok(atoms::ok())
     })

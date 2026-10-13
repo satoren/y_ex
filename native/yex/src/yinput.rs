@@ -204,6 +204,49 @@ impl Encoder for NifYInput {
     }
 }
 
+impl NifYInput {
+    /// Raises ArgumentError when the input is a document that cannot be inserted into the
+    /// document of `txn`. Call it before inserting, since into_content can only panic.
+    pub fn ensure_insertable(&self, txn: &TransactionMut) -> NifResult<()> {
+        match self {
+            NifYInput::Doc(doc) => match doc_insert_error(&doc.reference.doc, txn) {
+                Some(reason) => Err(ArgumentError::raise(reason)),
+                None => Ok(()),
+            },
+            _ => Ok(()),
+        }
+    }
+}
+
+/// Returns why `inserted` cannot be inserted into the document of `txn`, if it cannot.
+///
+/// Decoding already rejected a document that is a subdocument. Inserting a document into
+/// itself or into one of its own subdocuments would deadlock (the latter on the next
+/// Doc.destroy). The walk up the parents stops at an ancestor whose store is locked, so it
+/// is best effort: with root -> middle -> leaf and another process holding a transaction on
+/// middle, inserting root into leaf is not detected. It also stops when it revisits a
+/// document, so an existing cycle elsewhere cannot make it loop.
+fn doc_insert_error(inserted: &Doc, txn: &TransactionMut) -> Option<&'static str> {
+    if Doc::ptr_eq(inserted, txn.doc()) {
+        return Some("cannot insert a document into itself");
+    }
+    let mut ancestor = txn.parent_doc();
+    let mut seen = vec![txn.doc().clone()];
+    while let Some(d) = ancestor {
+        if Doc::ptr_eq(inserted, &d) {
+            return Some("cannot insert a document into one of its own subdocuments");
+        }
+        if seen.iter().any(|s| Doc::ptr_eq(s, &d)) {
+            break; // an existing cycle that does not pass through the inserted document
+        }
+        ancestor = yrs::Transact::try_transact(&d)
+            .ok()
+            .and_then(|t| t.parent_doc());
+        seen.push(d);
+    }
+    None
+}
+
 //Array(ArrayPrelim),
 //Map(MapPrelim),
 //XmlElement(XmlElementPrelim),
@@ -252,29 +295,11 @@ impl Prelim for NifYInput {
                 (ItemContent::Type(inner), Some(self))
             }
             NifYInput::Doc(doc) => {
-                // Decoding already rejected a document that is a subdocument. Inserting a
-                // document into itself or into one of its own subdocuments would deadlock
-                // (the latter on the next Doc.destroy), and into_content cannot return an
-                // error, so both panic. The walk stops at an ancestor whose store is locked.
-                // It also stops when it revisits a document, so an existing cycle elsewhere
-                // cannot make it loop.
-                let inserted = &doc.reference.doc;
-                if Doc::ptr_eq(inserted, txn.doc()) {
-                    panic!("cannot insert a document into itself");
-                }
-                let mut ancestor = txn.parent_doc();
-                let mut seen = vec![txn.doc().clone()];
-                while let Some(d) = ancestor {
-                    if Doc::ptr_eq(inserted, &d) {
-                        panic!("cannot insert a document into one of its own subdocuments");
-                    }
-                    if seen.iter().any(|s| Doc::ptr_eq(s, &d)) {
-                        break; // an existing cycle that does not pass through the inserted document
-                    }
-                    ancestor = yrs::Transact::try_transact(&d)
-                        .ok()
-                        .and_then(|t| t.parent_doc());
-                    seen.push(d);
+                // The NIFs call ensure_insertable first and raise ArgumentError. This is a
+                // backstop for a caller that does not: into_content cannot return an error,
+                // and integrating the document would deadlock.
+                if let Some(reason) = doc_insert_error(&doc.reference.doc, txn) {
+                    panic!("{reason}");
                 }
                 (ItemContent::Doc(None, doc.reference.doc.clone()), None)
             }
@@ -354,6 +379,18 @@ impl Prelim for NifXmlIn {
 }
 
 pub type NifYInputDelta = NifWrap<Vec<Delta<NifYInput>>>;
+
+impl NifYInputDelta {
+    /// Calls [NifYInput::ensure_insertable] on every inserted value.
+    pub fn ensure_insertable(&self, txn: &TransactionMut) -> NifResult<()> {
+        for delta in self.iter() {
+            if let Delta::Inserted(value, _) = delta {
+                value.ensure_insertable(txn)?;
+            }
+        }
+        Ok(())
+    }
+}
 
 impl<'a> Decoder<'a> for NifYInputDelta {
     fn decode(term: Term<'a>) -> NifResult<Self> {

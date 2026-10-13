@@ -53,6 +53,7 @@ fn map_set(
 ) -> NifResult<Atom> {
     map.mutably(env, current_transaction, |txn| {
         let map = map.get_ref(txn)?;
+        value.ensure_insertable(txn)?;
         map.insert(txn, key, value);
         Ok(atoms::ok())
     })

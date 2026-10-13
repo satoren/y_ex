@@ -97,6 +97,7 @@ fn text_insert_embed(
 ) -> NifResult<Atom> {
     text.mutably(env, current_transaction, |txn| {
         let text = text.get_ref(txn)?;
+        embed.ensure_insertable(txn)?;
         let index = normalize_index_for_insert(text.len(txn), index);
         let mut delta = Vec::with_capacity(2);
         if index > 0 {
@@ -119,6 +120,7 @@ fn text_insert_embed_with_attributes(
 ) -> NifResult<Atom> {
     text.mutably(env, current_transaction, |txn| {
         let text = text.get_ref(txn)?;
+        embed.ensure_insertable(txn)?;
         let index = normalize_index_for_insert(text.len(txn), index);
         let mut delta = Vec::with_capacity(2);
         if index > 0 {
@@ -238,6 +240,7 @@ fn text_apply_delta(
 ) -> NifResult<Atom> {
     text.mutably(env, current_transaction, |txn| {
         let text = text.get_ref(txn)?;
+        delta.ensure_insertable(txn)?;
         text.apply_delta(txn, delta.0);
         Ok(atoms::ok())
     })
