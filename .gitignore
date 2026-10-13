@@ -38,3 +38,5 @@ target/
 /Cargo.lock
 
 test_output_file
+# npm packages of the Yjs compatibility tests
+/test/support/yjs/node_modules/

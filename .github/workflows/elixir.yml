@@ -36,6 +36,7 @@ jobs:
 
     env:
       MIX_ENV: test
+      YEX_REQUIRE_YJS: "1"
     steps:
       - uses: actions/checkout@v7
       - name: Set up Elixir
@@ -52,6 +53,14 @@ jobs:
           restore-keys: ${{ runner.os }}-mix-${{ matrix.pair.otp }}-${{ matrix.pair.elixir }}-
       - name: Install dependencies
         run: mix deps.get
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: test/support/yjs/package-lock.json
+      - name: Install Yjs for the compatibility tests
+        run: npm ci --prefix test/support/yjs
       - name: Run tests
         run: mix coveralls.github --parallel --flagname "${{ matrix.os }}-otp-${{ matrix.pair.otp }}-elixir-${{ matrix.pair.elixir }}"
         env:
