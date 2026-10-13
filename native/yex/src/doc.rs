@@ -10,7 +10,7 @@ use rustler::{
 };
 use yrs::encoding::read::Read as _;
 use yrs::updates::{
-    decoder::{Decode, DecoderV1},
+    decoder::Decode,
     encoder::{Encode, Encoder as UpdatesEncoder, EncoderV1, EncoderV2},
 };
 use yrs::*;
@@ -19,7 +19,7 @@ use crate::event::NifSubdocsEvent;
 // Internal imports
 use crate::{
     atoms,
-    decode::{catch_decode_v2, decode_update_v2},
+    decode::{catch_decode_v2, decode_update_v2, decode_v1, ClientIdCheck},
     deferred::Deferred,
     error::Error,
     subscription::{DocEvent, NifSubscription, SubscriptionKey},
@@ -76,7 +76,7 @@ impl Encoder for SnapshotRef {
 impl<'a> Decoder<'a> for SnapshotRef {
     fn decode(term: Term<'a>) -> NifResult<Self> {
         let bin = term.decode_as_binary()?;
-        let snapshot = Snapshot::decode_v1(bin.as_slice()).map_err(Error::from)?;
+        let snapshot: Snapshot = decode_v1(bin.as_slice())?;
         Ok(SnapshotRef::new(snapshot))
     }
 }
@@ -554,7 +554,7 @@ fn apply_update_v1_impl(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     update: Binary,
 ) -> NifResult<Atom> {
-    let update = Update::decode_v1(update.as_slice()).map_err(Error::from)?;
+    let update: Update = decode_v1(update.as_slice())?;
 
     doc.mutably(env, current_transaction, |txn| {
         txn.apply_update(update)
@@ -619,8 +619,12 @@ fn apply_update_v2_dirty(
 }
 
 fn merge_updates_v1_impl<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
-    let merged =
-        yrs::merge_updates_v1(updates.iter().map(Binary::as_slice)).map_err(Error::from)?;
+    // Same as yrs::merge_updates_v1, with the client id check on decode.
+    let updates = updates
+        .iter()
+        .map(|update| decode_v1(update.as_slice()))
+        .collect::<Result<Vec<Update>, _>>()?;
+    let merged = Update::merge_updates(updates).encode_v1();
     Ok((atoms::ok(), SliceIntoBinary::new(merged.as_slice())).encode(env))
 }
 
@@ -657,7 +661,7 @@ fn merge_updates_v2_dirty<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResu
 
 #[rustler::nif]
 fn update_debug_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
-    let update = Update::decode_v1(update.as_slice()).map_err(Error::from)?;
+    let update: Update = decode_v1(update.as_slice())?;
     Ok((atoms::ok(), format!("{:#?}", update)).encode(env))
 }
 
@@ -682,8 +686,8 @@ fn decode_state_vector_v1(state_vector: &[u8]) -> Result<StateVector, Error> {
 }
 
 fn decode_v1_exact<T: Decode>(bytes: &[u8], what: &str) -> Result<T, Error> {
-    let mut decoder = DecoderV1::from(bytes);
-    let decoded = T::decode(&mut decoder)?;
+    let mut decoder = ClientIdCheck::v1(bytes);
+    let decoded: T = decoder.decode()?;
     if decoder.read_u8().is_ok() {
         return Err(Error::Encoding(yrs::encoding::read::Error::Custom(
             format!("{what} has trailing bytes"),
@@ -738,6 +742,8 @@ fn diff_update_v2_impl<'a>(
     // diff_updates_v2 expects the yrs v2 framing and Update::encode_diff is not public,
     // so the (small) state vector is re-framed.
     let state_vector = decode_state_vector_v1(state_vector.as_slice())?.encode_v2();
+    // yrs diff_updates_v2 decodes the update without the client id check.
+    decode_update_v2(update.as_slice())?;
     let diff = catch_decode_v2(|| yrs::diff_updates_v2(update.as_slice(), &state_vector))?;
     ok_binary(env, diff)
 }

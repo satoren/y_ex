@@ -234,6 +234,7 @@ pub fn awareness_apply_update_v1(
     origin: Term<'_>,
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
+        crate::decode::check_awareness_client_ids(update.as_slice())?;
         let update = AwarenessUpdate::decode_v1(update.as_slice()).map_err(Error::from)?;
 
         let mut awareness = awareness.lock();

@@ -51,6 +51,35 @@ defmodule YexTest do
       assert map_size(Yex.Map.to_map(Yex.Doc.get_map(doc2, "m"))) == 20_000
       assert_receive {:update_v1, _, nil, ^doc2}
     end
+
+    # 2^53 + 5 as a lib0 varint (v1, delete sets) and as a signed varint (v2 client column).
+    @aliased_var <<133, 128, 128, 128, 128, 128, 128, 16>>
+    @aliased_signed_var <<133, 128, 128, 128, 128, 128, 128, 32>>
+
+    test "rejects a client id of 2^53 or more instead of aliasing it to its low 53 bits" do
+      # One GC block written by the client, and a delete set entry for the client.
+      block_v1 = <<1, 1>> <> @aliased_var <> <<0, 0, 1, 0>>
+      delete_set_v1 = <<0, 1>> <> @aliased_var <> <<1, 0, 1>>
+
+      block_v2 =
+        <<0, 0, 8>> <> @aliased_signed_var <> <<0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0>>
+
+      doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 5})
+
+      for update <- [block_v1, delete_set_v1] do
+        assert {:error, {:encoding_exception, msg}} = Yex.apply_update(doc, update)
+        assert msg =~ "client id 9007199254740997 is out of range"
+        assert {:error, {:encoding_exception, _}} = Yex.merge_updates_v1([update])
+        assert {:error, {:encoding_exception, _}} = Yex.diff_update_v1(update, <<0>>)
+        assert {:error, {:encoding_exception, _}} = Yex.parse_update_meta_v1(update)
+      end
+
+      assert {:error, {:encoding_exception, _}} = Yex.apply_update_v2(doc, block_v2)
+      assert {:error, {:encoding_exception, _}} = Yex.merge_updates_v2([block_v2])
+      assert {:error, {:encoding_exception, _}} = Yex.diff_update_v2(block_v2, <<0>>)
+
+      assert {:ok, %{}} = Yex.decode_state_vector(Yex.encode_state_vector!(doc))
+    end
   end
 
   describe "doc-sized calls above the dirty item limits" do

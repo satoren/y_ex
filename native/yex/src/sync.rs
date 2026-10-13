@@ -230,7 +230,7 @@ fn apply_sync_update_payload_v1_impl(
 ) -> NifResult<Atom> {
     let mut decoder = DecoderV1::new(Cursor::new(payload.as_slice()));
     let update_bytes = decoder.read_buf().map_err(Error::from)?;
-    let update = Update::decode_v1(update_bytes).map_err(Error::from)?;
+    let update: Update = crate::decode::decode_v1(update_bytes)?;
 
     doc.mutably(env, current_transaction, |txn| {
         txn.apply_update(update)
