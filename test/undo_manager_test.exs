@@ -1533,6 +1533,111 @@ defmodule Yex.UndoManagerTest do
     end
   end
 
+  describe "scope from another document" do
+    setup do
+      other_doc = Doc.new()
+      other_text = Doc.get_text(other_doc, "text")
+      Text.insert(other_text, 0, "abcd")
+      other_xml = Doc.get_xml_fragment(other_doc, "xml")
+      other_array = Doc.get_array(other_doc, "array")
+
+      scopes = [
+        other_text,
+        other_array,
+        Doc.get_map(other_doc, "map"),
+        other_xml,
+        XmlFragment.insert_and_get(other_xml, 0, XmlTextPrelim.from("text")),
+        XmlFragment.insert_and_get(other_xml, 0, XmlElementPrelim.empty("div"))
+      ]
+
+      weak_link = Array.insert_and_get(other_array, 0, Text.quote(other_text, 1, 2))
+
+      %{other_text: other_text, scopes: scopes, weak_link: weak_link}
+    end
+
+    test "expand_scope raises ArgumentError", %{
+      doc: doc,
+      text: text,
+      other_text: other_text,
+      scopes: scopes,
+      weak_link: weak_link
+    } do
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+
+      for scope <- [weak_link | scopes] do
+        assert_raise ArgumentError, "scope belongs to a different document", fn ->
+          UndoManager.expand_scope(undo_manager, scope)
+        end
+      end
+
+      # This checks only that the raise leaves the manager's own scope as it was. It
+      # cannot show the foreign branch stayed out of the yrs scope: the manager
+      # observes only `doc`, so it would never capture `other_text` either way.
+      Text.insert(other_text, 0, "other")
+      Text.insert(Doc.get_text(doc, "untracked"), 0, "untracked")
+      refute UndoManager.can_undo?(undo_manager)
+
+      Text.insert(text, 0, "own")
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
+      assert Text.to_string(other_text) == "otherabcd"
+    end
+
+    test "new and new_with_options raise ArgumentError", %{doc: doc, scopes: scopes} do
+      for scope <- scopes do
+        assert_raise ArgumentError, "scope belongs to a different document", fn ->
+          UndoManager.new(doc, scope)
+        end
+
+        assert_raise ArgumentError, "scope belongs to a different document", fn ->
+          UndoManager.new_with_options(doc, scope, %UndoManager.Options{})
+        end
+      end
+    end
+  end
+
+  test "guards prevent invalid scope in expand_scope/2 and WeakLink in new/2", %{
+    doc: doc,
+    text: text
+  } do
+    {:ok, undo_manager} = UndoManager.new(doc, text)
+    Text.insert(text, 0, "ab")
+    weak_link = Array.insert_and_get(Doc.get_array(doc, "array"), 0, Text.quote(text, 0, 1))
+
+    assert_raise FunctionClauseError, fn ->
+      apply(UndoManager, :expand_scope, [undo_manager, %{not: "a valid scope"}])
+    end
+
+    assert_raise FunctionClauseError, fn -> apply(UndoManager, :new, [doc, weak_link]) end
+  end
+
+  describe "scope from another wrapper of the same subdocument" do
+    setup %{doc: doc} do
+      subdoc = Doc.new()
+      Yex.Map.set(Doc.get_map(doc, "subdocs"), "sub", subdoc)
+      {:ok, fetched} = Yex.Map.fetch(Doc.get_map(doc, "subdocs"), "sub")
+      refute fetched.reference == subdoc.reference
+      %{subdoc: subdoc, fetched: fetched}
+    end
+
+    test "new accepts it", %{subdoc: subdoc, fetched: fetched} do
+      text = Doc.get_text(subdoc, "text")
+      {:ok, undo_manager} = UndoManager.new(fetched, text)
+      Text.insert(text, 0, "sub")
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
+    end
+
+    test "expand_scope accepts it", %{subdoc: subdoc, fetched: fetched} do
+      {:ok, undo_manager} = UndoManager.new(fetched, Doc.get_map(fetched, "map"))
+      text = Doc.get_text(subdoc, "text")
+      assert :ok = UndoManager.expand_scope(undo_manager, text)
+      Text.insert(text, 0, "sub")
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+      assert Text.to_string(text) == ""
+    end
+  end
+
   test "new_with_options handles NIF errors" do
     # Mock test removed - relies on NIF implementation
   end
