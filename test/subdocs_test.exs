@@ -8,7 +8,9 @@ defmodule Yex.SubdocsTest do
     Text,
     XmlElement,
     XmlElementPrelim,
-    XmlFragment
+    XmlFragment,
+    XmlText,
+    XmlTextPrelim
   }
 
   test "new" do
@@ -214,9 +216,28 @@ defmodule Yex.SubdocsTest do
       :ok = Map.set(folder, "a", Doc.new())
       sub_doc = Map.fetch!(folder, "a")
 
-      assert catch_error(Map.set(Doc.get_map(sub_doc, "map"), "root", root_doc)) ==
-               :nif_panicked
+      sub_map = Doc.get_map(sub_doc, "map")
 
+      assert_raise ArgumentError, ~r/into one of its own subdocuments/, fn ->
+        Map.set(sub_map, "root", root_doc)
+      end
+
+      assert Map.keys(sub_map) == []
+      assert :ok = Doc.destroy(root_doc)
+    end
+
+    test "inserting a document into a deeper subdocument of its own raises" do
+      root_doc = Doc.new()
+      :ok = Map.set(Doc.get_map(root_doc, "folder"), "a", Doc.new())
+      middle = Map.fetch!(Doc.get_map(root_doc, "folder"), "a")
+      :ok = Map.set(Doc.get_map(middle, "inner"), "b", Doc.new())
+      leaf = Map.fetch!(Doc.get_map(middle, "inner"), "b")
+
+      assert_raise ArgumentError, ~r/into one of its own subdocuments/, fn ->
+        Array.push(Doc.get_array(leaf, "array"), root_doc)
+      end
+
+      assert Array.length(Doc.get_array(leaf, "array")) == 0
       assert :ok = Doc.destroy(root_doc)
     end
 
@@ -357,10 +378,40 @@ defmodule Yex.SubdocsTest do
       assert :ok = Map.set(folder, "a", sub_doc)
     end
 
-    test "inserting a document into itself raises" do
+    test "inserting a document into itself raises ArgumentError" do
       doc = Doc.new()
+      map = Doc.get_map(doc, "map")
+      array = Doc.get_array(doc, "array")
+      text = Doc.get_text(doc, "text")
 
-      assert catch_error(Map.set(Doc.get_map(doc, "map"), "me", doc)) == :nif_panicked
+      element =
+        XmlFragment.push_and_get(Doc.get_xml_fragment(doc, "xml"), XmlElementPrelim.empty("div"))
+
+      xml_text =
+        XmlFragment.push_and_get(Doc.get_xml_fragment(doc, "xml"), XmlTextPrelim.from(""))
+
+      for insert <- [
+            fn -> Map.set(map, "me", doc) end,
+            fn -> Array.insert(array, 0, doc) end,
+            fn -> Array.insert_and_get(array, 0, doc) end,
+            fn -> Text.insert_embed(text, 0, doc) end,
+            fn -> Text.insert_embed(text, 0, doc, %{"bold" => true}) end,
+            fn -> Text.apply_delta(text, [%{insert: "a"}, %{insert: doc}]) end,
+            fn -> XmlElement.insert_attribute(element, "me", doc) end,
+            fn -> XmlText.insert_embed(xml_text, 0, doc) end,
+            fn -> XmlText.insert_embed(xml_text, 0, doc, %{"bold" => true}) end,
+            fn -> XmlText.apply_delta(xml_text, [%{insert: doc}]) end,
+            fn -> XmlText.insert_attribute(xml_text, "me", doc) end
+          ] do
+        assert_raise ArgumentError, ~r/into itself/, insert
+      end
+
+      assert Map.keys(map) == []
+      assert Array.length(array) == 0
+      assert Text.to_string(text) == ""
+      assert XmlElement.get_attribute(element, "me") == nil
+      assert XmlText.to_string(xml_text) == ""
+      assert :ok = Doc.destroy(doc)
     end
 
     test "a destroyed subdocument can be inserted again" do
