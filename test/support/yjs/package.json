@@ -1,0 +1,11 @@
+{
+  "name": "y_ex-yjs-compat",
+  "private": true,
+  "description": "Runs the real Yjs from the y_ex test suite to check that the two exchange data correctly",
+  "type": "module",
+  "dependencies": {
+    "lib0": "0.2.119",
+    "y-protocols": "1.0.7",
+    "yjs": "13.6.33"
+  }
+}
