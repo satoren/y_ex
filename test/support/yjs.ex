@@ -21,12 +21,21 @@ defmodule Yex.Yjs do
       System.find_executable("node") == nil ->
         {:error, "node is not on PATH"}
 
-      not File.dir?(Path.join([@dir, "node_modules", "yjs"])) ->
+      not Enum.all?(packages(), &File.dir?(Path.join([@dir, "node_modules", &1]))) ->
         {:error, "run `npm ci --prefix test/support/yjs`"}
 
       true ->
         :ok
     end
+  end
+
+  # Every dependency in package.json, since bridge.mjs imports them all.
+  defp packages do
+    Path.join(@dir, "package.json")
+    |> File.read!()
+    |> Jason.decode!()
+    |> Map.fetch!("dependencies")
+    |> Map.keys()
   end
 
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts)
