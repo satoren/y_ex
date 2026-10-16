@@ -326,6 +326,8 @@ fn expand<R: AsRef<yrs::branch::Branch>>(
         .map_err(|_| Error::Transaction)
 }
 
+/// Adds `scope` to an existing manager. Raises `TransactionAcqError` instead of panicking
+/// when the scope's document is busy (see `expand`).
 fn expand_scope<T: NifSharedType>(
     manager: &mut YexUndoManager,
     doc: &NifDoc,
@@ -337,6 +339,7 @@ fn expand_scope<T: NifSharedType>(
     Ok(())
 }
 
+/// Builds a manager tracking `scope` and attaches it to `doc` (see `attach`).
 fn create_undo_manager_with_options<T: NifSharedType>(
     _env: Env<'_>,
     doc: NifDoc,
@@ -375,6 +378,7 @@ fn create_undo_manager_with_options<T: NifSharedType>(
     ))
 }
 
+/// NIF behind `Yex.UndoManager.new/2` and `new_with_options/3`.
 #[rustler::nif]
 pub fn undo_manager_new_with_options(
     env: Env<'_>,

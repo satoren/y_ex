@@ -1413,6 +1413,9 @@ defmodule Yex.UndoManagerTest do
       Process.exit(reader, :kill)
       assert_receive {:DOWN, ^reader_ref, :process, ^reader, :killed}, 5_000
       assert Enum.all?(results, &(match?({:ok, _}, &1) or &1 == :busy))
+      # The reader only opens read transactions, which do not block the read that resolves
+      # the scope, so every :busy came from the observer registration in `attach`.
+      assert :busy in results
 
       {:ok, undo_manager} = UndoManager.new(doc, text)
       Text.insert(text, 0, "b")

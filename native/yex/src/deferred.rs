@@ -50,6 +50,8 @@ impl Deferred {
         }
     }
 
+    /// Queues `manager` for `release_undo_managers`, with `home`, the document it was created
+    /// on, so the release can detach observers the manager no longer lists.
     pub(crate) fn defer_undo_manager(&self, manager: YexUndoManager, home: Doc) {
         lock(&self.undo_managers).push((manager, home));
         self.has_undo_managers.store(true, Ordering::Release);
