@@ -1,7 +1,7 @@
 use std::mem;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
-use yrs::TransactionMut;
+use yrs::{Doc, TransactionMut};
 
 use crate::undo::{try_release, YexUndoManager};
 
@@ -18,7 +18,8 @@ pub(crate) type Unobserve = Box<dyn FnOnce(&TransactionMut) + Send>;
 pub(crate) struct Deferred {
     unobserves: Mutex<Vec<Unobserve>>,
     has_unobserves: AtomicBool,
-    undo_managers: Mutex<Vec<YexUndoManager>>,
+    // Each manager with the document it was created on (see `try_release`).
+    undo_managers: Mutex<Vec<(YexUndoManager, Doc)>>,
     has_undo_managers: AtomicBool,
 }
 
@@ -49,8 +50,10 @@ impl Deferred {
         }
     }
 
-    pub(crate) fn defer_undo_manager(&self, manager: YexUndoManager) {
-        lock(&self.undo_managers).push(manager);
+    /// Queues `manager` for `release_undo_managers`, with `home`, the document it was created
+    /// on, so the release can detach observers the manager no longer lists.
+    pub(crate) fn defer_undo_manager(&self, manager: YexUndoManager, home: Doc) {
+        lock(&self.undo_managers).push((manager, home));
         self.has_undo_managers.store(true, Ordering::Release);
     }
 
@@ -65,9 +68,9 @@ impl Deferred {
             self.has_undo_managers.store(false, Ordering::Release);
             mem::take(&mut *queue)
         };
-        let still_busy: Vec<YexUndoManager> = pending
+        let still_busy: Vec<(YexUndoManager, Doc)> = pending
             .into_iter()
-            .filter_map(|manager| try_release(manager).err())
+            .filter_map(|(manager, home)| try_release(manager, &home).err().map(|m| (m, home)))
             .collect();
         if !still_busy.is_empty() {
             lock(&self.undo_managers).extend(still_busy);
@@ -83,8 +86,8 @@ impl Drop for Deferred {
                 .get_mut()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
         );
-        for manager in managers {
-            if let Err(manager) = try_release(manager) {
+        for (manager, home) in managers {
+            if let Err(manager) = try_release(manager, &home) {
                 // Its observers still point at it, so freeing it would leave them dangling.
                 mem::forget(manager);
             }

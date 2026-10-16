@@ -1376,6 +1376,51 @@ defmodule Yex.UndoManagerTest do
       assert :ok = UndoManager.clear(undo_manager)
       refute UndoManager.can_undo?(undo_manager)
     end
+
+    test "creating a manager while another process opens transactions raises instead of panicking" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      Text.insert(text, 0, String.duplicate("a", 10_000))
+
+      # Bypasses the worker, so its read transactions race the creation below.
+      reader =
+        spawn_link(fn ->
+          bypass = %{doc | worker_pid: self()}
+
+          Stream.repeatedly(fn ->
+            try do
+              Yex.encode_state_vector(bypass)
+            rescue
+              Yex.TransactionAcqError -> :busy
+            end
+          end)
+          |> Stream.run()
+        end)
+
+      # Keeping the managers alive makes the race far more frequent (measured), so they
+      # are held until the end.
+      results =
+        for _ <- 1..2_000 do
+          try do
+            {:ok, _} = UndoManager.new(doc, text)
+          rescue
+            Yex.TransactionAcqError -> :busy
+          end
+        end
+
+      Process.unlink(reader)
+      reader_ref = Process.monitor(reader)
+      Process.exit(reader, :kill)
+      assert_receive {:DOWN, ^reader_ref, :process, ^reader, :killed}, 5_000
+      assert Enum.all?(results, &(match?({:ok, _}, &1) or &1 == :busy))
+      # The reader only opens read transactions, which do not block the read that resolves
+      # the scope, so every :busy came from the observer registration in `attach`.
+      assert :busy in results
+
+      {:ok, undo_manager} = UndoManager.new(doc, text)
+      Text.insert(text, 0, "b")
+      assert {:ok, true} = UndoManager.undo_with_result(undo_manager)
+    end
   end
 
   defmodule TestWorker do
