@@ -470,6 +470,8 @@ defmodule Yex.Doc do
   The third element is the transaction's origin: the term passed to `transaction/3`,
   `nil` when none was given, or the `%Yex.UndoManager{}` for a transaction committed
   by `Yex.UndoManager.undo/1` or `Yex.UndoManager.redo/1`.
+
+  Works inside `transaction/3`; that transaction is reported when it commits.
   """
   @spec monitor_update(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_update(%__MODULE__{} = doc, opt \\ []) do
@@ -480,14 +482,21 @@ defmodule Yex.Doc do
   Monitor document updates encoded with the v1 format.
 
   The calling process receives `{:update_v1, update, origin, metadata}` messages.
-  See `monitor_update/2` for the meaning of `origin` and the `:metadata` option.
+  See `monitor_update/2` for the meaning of `origin`, the `:metadata` option and use
+  inside `transaction/3`.
   """
   @spec monitor_update_v1(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_update_v1(%__MODULE__{} = doc, opt \\ []) do
     notify_pid = self()
 
     case run_in_worker_process(doc,
-           do: Yex.Nif.doc_monitor_update_v1(doc, notify_pid, Keyword.get(opt, :metadata, doc))
+           do:
+             Yex.Nif.doc_monitor_update_v1(
+               doc,
+               cur_txn(doc),
+               notify_pid,
+               Keyword.get(opt, :metadata, doc)
+             )
          ) do
       {:ok, sub} ->
         {:ok, Yex.Subscription.register(sub)}
@@ -501,14 +510,21 @@ defmodule Yex.Doc do
   Monitor document updates encoded with the v2 format.
 
   The calling process receives `{:update_v2, update, origin, metadata}` messages.
-  See `monitor_update/2` for the meaning of `origin` and the `:metadata` option.
+  See `monitor_update/2` for the meaning of `origin`, the `:metadata` option and use
+  inside `transaction/3`.
   """
   @spec monitor_update_v2(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_update_v2(%__MODULE__{} = doc, opt \\ []) do
     notify_pid = self()
 
     case run_in_worker_process(doc,
-           do: Yex.Nif.doc_monitor_update_v2(doc, notify_pid, Keyword.get(opt, :metadata, doc))
+           do:
+             Yex.Nif.doc_monitor_update_v2(
+               doc,
+               cur_txn(doc),
+               notify_pid,
+               Keyword.get(opt, :metadata, doc)
+             )
          ) do
       {:ok, sub} ->
         {:ok, Yex.Subscription.register(sub)}
@@ -549,6 +565,7 @@ defmodule Yex.Doc do
   `{:subdocs, %{added: [Yex.Doc.t()], removed: [Yex.Doc.t()], loaded: [Yex.Doc.t()]}, origin, metadata}`
   messages whenever subdocuments are added to, removed from, or loaded in this document.
   You can pass metadata as an option; if omitted, the document itself is used.
+  Works inside `transaction/3`; that transaction is reported when it commits.
 
   Use `Yex.Subscription.unsubscribe/1` with the returned reference to stop monitoring.
   """
@@ -557,7 +574,13 @@ defmodule Yex.Doc do
     notify_pid = self()
 
     case run_in_worker_process(doc,
-           do: Yex.Nif.doc_monitor_subdocs(doc, notify_pid, Keyword.get(opt, :metadata, doc))
+           do:
+             Yex.Nif.doc_monitor_subdocs(
+               doc,
+               cur_txn(doc),
+               notify_pid,
+               Keyword.get(opt, :metadata, doc)
+             )
          ) do
       {:ok, sub} ->
         {:ok, Yex.Subscription.register(sub)}
@@ -578,7 +601,10 @@ defmodule Yex.Doc do
 
   Transactions that changed nothing are not reported. yjs reports every transaction, but
   y_ex also opens empty write transactions internally (for example in `get_text/2` and
-  when subscribing), which would show up as noise.
+  when subscribing), which would show up as noise. This includes a remote update that
+  only adds structs waiting on missing predecessors: they are held as pending (see
+  `get_pending_update/1`) and change neither the state vector nor the delete set until
+  they integrate.
 
   `origin` and the `:metadata` option work as in `monitor_update/2`. Works inside
   `transaction/3`; that transaction is reported when it commits.
@@ -643,7 +669,13 @@ defmodule Yex.Doc do
   (yjs `getSubdocs()`).
 
   A subdocument inserted in an open `transaction/3` is listed once that transaction
-  commits. See `destroy/1` for what is listed after a subdocument was destroyed.
+  commits.
+
+  This call is not free of side effects. After a subdocument was destroyed, yrs 0.28
+  leaves the parent listing the destroyed doc (see `destroy/1`). Listing it caches that
+  doc under its guid in place of the live replacement, so the next lookup of the
+  replacement through its container (`Yex.Map.fetch/2`, say) returns a new resource
+  whose `reference` differs from one fetched before this call.
   """
   @spec subdocs(t) :: [t]
   def subdocs(%__MODULE__{} = doc) do

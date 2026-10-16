@@ -122,6 +122,26 @@ defmodule Yex.DocLifecycleTest do
       assert_receive {:transaction_cleanup, %{after_state: %{7 => 2}}, nil, _}
     end
 
+    test "does not report a remote update held as pending until it integrates" do
+      source = doc(1)
+      text = Doc.get_text(source, "text")
+      Text.insert(text, 0, "a")
+      first = Yex.encode_state_as_update!(source)
+      sv = Yex.encode_state_vector!(source)
+      Text.insert(text, 1, "b")
+      second = Yex.encode_state_as_update!(source, sv)
+
+      target = doc(2)
+      {:ok, _} = Doc.monitor_transaction_cleanup(target)
+      :ok = Yex.apply_update(target, second)
+      assert {:ok, pending} = Doc.get_pending_update(target)
+      assert is_binary(pending)
+      refute_receive {:transaction_cleanup, _, _, _}, 10
+
+      :ok = Yex.apply_update(target, first)
+      assert_receive {:transaction_cleanup, %{before_state: %{}, after_state: %{1 => 2}}, nil, _}
+    end
+
     test "arrives before the update message of the same commit" do
       doc = doc(7)
       {:ok, _} = Doc.monitor_update(doc)
@@ -497,6 +517,17 @@ defmodule Yex.DocLifecycleTest do
       end)
 
       assert [_] = Doc.subdocs(parent)
+    end
+
+    test "listing a destroyed subdoc evicts the cached replacement" do
+      {parent, folder, sub} = parent_with_subdoc()
+      :ok = Doc.destroy(sub)
+      live = Map.fetch!(folder, "a")
+      assert Map.fetch!(folder, "a").reference == live.reference
+
+      assert [listed] = Doc.subdocs(parent)
+      assert Doc.guid(listed) == "sub"
+      assert Map.fetch!(folder, "a").reference != live.reference
     end
 
     test "works through a worker process" do

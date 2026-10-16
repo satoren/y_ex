@@ -55,10 +55,13 @@ defmodule Yex.Nif do
 
   def doc_root_refs(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
-  def doc_monitor_update_v1(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
-  def doc_monitor_update_v2(_doc, _pid, _metadata), do: :erlang.nif_error(:nif_not_loaded)
+  def doc_monitor_update_v1(_doc, _cur_txn, _pid, _metadata),
+    do: :erlang.nif_error(:nif_not_loaded)
 
-  def doc_monitor_subdocs(_doc, _pid, _metadata),
+  def doc_monitor_update_v2(_doc, _cur_txn, _pid, _metadata),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def doc_monitor_subdocs(_doc, _cur_txn, _pid, _metadata),
     do: :erlang.nif_error(:nif_not_loaded)
 
   def doc_monitor_transaction_cleanup(_doc, _cur_txn, _pid, _metadata),

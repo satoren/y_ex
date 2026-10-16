@@ -197,6 +197,25 @@ defmodule Yex.DocTest do
     Doc.demonitor_update(monitor_ref)
   end
 
+  test "monitor_update_v1, monitor_update_v2 and monitor_subdocs registered inside a transaction report that transaction" do
+    doc = Doc.new()
+    text = Doc.get_text(doc, "text")
+    map = Doc.get_map(doc, "map")
+
+    Doc.transaction(doc, "origin", fn ->
+      {:ok, _} = Doc.monitor_update_v1(doc)
+      {:ok, _} = Doc.monitor_update_v2(doc)
+      {:ok, _} = Doc.monitor_subdocs(doc)
+      Text.insert(text, 0, "Hello")
+      :ok = Yex.Map.set(map, "sub", Doc.with_options(%Doc.Options{guid: "sub"}))
+    end)
+
+    assert_receive {:update_v1, _update, "origin", ^doc}
+    assert_receive {:update_v2, _update, "origin", ^doc}
+    assert_receive {:subdocs, %{added: [added]}, "origin", ^doc}
+    assert Doc.guid(added) == "sub"
+  end
+
   test "apply_update from update event" do
     doc = Doc.new()
     {:ok, monitor_ref} = Doc.monitor_update(doc)

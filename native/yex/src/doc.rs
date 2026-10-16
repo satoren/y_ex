@@ -481,71 +481,81 @@ fn commit_transaction(env: Env<'_>, current_transaction: ResourceArc<Transaction
 
 #[rustler::nif]
 fn doc_monitor_update_v1(
+    env: Env<'_>,
     doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
 
-    doc.observe_update_v1(sub_key.key.clone(), move |txn, event| {
-        let Some(state) = state.get() else {
-            return;
-        };
-        let (pid, metadata) = &*state;
-        ENV.with(|env| {
-            let metadata = metadata.get(*env);
-            let _ = env.send(
-                pid,
-                (
-                    atoms::update_v1(),
-                    SliceIntoBinary::new(event.update.as_slice()),
-                    origin_to_term(env, txn.origin()),
-                    metadata,
-                ),
-            );
-        })
-    })
-    .map(|_| {
-        (
-            atoms::ok(),
-            NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV1), doc.clone()),
-        )
-    })
-    .map_err(|e| Error::from(e).into())
+    let key = sub_key.key.clone();
+
+    doc.mutably(env, current_transaction, move |txn| {
+        txn.observe_update_v1(key, move |txn, event| {
+            let Some(state) = state.get() else {
+                return;
+            };
+            let (pid, metadata) = &*state;
+            ENV.with(|env| {
+                let metadata = metadata.get(*env);
+                let _ = env.send(
+                    pid,
+                    (
+                        atoms::update_v1(),
+                        SliceIntoBinary::new(event.update.as_slice()),
+                        origin_to_term(env, txn.origin()),
+                        metadata,
+                    ),
+                );
+            })
+        });
+        Ok(())
+    })?;
+
+    Ok((
+        atoms::ok(),
+        NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV1), doc.clone()),
+    ))
 }
 #[rustler::nif]
 fn doc_monitor_update_v2(
+    env: Env<'_>,
     doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
 
-    doc.observe_update_v2(sub_key.key.clone(), move |txn, event| {
-        let Some(state) = state.get() else {
-            return;
-        };
-        let (pid, metadata) = &*state;
-        ENV.with(|env| {
-            let metadata = metadata.get(*env);
-            let _ = env.send(
-                pid,
-                (
-                    atoms::update_v2(),
-                    SliceIntoBinary::new(event.update.as_slice()),
-                    origin_to_term(env, txn.origin()),
-                    metadata,
-                ),
-            );
-        })
-    })
-    .map(|_| {
-        (
-            atoms::ok(),
-            NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV2), doc.clone()),
-        )
-    })
-    .map_err(|e| Error::from(e).into())
+    let key = sub_key.key.clone();
+
+    doc.mutably(env, current_transaction, move |txn| {
+        txn.observe_update_v2(key, move |txn, event| {
+            let Some(state) = state.get() else {
+                return;
+            };
+            let (pid, metadata) = &*state;
+            ENV.with(|env| {
+                let metadata = metadata.get(*env);
+                let _ = env.send(
+                    pid,
+                    (
+                        atoms::update_v2(),
+                        SliceIntoBinary::new(event.update.as_slice()),
+                        origin_to_term(env, txn.origin()),
+                        metadata,
+                    ),
+                );
+            })
+        });
+        Ok(())
+    })?;
+
+    Ok((
+        atoms::ok(),
+        NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV2), doc.clone()),
+    ))
 }
 
 fn apply_update_v1_impl(
@@ -1284,40 +1294,45 @@ fn transaction_json_path_all<'a>(
 
 #[rustler::nif]
 fn doc_monitor_subdocs(
+    env: Env<'_>,
     doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata), doc.clone()));
 
-    doc.observe_subdocs(sub_key.key.clone(), move |txn, event: &SubdocsEvent| {
-        let Some(state) = state.get() else {
-            return;
-        };
-        let (pid, metadata, event_doc) = &*state;
-        ENV.with(|env| {
-            let active_subdoc_guids: HashSet<String> =
-                txn.subdoc_guids().map(|guid| guid.to_string()).collect();
-            let event = NifSubdocsEvent::new(event, event_doc, &active_subdoc_guids);
-            let metadata = metadata.get(*env);
-            let _ = env.send(
-                pid,
-                (
-                    atoms::subdocs(),
-                    event,
-                    origin_to_term(env, txn.origin()),
-                    metadata,
-                ),
-            );
-        })
-    })
-    .map(|_| {
-        (
-            atoms::ok(),
-            NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::Subdocs), doc.clone()),
-        )
-    })
-    .map_err(|e| Error::from(e).into())
+    let key = sub_key.key.clone();
+
+    doc.mutably(env, current_transaction, move |txn| {
+        txn.observe_subdocs(key, move |txn, event: &SubdocsEvent| {
+            let Some(state) = state.get() else {
+                return;
+            };
+            let (pid, metadata, event_doc) = &*state;
+            ENV.with(|env| {
+                let active_subdoc_guids: HashSet<String> =
+                    txn.subdoc_guids().map(|guid| guid.to_string()).collect();
+                let event = NifSubdocsEvent::new(event, event_doc, &active_subdoc_guids);
+                let metadata = metadata.get(*env);
+                let _ = env.send(
+                    pid,
+                    (
+                        atoms::subdocs(),
+                        event,
+                        origin_to_term(env, txn.origin()),
+                        metadata,
+                    ),
+                );
+            })
+        });
+        Ok(())
+    })?;
+
+    Ok((
+        atoms::ok(),
+        NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::Subdocs), doc.clone()),
+    ))
 }
 
 /// NIF behind `Yex.Doc.monitor_transaction_cleanup/2`. Sends
