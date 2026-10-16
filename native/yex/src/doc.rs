@@ -1181,6 +1181,8 @@ fn doc_load(env: Env<'_>, doc: NifDoc) -> NifResult<Atom> {
     })
 }
 
+/// NIF behind `Yex.Doc.destroy/1`. Raises `TransactionAcqError` when the document, a
+/// subdocument or the parent is locked, then frees undo managers the destroy detached.
 #[rustler::nif]
 fn doc_destroy(env: Env<'_>, doc: NifDoc) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
@@ -1318,6 +1320,9 @@ fn doc_monitor_subdocs(
     .map_err(|e| Error::from(e).into())
 }
 
+/// NIF behind `Yex.Doc.monitor_transaction_cleanup/2`. Sends
+/// `{:transaction_cleanup, event, origin, metadata}` to `pid` after each transaction that
+/// changed the document.
 #[rustler::nif]
 fn doc_monitor_transaction_cleanup(
     env: Env<'_>,
@@ -1365,6 +1370,8 @@ fn doc_monitor_transaction_cleanup(
     ))
 }
 
+/// NIF behind `Yex.Doc.monitor_destroy/2`. Sends `{:destroy, metadata}` to `pid` when the
+/// document is destroyed.
 #[rustler::nif]
 fn doc_monitor_destroy(
     env: Env<'_>,
@@ -1396,6 +1403,8 @@ fn doc_monitor_destroy(
     ))
 }
 
+/// NIF behind `Yex.Doc.subdocs/1`. Returns the cached handle of each subdocument linked
+/// into this document.
 #[rustler::nif]
 fn doc_subdocs(
     doc: NifDoc,

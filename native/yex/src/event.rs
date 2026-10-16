@@ -568,6 +568,7 @@ pub struct NifTransactionCleanupEvent {
 }
 
 impl From<&yrs::TransactionCleanupEvent> for NifTransactionCleanupEvent {
+    /// Copies the state vectors and delete set into Elixir-encodable maps.
     fn from(event: &yrs::TransactionCleanupEvent) -> Self {
         NifTransactionCleanupEvent {
             before_state: state_vector_to_map(&event.before_state),
