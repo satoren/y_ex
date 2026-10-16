@@ -12,9 +12,10 @@ use yrs::*;
 use crate::{
     any::NifAttr,
     atoms,
-    doc::NifDoc,
+    doc::{NifDoc, SnapshotRef},
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
+    snapshot::known_clients_only,
     transaction::TransactionResource,
     yinput::{NifYInput, NifYInputDelta},
     youtput::NifYOut,
@@ -208,6 +209,45 @@ fn text_to_delta(
     encode_diffs(diff, &text.doc, env)
 }
 
+/// Text delta covering everything visible at `hi` or `lo`, with `ychange` marking strings
+/// added since `lo` or removed by `hi`. A missing `hi` means the current state.
+pub fn diff_between_snapshots<T: Text>(
+    txn: &mut TransactionMut,
+    text: &T,
+    hi: Option<SnapshotRef>,
+    lo: Option<SnapshotRef>,
+) -> Vec<Diff<YChange>> {
+    let local = txn.state_vector();
+    // yrs only marks changes when `hi` is given, so a missing `hi` becomes the current
+    // snapshot, under which every integrated item is visible exactly when not deleted.
+    let hi = match hi {
+        Some(snapshot) => known_clients_only(snapshot.0, &local),
+        None => txn.snapshot(),
+    };
+    let lo = lo.map(|snapshot| known_clients_only(snapshot.0, &local));
+    text.diff_range(txn, Some(&hi), lo.as_ref(), YChange::identity)
+}
+
+#[rustler::nif]
+fn text_to_delta_with_snapshots(
+    env: Env<'_>,
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    snapshot: Option<SnapshotRef>,
+    prev_snapshot: Option<SnapshotRef>,
+) -> NifResult<rustler::Term<'_>> {
+    let diff = text.mutably(env, current_transaction, |txn| {
+        let text_ref = text.get_ref(txn)?;
+        Ok(diff_between_snapshots(
+            txn,
+            &text_ref,
+            snapshot,
+            prev_snapshot,
+        ))
+    })?;
+    encode_diffs(diff, &text.doc, env)
+}
+
 #[rustler::nif]
 fn text_quote(
     env: Env<'_>,
@@ -267,14 +307,21 @@ pub fn encode_diff<'a>(diff: &Diff<YChange>, doc: &NifDoc, env: Env<'a>) -> NifR
     });
 
     if let Some(ychange) = &diff.ychange {
-        let ychange = match ychange.kind {
-            types::text::ChangeKind::Added => {
-                HashMap::from([("kind".into(), Any::String("added".into()))])
-            }
-            types::text::ChangeKind::Removed => {
-                HashMap::from([("kind".into(), Any::String("removed".into()))])
-            }
+        let kind = match ychange.kind {
+            types::text::ChangeKind::Added => "added",
+            types::text::ChangeKind::Removed => "removed",
         };
+        let id = HashMap::from([
+            (
+                "client".to_string(),
+                Any::from(ychange.id.client.get() as i64),
+            ),
+            ("clock".to_string(), Any::from(ychange.id.clock as i64)),
+        ]);
+        let ychange = HashMap::from([
+            ("type".to_string(), Any::String(kind.into())),
+            ("id".to_string(), Any::from(id)),
+        ]);
 
         if let Some(mut attr) = attribute {
             attr.insert("ychange".into(), Any::from(ychange));

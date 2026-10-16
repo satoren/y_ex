@@ -1,9 +1,22 @@
 defmodule Yex.Snapshot do
   @moduledoc """
-  Opaque snapshot of a document state at a specific point in time.
+  Snapshot of a document state at a point in time: its state vector and delete set.
 
-  Use `Yex.snapshot/1` to create it and `encode_state_v1/1`
-  or `encode_state_v2/1` to generate time-travel updates.
+  Use `Yex.snapshot/1` to take one, `encode_v1/1` / `decode_v1/1` (or the v2 pair) to
+  persist it, `encode_state_v1/2` or `create_doc/3` to restore the state it describes,
+  and `Yex.Text.to_delta/3` / `Yex.XmlText.to_delta/3` to show the text changes between
+  two snapshots.
+
+  Reading a document through a snapshot needs the deleted content, so the document must
+  have garbage collection disabled (`Yex.Doc.Options.skip_gc == true`).
+
+  The struct is opaque. `doc` is the document the snapshot was taken from, or `nil` for a
+  decoded snapshot. `reference` holds the snapshot's canonical lib0 v1 bytes: delete set
+  ranges sorted and merged, clock-0 state vector entries dropped, and clients written in
+  descending order as yjs writes them.
+
+  Arrays, maps and XML elements have no snapshot readers (yrs has none); restore the state
+  with `create_doc/3` and read it there.
   """
 
   alias Yex.Doc
@@ -13,27 +26,160 @@ defmodule Yex.Snapshot do
   defstruct [:doc, :reference]
 
   @type t :: %__MODULE__{
-          doc: Yex.Doc.t(),
+          doc: Yex.Doc.t() | nil,
           reference: binary()
         }
 
   @doc """
-  Encodes document state represented by this snapshot in lib0 v1 format.
+  Encodes the snapshot itself in lib0 v1 format, byte-identical to yjs `encodeSnapshot`.
+
+  y_ex 0.12.1 and earlier wrote these bytes in yrs order, which differs from yjs for
+  documents with several clients. Such bytes still decode; pass them through
+  `decode_v1/1` before comparing them with `equal?/2`.
+
+  ## Examples
+      iex> {:ok, snapshot} = Yex.Snapshot.decode_v1(<<0, 1, 1, 3>>)
+      iex> Yex.Snapshot.encode_v1(snapshot)
+      {:ok, <<0, 1, 1, 3>>}
+  """
+  @spec encode_v1(t()) :: {:ok, binary()}
+  def encode_v1(%__MODULE__{reference: reference}), do: {:ok, reference}
+
+  @doc """
+  Encodes the snapshot itself in lib0 v2 format, byte-identical to yjs `encodeSnapshotV2`.
+
+  This is not the yrs/ywasm `Snapshot::encode_v2` format, which yjs cannot read.
+  """
+  @spec encode_v2(t()) :: {:ok, binary()}
+  def encode_v2(%__MODULE__{reference: reference}), do: Yex.Nif.snapshot_encode_v2(reference)
+
+  @doc """
+  Decodes a snapshot encoded in lib0 v1 format (yjs `encodeSnapshot`, yrs `encode_v1`).
+
+  The returned snapshot is not bound to a document (`doc: nil`).
+
+  ## Examples
+      iex> {:ok, %Yex.Snapshot{doc: nil}} = Yex.Snapshot.decode_v1(<<0, 0>>)
+      iex> {:error, {:encoding_exception, _}} = Yex.Snapshot.decode_v1(<<0x80>>)
+  """
+  @spec decode_v1(binary()) :: {:ok, t()} | {:error, {:encoding_exception, String.t()}}
+  def decode_v1(bytes) when is_binary(bytes), do: Yex.Nif.snapshot_decode_v1(bytes)
+
+  @doc """
+  Decodes a snapshot encoded in lib0 v2 format (yjs `encodeSnapshotV2`).
+
+  The returned snapshot is not bound to a document (`doc: nil`).
+  """
+  @spec decode_v2(binary()) :: {:ok, t()} | {:error, {:encoding_exception, String.t()}}
+  def decode_v2(bytes) when is_binary(bytes), do: Yex.Nif.snapshot_decode_v2(bytes)
+
+  @doc """
+  Returns true when both snapshots have the same state vector and delete set, like yjs
+  `equalSnapshots`. The document a snapshot came from is ignored.
+
+  Delete sets are compared after merging adjacent ranges, so two encodings of the same
+  set compare equal even when yjs, which compares the raw range lists, would not.
+
+  ## Examples
+      iex> {:ok, a} = Yex.Snapshot.decode_v1(<<1, 1, 2, 1, 1, 2, 1, 0>>)
+      iex> {:ok, b} = Yex.Snapshot.decode_v1(<<1, 1, 1, 1, 2, 0>>)
+      iex> Yex.Snapshot.equal?(a, b)
+      true
+  """
+  @spec equal?(t(), t()) :: boolean()
+  def equal?(%__MODULE__{reference: a}, %__MODULE__{reference: b}), do: a == b
+
+  @doc """
+  Encodes the state of the snapshot's document as of the snapshot, in lib0 v1 format.
+
+  Raises `ArgumentError` for a decoded snapshot; use `encode_state_v1/2` instead.
   """
   @spec encode_state_v1(t()) :: {:ok, binary()} | {:error, term()}
-  def encode_state_v1(%__MODULE__{doc: %Yex.Doc{} = doc} = snapshot) do
+  def encode_state_v1(%__MODULE__{} = snapshot),
+    do: encode_state_v1(snapshot, bound_doc(snapshot))
+
+  @doc """
+  Encodes the state of `doc` as of `snapshot`, in lib0 v1 format.
+
+  `snapshot` can come from any replica of the document, for example a decoded one.
+  Returns `{:error, {:encoding_exception, _}}` when `doc` has garbage collection enabled.
+
+  A client whose first updates `doc` has not received (yrs integrates its later ones
+  behind a gap) is left out of the result.
+  """
+  @spec encode_state_v1(t(), Yex.Doc.t()) :: {:ok, binary()} | {:error, term()}
+  def encode_state_v1(%__MODULE__{reference: reference}, %Yex.Doc{} = doc) do
     Doc.run_in_worker_process doc do
-      Yex.Nif.transaction_encode_state_from_snapshot_v1(cur_txn(doc), snapshot)
+      Yex.Nif.transaction_encode_state_from_snapshot_v1(doc, cur_txn(doc), reference)
     end
   end
 
   @doc """
-  Encodes document state represented by this snapshot in lib0 v2 format.
+  Encodes the state of the snapshot's document as of the snapshot, in lib0 v2 format.
+
+  Raises `ArgumentError` for a decoded snapshot; use `encode_state_v2/2` instead.
   """
   @spec encode_state_v2(t()) :: {:ok, binary()} | {:error, term()}
-  def encode_state_v2(%__MODULE__{doc: %Yex.Doc{} = doc} = snapshot) do
+  def encode_state_v2(%__MODULE__{} = snapshot),
+    do: encode_state_v2(snapshot, bound_doc(snapshot))
+
+  @doc """
+  Encodes the state of `doc` as of `snapshot`, in lib0 v2 format.
+
+  `snapshot` can come from any replica of the document, for example a decoded one.
+  Returns `{:error, {:encoding_exception, _}}` when `doc` has garbage collection enabled.
+
+  A client whose first updates `doc` has not received (yrs integrates its later ones
+  behind a gap) is left out of the result.
+  """
+  @spec encode_state_v2(t(), Yex.Doc.t()) :: {:ok, binary()} | {:error, term()}
+  def encode_state_v2(%__MODULE__{reference: reference}, %Yex.Doc{} = doc) do
     Doc.run_in_worker_process doc do
-      Yex.Nif.transaction_encode_state_from_snapshot_v2(cur_txn(doc), snapshot)
+      Yex.Nif.transaction_encode_state_from_snapshot_v2(doc, cur_txn(doc), reference)
     end
+  end
+
+  @doc """
+  Restores `origin_doc` as of `snapshot` into `target`, like yjs `createDocFromSnapshot`.
+
+  `target` defaults to a new document owned by the calling process. Raises
+  `ArgumentError` when `origin_doc` has garbage collection enabled.
+
+  ## Examples
+      iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{skip_gc: true})
+      iex> text = Yex.Doc.get_text(doc, "text")
+      iex> Yex.Text.insert(text, 0, "world!")
+      iex> {:ok, snapshot} = Yex.snapshot(doc)
+      iex> Yex.Text.insert(text, 0, "hello ")
+      iex> {:ok, restored} = Yex.Snapshot.create_doc(snapshot, doc)
+      iex> Yex.Doc.get_text(restored, "text") |> Yex.Text.to_string()
+      "world!"
+  """
+  @spec create_doc(t(), Yex.Doc.t(), Yex.Doc.t()) :: {:ok, Yex.Doc.t()}
+  def create_doc(%__MODULE__{} = snapshot, %Yex.Doc{} = origin_doc, target \\ Doc.new()) do
+    ensure_skip_gc!(origin_doc)
+    {:ok, update} = encode_state_v2(snapshot, origin_doc)
+    :ok = Yex.apply_update_v2(target, update)
+    {:ok, target}
+  end
+
+  @doc false
+  # Shared precondition of every function that reads a document through a snapshot.
+  # `skip_gc` is fixed when the document is created, so the check cannot go stale.
+  @spec ensure_skip_gc!(Yex.Doc.t()) :: :ok
+  def ensure_skip_gc!(%Yex.Doc{} = doc) do
+    if Doc.skip_gc(doc) do
+      :ok
+    else
+      raise ArgumentError,
+            "garbage collection must be disabled (skip_gc: true) to read a document through a snapshot"
+    end
+  end
+
+  defp bound_doc(%__MODULE__{doc: %Yex.Doc{} = doc}), do: doc
+
+  defp bound_doc(%__MODULE__{doc: nil}) do
+    raise ArgumentError,
+          "snapshot is not bound to a document; pass the document as the second argument"
   end
 end

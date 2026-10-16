@@ -7,10 +7,10 @@ use yrs::{
 use crate::{
     any::NifAttr,
     atoms,
-    doc::NifDoc,
+    doc::{NifDoc, SnapshotRef},
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifXmlEvent, NifXmlTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
-    text::encode_diffs,
+    text::{diff_between_snapshots, encode_diffs},
     transaction::{ReadTransaction, TransactionResource},
     utils::{capped_index_and_length, normalize_index, normalize_index_for_insert},
     wrap::NifMapPairs,
@@ -707,6 +707,26 @@ fn xml_text_to_delta(
     let diff = xml.readonly(current_transaction, |txn| -> Result<_, rustler::Error> {
         let xml = xml.get_ref(txn)?;
         Ok(xml.diff(txn, YChange::identity))
+    })?;
+    encode_diffs(diff, xml.doc(), env)
+}
+
+#[rustler::nif]
+fn xml_text_to_delta_with_snapshots(
+    env: Env<'_>,
+    xml: NifXmlText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    snapshot: Option<SnapshotRef>,
+    prev_snapshot: Option<SnapshotRef>,
+) -> NifResult<rustler::Term<'_>> {
+    let diff = xml.mutably(env, current_transaction, |txn| {
+        let xml_ref = xml.get_ref(txn)?;
+        Ok(diff_between_snapshots(
+            txn,
+            &xml_ref,
+            snapshot,
+            prev_snapshot,
+        ))
     })?;
     encode_diffs(diff, xml.doc(), env)
 }
