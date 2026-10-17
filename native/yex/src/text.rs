@@ -1,7 +1,7 @@
 use crate::{
     any::{encode as encode_any, encode_str},
     utils::{capped_index_and_length, normalize_index_for_insert},
-    wrap::{make_map, NifStr},
+    wrap::{make_list, make_map, NifStr},
     yinput::NifWeakPrelim,
 };
 use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
@@ -204,7 +204,7 @@ fn text_to_delta(
             Ok(text.diff(txn, YChange::identity))
         },
     )?;
-    encode_diffs(diff, &text.doc, env)
+    Ok(encode_diffs(diff, &text.doc, env))
 }
 
 #[rustler::nif]
@@ -245,18 +245,10 @@ fn text_apply_delta(
     })
 }
 
-pub fn encode_diffs<'a>(
-    diff: Vec<Diff<YChange>>,
-    doc: &NifDoc,
-    env: Env<'a>,
-) -> NifResult<Term<'a>> {
-    let deltas: Vec<Term<'a>> = diff
-        .iter()
-        .map(|diff| encode_diff(diff, doc, env))
-        .collect::<Result<Vec<Term<'a>>, rustler::Error>>()?;
-    Ok(deltas.encode(env))
+pub fn encode_diffs<'a>(diff: Vec<Diff<YChange>>, doc: &NifDoc, env: Env<'a>) -> Term<'a> {
+    make_list(env, diff.iter().map(|diff| encode_diff(diff, doc, env)))
 }
-pub fn encode_diff<'a>(diff: &Diff<YChange>, doc: &NifDoc, env: Env<'a>) -> NifResult<Term<'a>> {
+pub fn encode_diff<'a>(diff: &Diff<YChange>, doc: &NifDoc, env: Env<'a>) -> Term<'a> {
     let insert = NifYOut::from_native(diff.insert.clone(), doc).encode(env);
 
     let ychange = diff.ychange.as_ref().map(|ychange| {
@@ -283,5 +275,5 @@ pub fn encode_diff<'a>(diff: &Diff<YChange>, doc: &NifDoc, env: Env<'a>) -> NifR
 
     let insert = (atoms::insert().encode(env), insert);
     let attributes = attributes.map(|attrs| (atoms::attributes().encode(env), attrs));
-    Ok(make_map(env, std::iter::once(insert).chain(attributes)))
+    make_map(env, std::iter::once(insert).chain(attributes))
 }

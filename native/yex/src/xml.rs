@@ -233,20 +233,32 @@ fn xml_fragment_parent(
 }
 
 /// The nodes `children/1` streams: the child at index 0, then each node's next sibling,
-/// stopping where `Xml::siblings` does. Returns them in one call instead of one per child.
-fn child_nodes<X: XmlFragment>(xml: &X, txn: &ReadTransaction, doc: &NifDoc) -> Vec<NifYOut> {
+/// stopping where `Xml::siblings` does. Returns them in one call instead of one per child,
+/// at most `max` of them.
+pub(crate) fn child_xml_nodes<X: XmlFragment>(
+    xml: &X,
+    txn: &ReadTransaction,
+    max: usize,
+) -> Vec<XmlOut> {
     let mut nodes = Vec::new();
     let mut next = xml.get(txn, 0);
-    while let Some(node) = next {
+    while let Some(node) = next.filter(|_| nodes.len() < max) {
         next = match &node {
             XmlOut::Element(element) => element.siblings(txn).next(),
             XmlOut::Text(text) => text.siblings(txn).next(),
             // A fragment has no siblings to follow: `Xml.next_sibling/1` has no clause for it.
             XmlOut::Fragment(_) => None,
         };
-        nodes.push(NifYOut::from_xml_out(node, doc.clone()));
+        nodes.push(node);
     }
     nodes
+}
+
+fn child_nodes<X: XmlFragment>(xml: &X, txn: &ReadTransaction, doc: &NifDoc) -> Vec<NifYOut> {
+    child_xml_nodes(xml, txn, usize::MAX)
+        .into_iter()
+        .map(|node| NifYOut::from_xml_out(node, doc.clone()))
+        .collect()
 }
 
 #[rustler::nif]
@@ -749,7 +761,7 @@ fn xml_text_to_delta(
         let xml = xml.get_ref(txn)?;
         Ok(xml.diff(txn, YChange::identity))
     })?;
-    encode_diffs(diff, xml.doc(), env)
+    Ok(encode_diffs(diff, xml.doc(), env))
 }
 
 #[rustler::nif]

@@ -8,6 +8,7 @@ mod doc;
 mod error;
 mod event;
 mod map;
+mod prelim;
 mod shared_type;
 mod sticky_index;
 mod subscription;

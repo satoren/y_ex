@@ -37,6 +37,24 @@ defmodule Yex.Nif do
   def dirty_encode_items(), do: 16_384
   def dirty_json_items(), do: 1_024
 
+  # as_prelim/1 converts a subtree, which can be small in a large doc, so it is not judged
+  # by the doc's item count. The normal NIF converts up to this many values (every value,
+  # child node and delta entry) and returns :dirty without a result when the tree holds
+  # more; as_prelim/2 then uses the DirtyCpu twin. The limit is the largest power of two
+  # below the smallest value count whose normal-scheduler median passes 1 ms, set by XML
+  # paragraphs (2_801). A plain value counts once whatever its size, as it costs no more
+  # than it did when array_to_list/2 read it. See benchmark/dirty_prelim.exs.
+  def dirty_prelim_values(), do: 2_048
+
+  # The prelim of a shared type and everything in it, built in one call. Call it in the
+  # worker process.
+  def as_prelim(shared_type, cur_txn) do
+    case shared_type_as_prelim(shared_type, cur_txn, dirty_prelim_values()) do
+      :dirty -> shared_type_as_prelim_dirty(shared_type, cur_txn)
+      prelim -> prelim
+    end
+  end
+
   # map_clear deletes every entry and nested item, and its auto-commit builds one
   # observer event entry per removed key, so it also costs what the document costs. Its
   # normal NIF returns :dirty above this many doc items. With observe and observe_deep
@@ -166,6 +184,13 @@ defmodule Yex.Nif do
   def xml_fragment_tree_walker(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_element_tree_walker(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_fragment_children(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def shared_type_as_prelim(_shared_type, _cur_txn, _budget),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def shared_type_as_prelim_dirty(_shared_type, _cur_txn),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def xml_element_children(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_query_selector(_xml_fragment, _cur_txn, _tag, _first_only),

@@ -238,12 +238,7 @@ defmodule Yex.XmlText do
   """
   @spec as_prelim(t) :: Yex.XmlTextPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = xml_text) do
-    Doc.run_in_worker_process doc do
-      attributes =
-        Map.new(get_attributes(xml_text), fn {k, v} -> {k, Yex.Output.as_prelim(v)} end)
-
-      %{Yex.XmlTextPrelim.from(to_delta(xml_text)) | attributes: attributes}
-    end
+    Doc.run_in_worker_process(doc, do: Yex.Nif.as_prelim(xml_text, cur_txn(xml_text)))
   end
 
   @doc """

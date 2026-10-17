@@ -161,8 +161,8 @@ defmodule Yex.Text do
     * `text` - The text object to convert
   """
   @spec as_prelim(t) :: Yex.TextPrelim.t()
-  def as_prelim(%__MODULE__{} = text) do
-    Yex.Text.to_delta(text) |> Yex.TextPrelim.from()
+  def as_prelim(%__MODULE__{doc: doc} = text) do
+    Doc.run_in_worker_process(doc, do: Yex.Nif.as_prelim(text, cur_txn(text)))
   end
 
   defimpl Yex.Output do

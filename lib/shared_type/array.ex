@@ -410,12 +410,7 @@ defmodule Yex.Array do
   """
   @spec as_prelim(t) :: Yex.ArrayPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = array) do
-    Doc.run_in_worker_process(doc,
-      do:
-        Yex.Array.to_list(array)
-        |> Enum.map(&Yex.Output.as_prelim/1)
-        |> Yex.ArrayPrelim.from()
-    )
+    Doc.run_in_worker_process(doc, do: Yex.Nif.as_prelim(array, cur_txn(array)))
   end
 
   defimpl Yex.Output do

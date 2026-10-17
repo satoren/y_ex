@@ -369,13 +369,7 @@ defmodule Yex.Map do
   """
   @spec as_prelim(t) :: Yex.MapPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = map) do
-    Doc.run_in_worker_process(doc,
-      do:
-        Yex.Map.to_list(map)
-        |> Enum.map(fn {key, value} -> {key, Yex.Output.as_prelim(value)} end)
-        |> Map.new()
-        |> Yex.MapPrelim.from()
-    )
+    Doc.run_in_worker_process(doc, do: Yex.Nif.as_prelim(map, cur_txn(map)))
   end
 
   defimpl Yex.Output do

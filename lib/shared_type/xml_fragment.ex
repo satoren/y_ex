@@ -360,12 +360,7 @@ defmodule Yex.XmlFragment do
   """
   @spec as_prelim(t) :: Yex.XmlFragmentPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = xml_fragment) do
-    Doc.run_in_worker_process(doc,
-      do:
-        child_list(xml_fragment)
-        |> Enum.map(fn child -> Yex.Output.as_prelim(child) end)
-        |> Yex.XmlFragmentPrelim.new()
-    )
+    Doc.run_in_worker_process(doc, do: Yex.Nif.as_prelim(xml_fragment, cur_txn(xml_fragment)))
   end
 
   defimpl Yex.Output do

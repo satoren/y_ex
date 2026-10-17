@@ -69,5 +69,16 @@ rustler::atoms! {
   meta,
   not_found,
   struct_ = "__struct__",
+  // prelim structs and their fields
+  map_prelim = "Elixir.Yex.MapPrelim",
+  array_prelim = "Elixir.Yex.ArrayPrelim",
+  text_prelim = "Elixir.Yex.TextPrelim",
+  xml_element_prelim = "Elixir.Yex.XmlElementPrelim",
+  xml_fragment_prelim = "Elixir.Yex.XmlFragmentPrelim",
+  xml_text_prelim = "Elixir.Yex.XmlTextPrelim",
+  list,
+  delta,
+  tag,
+  children,
   type_ = "type",
 }

@@ -453,16 +453,7 @@ defmodule Yex.XmlElement do
   """
   @spec as_prelim(t) :: Yex.XmlElementPrelim.t()
   def as_prelim(%__MODULE__{doc: doc} = xml_element) do
-    Doc.run_in_worker_process doc do
-      c =
-        child_list(xml_element)
-        |> Enum.map(fn child -> Yex.Output.as_prelim(child) end)
-
-      attributes =
-        Map.new(get_attributes(xml_element), fn {k, v} -> {k, Yex.Output.as_prelim(v)} end)
-
-      Yex.XmlElementPrelim.new(get_tag(xml_element), c, attributes)
-    end
+    Doc.run_in_worker_process(doc, do: Yex.Nif.as_prelim(xml_element, cur_txn(xml_element)))
   end
 
   defimpl Yex.Output do
