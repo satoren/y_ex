@@ -1,4 +1,4 @@
-use rustler::{Atom, Env, NifResult, NifStruct, ResourceArc};
+use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
 use yrs::{
     types::text::YChange, GetString, SharedRef as _, Text, Xml, XmlElementRef, XmlFragment,
     XmlFragmentRef, XmlOut, XmlTextRef,
@@ -234,6 +234,20 @@ fn xml_fragment_parent(
 
 /// The nodes `children/1` streams: the child at index 0, then each node's next sibling,
 /// stopping where `Xml::siblings` does. Returns them in one call instead of one per child.
+/// Returns `:dirty` without reading when `xml` has more than `child_limit` children.
+fn children_term<'a, X: XmlFragment>(
+    env: Env<'a>,
+    xml: &X,
+    txn: &ReadTransaction,
+    doc: &NifDoc,
+    child_limit: Option<u32>,
+) -> Term<'a> {
+    if child_limit.is_some_and(|limit| xml.len(txn) > limit) {
+        return atoms::dirty().encode(env);
+    }
+    child_nodes(xml, txn, doc).encode(env)
+}
+
 fn child_nodes<X: XmlFragment>(xml: &X, txn: &ReadTransaction, doc: &NifDoc) -> Vec<NifYOut> {
     let mut nodes = Vec::new();
     let mut next = xml.get(txn, 0);
@@ -249,28 +263,68 @@ fn child_nodes<X: XmlFragment>(xml: &X, txn: &ReadTransaction, doc: &NifDoc) -> 
     nodes
 }
 
-#[rustler::nif]
-fn xml_fragment_children(
+fn xml_fragment_children_impl<'a>(
+    env: Env<'a>,
     xml: NifXmlFragment,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<Vec<NifYOut>> {
+    child_limit: Option<u32>,
+) -> NifResult<Term<'a>> {
     let doc = xml.doc();
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        Ok(child_nodes(&xml, txn, doc))
+        Ok(children_term(env, &xml, txn, doc, child_limit))
     })
 }
 
 #[rustler::nif]
-fn xml_element_children(
+fn xml_fragment_children<'a>(
+    env: Env<'a>,
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    child_limit: Option<u32>,
+) -> NifResult<Term<'a>> {
+    xml_fragment_children_impl(env, xml, current_transaction, child_limit)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn xml_fragment_children_dirty<'a>(
+    env: Env<'a>,
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Term<'a>> {
+    xml_fragment_children_impl(env, xml, current_transaction, None)
+}
+
+fn xml_element_children_impl<'a>(
+    env: Env<'a>,
     xml: NifXmlElement,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<Vec<NifYOut>> {
+    child_limit: Option<u32>,
+) -> NifResult<Term<'a>> {
     let doc = xml.doc();
     xml.readonly(current_transaction, |txn| {
         let xml = xml.get_ref(txn)?;
-        Ok(child_nodes(&xml, txn, doc))
+        Ok(children_term(env, &xml, txn, doc, child_limit))
     })
+}
+
+#[rustler::nif]
+fn xml_element_children<'a>(
+    env: Env<'a>,
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    child_limit: Option<u32>,
+) -> NifResult<Term<'a>> {
+    xml_element_children_impl(env, xml, current_transaction, child_limit)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn xml_element_children_dirty<'a>(
+    env: Env<'a>,
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Term<'a>> {
+    xml_element_children_impl(env, xml, current_transaction, None)
 }
 
 /// Collects every descendant of `xml` in document order (depth-first, pre-order).
