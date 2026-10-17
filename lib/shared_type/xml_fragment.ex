@@ -52,6 +52,11 @@ defmodule Yex.XmlFragment do
     )
   end
 
+  # The nodes children/1 streams, read in one NIF call. Call it in the worker process.
+  defp child_list(%__MODULE__{} = xml_fragment) do
+    Yex.Nif.xml_fragment_children(xml_fragment, cur_txn(xml_fragment))
+  end
+
   @typedoc "A node returned by `tree_walker/2`."
   @type xml_node :: Yex.XmlElement.t() | Yex.XmlText.t() | Yex.XmlFragment.t()
 
@@ -173,7 +178,7 @@ defmodule Yex.XmlFragment do
         ) :: :ok | :error
   def insert_after(%__MODULE__{doc: doc} = xml_fragment, ref, content) do
     Doc.run_in_worker_process doc do
-      index = children(xml_fragment) |> Enum.find_index(&(&1 == ref))
+      index = child_list(xml_fragment) |> Enum.find_index(&(&1 == ref))
 
       if index == nil do
         insert(xml_fragment, 0, content)
@@ -195,7 +200,7 @@ defmodule Yex.XmlFragment do
         ) :: Yex.XmlElement.t() | Yex.XmlText.t()
   def insert_after_and_get(%__MODULE__{doc: doc} = xml_fragment, ref, content) do
     Doc.run_in_worker_process doc do
-      index = children(xml_fragment) |> Enum.find_index(&(&1 == ref))
+      index = child_list(xml_fragment) |> Enum.find_index(&(&1 == ref))
 
       target_index =
         if index == nil do
@@ -357,7 +362,7 @@ defmodule Yex.XmlFragment do
   def as_prelim(%__MODULE__{doc: doc} = xml_fragment) do
     Doc.run_in_worker_process(doc,
       do:
-        children(xml_fragment)
+        child_list(xml_fragment)
         |> Enum.map(fn child -> Yex.Output.as_prelim(child) end)
         |> Yex.XmlFragmentPrelim.new()
     )

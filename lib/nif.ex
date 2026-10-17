@@ -165,6 +165,8 @@ defmodule Yex.Nif do
 
   def xml_fragment_tree_walker(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_element_tree_walker(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_fragment_children(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+  def xml_element_children(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_query_selector(_xml_fragment, _cur_txn, _tag, _first_only),
     do: :erlang.nif_error(:nif_not_loaded)

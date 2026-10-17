@@ -481,6 +481,39 @@ defmodule YexXmlFragmentTest do
     end
   end
 
+  describe "children read in one call" do
+    # insert_after/3, insert_after_and_get/3 and as_prelim/1 read the children with one
+    # NIF call; it must return exactly what children/1 streams.
+    test "match children/1 for the fragment and an element", %{xml_fragment: f} do
+      XmlFragment.push(f, XmlTextPrelim.from("t0"))
+
+      el =
+        XmlFragment.push_and_get(
+          f,
+          XmlElementPrelim.new("div", [
+            XmlElementPrelim.empty("p"),
+            XmlTextPrelim.from("inner"),
+            XmlElementPrelim.empty("span")
+          ])
+        )
+
+      XmlFragment.push(f, XmlElementPrelim.empty("deleted"))
+      XmlFragment.push(f, XmlTextPrelim.from("t1"))
+      XmlFragment.delete(f, 2, 1)
+      XmlElement.delete(el, 1, 1)
+
+      # No transaction is open, so the NIFs take nil like the public functions do.
+      txn = nil
+      assert Yex.Nif.xml_fragment_children(f, txn) == Enum.to_list(XmlFragment.children(f))
+      assert 3 == length(Yex.Nif.xml_fragment_children(f, txn))
+      assert Yex.Nif.xml_element_children(el, txn) == Enum.to_list(XmlElement.children(el))
+      assert 2 == length(Yex.Nif.xml_element_children(el, txn))
+
+      empty = XmlFragment.push_and_get(f, XmlElementPrelim.empty("empty"))
+      assert [] == Yex.Nif.xml_element_children(empty, txn)
+    end
+  end
+
   describe "non-XML child written by yjs" do
     # Built with yjs 13.6 (client id 1): a fragment holding <a>x</a>, a Y.Map with
     # "k" => "v", and <b></b>, in that order. yjs does not stop a peer from putting a
@@ -513,6 +546,17 @@ defmodule YexXmlFragmentTest do
       assert [%XmlElement{} = a] = Enum.to_list(XmlFragment.children(frag))
       assert "a" == XmlElement.get_tag(a)
       assert 3 == XmlFragment.length(frag)
+    end
+
+    test "insert_after and as_prelim stop at the non-XML child too", %{frag: frag} do
+      {:ok, a} = XmlFragment.fetch(frag, 0)
+
+      assert %Yex.XmlFragmentPrelim{children: [%XmlElementPrelim{tag: "a"}]} =
+               XmlFragment.as_prelim(frag)
+
+      :ok = XmlFragment.insert_after(frag, a, XmlElementPrelim.empty("after-a"))
+      {:ok, inserted} = XmlFragment.fetch(frag, 1)
+      assert "after-a" == XmlElement.get_tag(inserted)
     end
 
     test "the non-XML child survives an update round trip", %{doc: doc} do
