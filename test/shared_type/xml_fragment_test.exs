@@ -564,7 +564,28 @@ defmodule YexXmlFragmentTest do
       assert [_] = Yex.Nif.xml_element_children(el, nil, 1)
     end
 
-    test "insert_after uses the DirtyCpu twin above the limit", %{doc: doc, xml_fragment: f} do
+    test "as_prelim reads children above the limit with the DirtyCpu twin",
+         %{doc: doc, xml_fragment: f} do
+      count = Yex.Nif.dirty_xml_children() + 1
+      el = XmlFragment.push_and_get(f, XmlElementPrelim.empty("div"))
+
+      Doc.transaction(doc, fn ->
+        for _ <- 2..count, do: XmlFragment.push(f, XmlElementPrelim.empty("p"))
+        for _ <- 1..count, do: XmlElement.push(el, XmlElementPrelim.empty("p"))
+      end)
+
+      assert :dirty == Yex.Nif.xml_fragment_children(f, nil, Yex.Nif.dirty_xml_children())
+      assert :dirty == Yex.Nif.xml_element_children(el, nil, Yex.Nif.dirty_xml_children())
+
+      assert %Yex.XmlFragmentPrelim{children: [%XmlElementPrelim{tag: "div"} = div | rest]} =
+               XmlFragment.as_prelim(f)
+
+      assert count == length(rest) + 1
+      assert count == length(div.children)
+      assert count == length(XmlElement.as_prelim(el).children)
+    end
+
+    test "insert_after finds the last of many children", %{doc: doc, xml_fragment: f} do
       count = Yex.Nif.dirty_xml_children() + 1
 
       Doc.transaction(doc, fn ->
