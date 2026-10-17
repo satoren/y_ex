@@ -37,6 +37,11 @@ defmodule Yex.Nif do
   def dirty_encode_items(), do: 16_384
   def dirty_json_items(), do: 1_024
 
+  # The XML children readers return :dirty without reading above this many children; callers
+  # then use the DirtyCpu twin. The largest power of two below the smallest child count whose
+  # normal-scheduler median passes 1 ms (4_000).
+  def dirty_xml_children(), do: 2_048
+
   # map_clear deletes every entry and nested item, and its auto-commit builds one
   # observer event entry per removed key, so it also costs what the document costs. Its
   # normal NIF returns :dirty above this many doc items. With observe and observe_deep
@@ -165,8 +170,18 @@ defmodule Yex.Nif do
 
   def xml_fragment_tree_walker(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def xml_element_tree_walker(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
-  def xml_fragment_children(_xml_fragment, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
-  def xml_element_children(_xml_element, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_fragment_children(_xml_fragment, _cur_txn, _child_limit),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_fragment_children_dirty(_xml_fragment, _cur_txn),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_element_children(_xml_element, _cur_txn, _child_limit),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_element_children_dirty(_xml_element, _cur_txn),
+    do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_query_selector(_xml_fragment, _cur_txn, _tag, _first_only),
     do: :erlang.nif_error(:nif_not_loaded)

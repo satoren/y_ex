@@ -502,15 +502,43 @@ defmodule YexXmlFragmentTest do
       XmlFragment.delete(f, 2, 1)
       XmlElement.delete(el, 1, 1)
 
-      # No transaction is open, so the NIFs take nil like the public functions do.
+      # No transaction is open, so the NIFs take nil like the public functions do. A nil
+      # child limit never declines.
       txn = nil
-      assert Yex.Nif.xml_fragment_children(f, txn) == Enum.to_list(XmlFragment.children(f))
-      assert 3 == length(Yex.Nif.xml_fragment_children(f, txn))
-      assert Yex.Nif.xml_element_children(el, txn) == Enum.to_list(XmlElement.children(el))
-      assert 2 == length(Yex.Nif.xml_element_children(el, txn))
+      stream = Enum.to_list(XmlFragment.children(f))
+      assert 3 == length(stream)
+      assert stream == Yex.Nif.xml_fragment_children(f, txn, nil)
+      assert stream == Yex.Nif.xml_fragment_children_dirty(f, txn)
+
+      stream = Enum.to_list(XmlElement.children(el))
+      assert 2 == length(stream)
+      assert stream == Yex.Nif.xml_element_children(el, txn, nil)
+      assert stream == Yex.Nif.xml_element_children_dirty(el, txn)
 
       empty = XmlFragment.push_and_get(f, XmlElementPrelim.empty("empty"))
-      assert [] == Yex.Nif.xml_element_children(empty, txn)
+      assert [] == Yex.Nif.xml_element_children(empty, txn, nil)
+    end
+
+    test "decline above the child limit", %{xml_fragment: f} do
+      el = XmlFragment.push_and_get(f, XmlElementPrelim.new("div", [XmlTextPrelim.from("t")]))
+
+      assert :dirty == Yex.Nif.xml_fragment_children(f, nil, 0)
+      assert [_] = Yex.Nif.xml_fragment_children(f, nil, 1)
+      assert :dirty == Yex.Nif.xml_element_children(el, nil, 0)
+      assert [_] = Yex.Nif.xml_element_children(el, nil, 1)
+    end
+
+    test "insert_after uses the DirtyCpu twin above the limit", %{doc: doc, xml_fragment: f} do
+      count = Yex.Nif.dirty_xml_children() + 1
+
+      Doc.transaction(doc, fn ->
+        for _ <- 1..count, do: XmlFragment.push(f, XmlElementPrelim.empty("p"))
+      end)
+
+      {:ok, last} = XmlFragment.fetch(f, count - 1)
+      :ok = XmlFragment.insert_after(f, last, XmlElementPrelim.empty("after"))
+      {:ok, inserted} = XmlFragment.fetch(f, count)
+      assert "after" == XmlElement.get_tag(inserted)
     end
   end
 
