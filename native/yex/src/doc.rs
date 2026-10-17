@@ -15,7 +15,7 @@ use yrs::updates::{
 };
 use yrs::*;
 
-use crate::event::NifSubdocsEvent;
+use crate::event::{NifSubdocsEvent, NifTransactionCleanupEvent};
 // Internal imports
 use crate::{
     atoms,
@@ -481,71 +481,81 @@ fn commit_transaction(env: Env<'_>, current_transaction: ResourceArc<Transaction
 
 #[rustler::nif]
 fn doc_monitor_update_v1(
+    env: Env<'_>,
     doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
 
-    doc.observe_update_v1(sub_key.key.clone(), move |txn, event| {
-        let Some(state) = state.get() else {
-            return;
-        };
-        let (pid, metadata) = &*state;
-        ENV.with(|env| {
-            let metadata = metadata.get(*env);
-            let _ = env.send(
-                pid,
-                (
-                    atoms::update_v1(),
-                    SliceIntoBinary::new(event.update.as_slice()),
-                    origin_to_term(env, txn.origin()),
-                    metadata,
-                ),
-            );
-        })
-    })
-    .map(|_| {
-        (
-            atoms::ok(),
-            NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV1), doc.clone()),
-        )
-    })
-    .map_err(|e| Error::from(e).into())
+    let key = sub_key.key.clone();
+
+    doc.mutably(env, current_transaction, move |txn| {
+        txn.observe_update_v1(key, move |txn, event| {
+            let Some(state) = state.get() else {
+                return;
+            };
+            let (pid, metadata) = &*state;
+            ENV.with(|env| {
+                let metadata = metadata.get(*env);
+                let _ = env.send(
+                    pid,
+                    (
+                        atoms::update_v1(),
+                        SliceIntoBinary::new(event.update.as_slice()),
+                        origin_to_term(env, txn.origin()),
+                        metadata,
+                    ),
+                );
+            })
+        });
+        Ok(())
+    })?;
+
+    Ok((
+        atoms::ok(),
+        NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV1), doc.clone()),
+    ))
 }
 #[rustler::nif]
 fn doc_monitor_update_v2(
+    env: Env<'_>,
     doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
 
-    doc.observe_update_v2(sub_key.key.clone(), move |txn, event| {
-        let Some(state) = state.get() else {
-            return;
-        };
-        let (pid, metadata) = &*state;
-        ENV.with(|env| {
-            let metadata = metadata.get(*env);
-            let _ = env.send(
-                pid,
-                (
-                    atoms::update_v2(),
-                    SliceIntoBinary::new(event.update.as_slice()),
-                    origin_to_term(env, txn.origin()),
-                    metadata,
-                ),
-            );
-        })
-    })
-    .map(|_| {
-        (
-            atoms::ok(),
-            NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV2), doc.clone()),
-        )
-    })
-    .map_err(|e| Error::from(e).into())
+    let key = sub_key.key.clone();
+
+    doc.mutably(env, current_transaction, move |txn| {
+        txn.observe_update_v2(key, move |txn, event| {
+            let Some(state) = state.get() else {
+                return;
+            };
+            let (pid, metadata) = &*state;
+            ENV.with(|env| {
+                let metadata = metadata.get(*env);
+                let _ = env.send(
+                    pid,
+                    (
+                        atoms::update_v2(),
+                        SliceIntoBinary::new(event.update.as_slice()),
+                        origin_to_term(env, txn.origin()),
+                        metadata,
+                    ),
+                );
+            })
+        });
+        Ok(())
+    })?;
+
+    Ok((
+        atoms::ok(),
+        NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::UpdateV2), doc.clone()),
+    ))
 }
 
 fn apply_update_v1_impl(
@@ -1150,6 +1160,15 @@ pub(crate) fn try_parent_doc(doc: &NifDoc) -> NifResult<Option<Doc>> {
     Ok(txn.parent_doc())
 }
 
+/// Takes and drops a read lock on every subdocument below `doc` without blocking.
+fn try_probe_subdocs(doc: &Doc) -> NifResult<()> {
+    let txn = yrs::Transact::try_transact(doc).map_err(Error::from)?;
+    for subdoc in txn.subdocs() {
+        try_probe_subdocs(subdoc)?;
+    }
+    Ok(())
+}
+
 #[rustler::nif]
 fn doc_load(env: Env<'_>, doc: NifDoc) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
@@ -1172,12 +1191,18 @@ fn doc_load(env: Env<'_>, doc: NifDoc) -> NifResult<Atom> {
     })
 }
 
+/// NIF behind `Yex.Doc.destroy/1`. Raises `TransactionAcqError` when the document, a
+/// subdocument or the parent is locked, then frees undo managers the destroy detached.
 #[rustler::nif]
 fn doc_destroy(env: Env<'_>, doc: NifDoc) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
         let parent = try_parent_doc(&doc)?;
-        // Doc::destroy blocks on the document lock, so fail first if it is held.
+        // Doc::destroy blocks on the document lock and on each subdocument's lock, so fail
+        // first if any of them is held.
+        // This closes the same-process case; another process can still take one of these
+        // locks before Doc::destroy re-acquires them (see the Yex.Doc moduledoc).
         drop(yrs::Transact::try_transact_mut(&doc.reference.doc).map_err(Error::from)?);
+        try_probe_subdocs(&doc.reference.doc)?;
         match parent {
             Some(parent) => {
                 // Committing the parent transaction emits the `removed`/`added` subdocs event.
@@ -1187,6 +1212,7 @@ fn doc_destroy(env: Env<'_>, doc: NifDoc) -> NifResult<Atom> {
             }
             None => doc.reference.doc.destroy(None),
         }
+        doc.reference.deferred.release_undo_managers();
         Ok(atoms::ok())
     })
 }
@@ -1268,40 +1294,145 @@ fn transaction_json_path_all<'a>(
 
 #[rustler::nif]
 fn doc_monitor_subdocs(
+    env: Env<'_>,
     doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
     pid: LocalPid,
     metadata: Term<'_>,
 ) -> NifResult<(Atom, NifSubscription)> {
     let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata), doc.clone()));
 
-    doc.observe_subdocs(sub_key.key.clone(), move |txn, event: &SubdocsEvent| {
-        let Some(state) = state.get() else {
-            return;
-        };
-        let (pid, metadata, event_doc) = &*state;
-        ENV.with(|env| {
-            let active_subdoc_guids: HashSet<String> =
-                txn.subdoc_guids().map(|guid| guid.to_string()).collect();
-            let event = NifSubdocsEvent::new(event, event_doc, &active_subdoc_guids);
-            let metadata = metadata.get(*env);
-            let _ = env.send(
-                pid,
-                (
-                    atoms::subdocs(),
-                    event,
-                    origin_to_term(env, txn.origin()),
-                    metadata,
-                ),
-            );
-        })
+    let key = sub_key.key.clone();
+
+    doc.mutably(env, current_transaction, move |txn| {
+        txn.observe_subdocs(key, move |txn, event: &SubdocsEvent| {
+            let Some(state) = state.get() else {
+                return;
+            };
+            let (pid, metadata, event_doc) = &*state;
+            ENV.with(|env| {
+                let active_subdoc_guids: HashSet<String> =
+                    txn.subdoc_guids().map(|guid| guid.to_string()).collect();
+                let event = NifSubdocsEvent::new(event, event_doc, &active_subdoc_guids);
+                let metadata = metadata.get(*env);
+                let _ = env.send(
+                    pid,
+                    (
+                        atoms::subdocs(),
+                        event,
+                        origin_to_term(env, txn.origin()),
+                        metadata,
+                    ),
+                );
+            })
+        });
+        Ok(())
+    })?;
+
+    Ok((
+        atoms::ok(),
+        NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::Subdocs), doc.clone()),
+    ))
+}
+
+/// NIF behind `Yex.Doc.monitor_transaction_cleanup/2`. Sends
+/// `{:transaction_cleanup, event, origin, metadata}` to `pid` after each transaction that
+/// changed the document.
+#[rustler::nif]
+fn doc_monitor_transaction_cleanup(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: LocalPid,
+    metadata: Term<'_>,
+) -> NifResult<(Atom, NifSubscription)> {
+    let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
+    let key = sub_key.key.clone();
+
+    doc.mutably(env, current_transaction, move |txn| {
+        txn.observe_transaction_cleanup(key, move |txn, event| {
+            // y_ex opens empty write transactions of its own (root getters, observer
+            // registration, unsubscribe); like update events, those are not reported.
+            if event.delete_set.is_empty() && event.before_state == event.after_state {
+                return;
+            }
+            let Some(state) = state.get() else {
+                return;
+            };
+            let (pid, metadata) = &*state;
+            ENV.with(|env| {
+                let metadata = metadata.get(*env);
+                let _ = env.send(
+                    pid,
+                    (
+                        atoms::transaction_cleanup(),
+                        NifTransactionCleanupEvent::from(event),
+                        origin_to_term(env, txn.origin()),
+                        metadata,
+                    ),
+                );
+            })
+        });
+        Ok(())
+    })?;
+
+    Ok((
+        atoms::ok(),
+        NifSubscription::new(
+            sub_key.doc(doc.clone(), DocEvent::TransactionCleanup),
+            doc.clone(),
+        ),
+    ))
+}
+
+/// NIF behind `Yex.Doc.monitor_destroy/2`. Sends `{:destroy, metadata}` to `pid` when the
+/// document is destroyed.
+#[rustler::nif]
+fn doc_monitor_destroy(
+    env: Env<'_>,
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    pid: LocalPid,
+    metadata: Term<'_>,
+) -> NifResult<(Atom, NifSubscription)> {
+    let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
+    let key = sub_key.key.clone();
+
+    doc.mutably(env, current_transaction, move |txn| {
+        txn.observe_destroy(key, move |_txn, _doc| {
+            let Some(state) = state.get() else {
+                return;
+            };
+            let (pid, metadata) = &*state;
+            ENV.with(|env| {
+                let metadata = metadata.get(*env);
+                let _ = env.send(pid, (atoms::destroy(), metadata));
+            })
+        });
+        Ok(())
+    })?;
+
+    Ok((
+        atoms::ok(),
+        NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::Destroy), doc.clone()),
+    ))
+}
+
+/// NIF behind `Yex.Doc.subdocs/1`. Returns the cached handle of each subdocument linked
+/// into this document.
+#[rustler::nif]
+fn doc_subdocs(
+    doc: NifDoc,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Vec<NifDoc>> {
+    doc.readonly(current_transaction, |txn| {
+        let active_subdoc_guids: HashSet<String> =
+            txn.subdoc_guids().map(|guid| guid.to_string()).collect();
+        Ok(txn
+            .subdocs()
+            .map(|subdoc| doc.with_cached_subdoc(subdoc.clone(), Some(&active_subdoc_guids)))
+            .collect())
     })
-    .map(|_| {
-        (
-            atoms::ok(),
-            NifSubscription::new(sub_key.doc(doc.clone(), DocEvent::Subdocs), doc.clone()),
-        )
-    })
-    .map_err(|e| Error::from(e).into())
 }
 
 #[rustler::nif]
@@ -1339,4 +1470,60 @@ fn doc_should_load(doc: NifDoc) -> bool {
 #[rustler::nif]
 fn doc_offset_kind(doc: NifDoc) -> NifOffsetKind {
     doc.offset_kind().into()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+    use yrs::{Doc, Map, ReadTxn, Transact};
+
+    /// Pins yrs 0.28 `Doc::destroy` on a subdocument. yjs puts the destroyed doc in the
+    /// parent's `removed` and the unloaded copy in `added`; yrs puts the copy in both, so the
+    /// parent keeps listing the destroyed doc and the copy is destroyed at commit, leaving a
+    /// second copy in the item. `Yex.Doc.destroy/1` documents this; update both when yrs
+    /// fixes it.
+    #[test]
+    fn destroying_a_subdoc_follows_yrs_0_28_bookkeeping() {
+        let parent = Doc::with_client_id(1);
+        let map = parent.get_or_insert_map("folder");
+        let sub = {
+            let mut txn = parent.transact_mut();
+            map.insert(&mut txn, "a", Doc::new())
+        };
+        assert_eq!(sub.client_id(), parent.client_id());
+
+        let added = Arc::new(Mutex::new(Vec::new()));
+        let added_in_event = added.clone();
+        parent
+            .observe_subdocs("pin", move |_, event| {
+                added_in_event
+                    .lock()
+                    .unwrap()
+                    .extend(event.added().cloned());
+            })
+            .unwrap();
+
+        sub.destroy(Some(&mut parent.transact_mut()));
+
+        let live = map
+            .get(&parent.transact(), "a")
+            .unwrap()
+            .cast::<Doc>()
+            .unwrap();
+        assert!(!live.should_load());
+        assert_eq!(live.guid(), sub.guid());
+        assert_eq!(live.client_id(), parent.client_id());
+        assert!(live.parent_doc().is_some());
+
+        // The doc reported as added is not the one left in the item, and it is detached.
+        let added = added.lock().unwrap();
+        assert_eq!(added.len(), 1);
+        assert!(!Doc::ptr_eq(&added[0], &live));
+        assert!(added[0].parent_doc().is_none());
+
+        // The parent still lists the destroyed doc and not the live one.
+        let listed: Vec<Doc> = parent.transact().subdocs().cloned().collect();
+        assert_eq!(listed.len(), 1);
+        assert!(Doc::ptr_eq(&listed[0], &sub));
+    }
 }

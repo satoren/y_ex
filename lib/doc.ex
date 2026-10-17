@@ -10,6 +10,13 @@ defmodule Yex.Doc do
     Make sure the worker process can handle the GenServer call messages properly.
 
     It is recommended to start a GenServer process such as `Yex.DocServer` when executing operations from other processes.
+
+    A subdocument can be reachable from two worker processes: the process that created it with `new/1`
+    and the parent's worker, which hands it out from the parent. `destroy/1` and `load/1` check that
+    the documents they lock are free and raise `Yex.TransactionAcqError` otherwise, but if the other
+    worker takes one of those locks right after that check, they block until it is released, and
+    they deadlock if that process then calls into this worker (for example a write to the parent
+    from inside its open transaction on the subdocument).
   """
 
   defmodule Options do
@@ -343,8 +350,9 @@ defmodule Yex.Doc do
   `skip_gc: true`.
 
   Deleted items are replaced by lightweight placeholders, so their content can no
-  longer be restored (for example by an `Yex.UndoManager` or from a snapshot taken
-  before the deletion). Works both inside and outside `transaction/3`.
+  longer be restored (for example from a snapshot taken before the deletion).
+  Content kept on an `Yex.UndoManager`'s stacks is not collected. Works both inside
+  and outside `transaction/3`.
 
   ## Examples
       iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{skip_gc: true})
@@ -388,8 +396,21 @@ defmodule Yex.Doc do
   `:removed` and `:added`. Getting the subdocument from the parent again returns
   that new document. Use this to free a loaded subdocument.
 
+  Sends `{:destroy, metadata}` to the `monitor_destroy/2` subscribers, then drops the
+  document-level subscriptions (`monitor_update/2`, `monitor_update_v2/2`,
+  `monitor_subdocs/2`, `monitor_transaction_cleanup/2`, `monitor_destroy/2`).
+  `Yex.SharedType.observe/2` and `Yex.SharedType.observe_deep/2` subscriptions stay,
+  and the document stays usable.
+
+  With yrs 0.28 the doc listed under `:added` is not the live replacement: yrs reports
+  the replacement as removed and then destroys it too, and `subdocs/1` on the parent
+  still lists the destroyed doc. Fetch the replacement from the container instead.
+  Until yrs changes this, destroying the parent later does not destroy that
+  replacement, and calling `subdocs/1` on the parent replaces the cached resource for
+  that guid.
+
   Raises `Yex.TransactionAcqError` when called inside a transaction on the
-  document or its parent.
+  document, one of its subdocuments or its parent.
   """
   @spec destroy(t) :: :ok
   def destroy(%__MODULE__{} = doc) do
@@ -449,6 +470,8 @@ defmodule Yex.Doc do
   The third element is the transaction's origin: the term passed to `transaction/3`,
   `nil` when none was given, or the `%Yex.UndoManager{}` for a transaction committed
   by `Yex.UndoManager.undo/1` or `Yex.UndoManager.redo/1`.
+
+  Works inside `transaction/3`; that transaction is reported when it commits.
   """
   @spec monitor_update(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_update(%__MODULE__{} = doc, opt \\ []) do
@@ -459,14 +482,21 @@ defmodule Yex.Doc do
   Monitor document updates encoded with the v1 format.
 
   The calling process receives `{:update_v1, update, origin, metadata}` messages.
-  See `monitor_update/2` for the meaning of `origin` and the `:metadata` option.
+  See `monitor_update/2` for the meaning of `origin`, the `:metadata` option and use
+  inside `transaction/3`.
   """
   @spec monitor_update_v1(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_update_v1(%__MODULE__{} = doc, opt \\ []) do
     notify_pid = self()
 
     case run_in_worker_process(doc,
-           do: Yex.Nif.doc_monitor_update_v1(doc, notify_pid, Keyword.get(opt, :metadata, doc))
+           do:
+             Yex.Nif.doc_monitor_update_v1(
+               doc,
+               cur_txn(doc),
+               notify_pid,
+               Keyword.get(opt, :metadata, doc)
+             )
          ) do
       {:ok, sub} ->
         {:ok, Yex.Subscription.register(sub)}
@@ -480,14 +510,21 @@ defmodule Yex.Doc do
   Monitor document updates encoded with the v2 format.
 
   The calling process receives `{:update_v2, update, origin, metadata}` messages.
-  See `monitor_update/2` for the meaning of `origin` and the `:metadata` option.
+  See `monitor_update/2` for the meaning of `origin`, the `:metadata` option and use
+  inside `transaction/3`.
   """
   @spec monitor_update_v2(t, keyword) :: {:ok, reference()} | {:error, term()}
   def monitor_update_v2(%__MODULE__{} = doc, opt \\ []) do
     notify_pid = self()
 
     case run_in_worker_process(doc,
-           do: Yex.Nif.doc_monitor_update_v2(doc, notify_pid, Keyword.get(opt, :metadata, doc))
+           do:
+             Yex.Nif.doc_monitor_update_v2(
+               doc,
+               cur_txn(doc),
+               notify_pid,
+               Keyword.get(opt, :metadata, doc)
+             )
          ) do
       {:ok, sub} ->
         {:ok, Yex.Subscription.register(sub)}
@@ -528,6 +565,7 @@ defmodule Yex.Doc do
   `{:subdocs, %{added: [Yex.Doc.t()], removed: [Yex.Doc.t()], loaded: [Yex.Doc.t()]}, origin, metadata}`
   messages whenever subdocuments are added to, removed from, or loaded in this document.
   You can pass metadata as an option; if omitted, the document itself is used.
+  Works inside `transaction/3`; that transaction is reported when it commits.
 
   Use `Yex.Subscription.unsubscribe/1` with the returned reference to stop monitoring.
   """
@@ -536,7 +574,13 @@ defmodule Yex.Doc do
     notify_pid = self()
 
     case run_in_worker_process(doc,
-           do: Yex.Nif.doc_monitor_subdocs(doc, notify_pid, Keyword.get(opt, :metadata, doc))
+           do:
+             Yex.Nif.doc_monitor_subdocs(
+               doc,
+               cur_txn(doc),
+               notify_pid,
+               Keyword.get(opt, :metadata, doc)
+             )
          ) do
       {:ok, sub} ->
         {:ok, Yex.Subscription.register(sub)}
@@ -546,9 +590,118 @@ defmodule Yex.Doc do
     end
   end
 
+  @doc """
+  Monitor committed transactions.
+
+  The calling process receives
+  `{:transaction_cleanup, %Yex.TransactionCleanupEvent{}, origin, metadata}` after every
+  committed transaction that changed the document, local or remote. The event carries the
+  document's state vector before and after the transaction and the ids it deleted; see
+  `Yex.TransactionCleanupEvent`. This is yjs's `afterTransactionCleanup` event.
+
+  Transactions that changed nothing are not reported. yjs reports every transaction, but
+  y_ex also opens empty write transactions internally (for example in `get_text/2` and
+  when subscribing), which would show up as noise. This includes a remote update that
+  only adds structs waiting on missing predecessors: they are held as pending (see
+  `get_pending_update/1`) and change neither the state vector nor the delete set until
+  they integrate.
+
+  `origin` and the `:metadata` option work as in `monitor_update/2`. Works inside
+  `transaction/3`; that transaction is reported when it commits.
+
+  Use `Yex.Subscription.unsubscribe/1` with the returned reference to stop monitoring.
+
+  ## Examples
+      iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 1})
+      iex> {:ok, _ref} = Yex.Doc.monitor_transaction_cleanup(doc)
+      iex> Yex.Text.insert(Yex.Doc.get_text(doc, "text"), 0, "Hello")
+      iex> assert_receive {:transaction_cleanup, event, nil, ^doc}
+      iex> {event.before_state, event.after_state, event.delete_set}
+      {%{}, %{1 => 5}, %{}}
+  """
+  @spec monitor_transaction_cleanup(t, keyword) :: {:ok, reference()}
+  def monitor_transaction_cleanup(%__MODULE__{} = doc, opt \\ []) do
+    notify_pid = self()
+
+    {:ok, sub} =
+      run_in_worker_process(doc,
+        do:
+          Yex.Nif.doc_monitor_transaction_cleanup(
+            doc,
+            cur_txn(doc),
+            notify_pid,
+            Keyword.get(opt, :metadata, doc)
+          )
+      )
+
+    {:ok, Yex.Subscription.register(sub)}
+  end
+
+  @doc """
+  Monitor destruction of the document.
+
+  The calling process receives `{:destroy, metadata}` when `destroy/1` is called on this
+  document, on a document containing it, or when the document is removed from its parent
+  document. `metadata` defaults to the document itself. Works inside `transaction/3`.
+
+  Use `Yex.Subscription.unsubscribe/1` with the returned reference to stop monitoring.
+  """
+  @spec monitor_destroy(t, keyword) :: {:ok, reference()}
+  def monitor_destroy(%__MODULE__{} = doc, opt \\ []) do
+    notify_pid = self()
+
+    {:ok, sub} =
+      run_in_worker_process(doc,
+        do:
+          Yex.Nif.doc_monitor_destroy(
+            doc,
+            cur_txn(doc),
+            notify_pid,
+            Keyword.get(opt, :metadata, doc)
+          )
+      )
+
+    {:ok, Yex.Subscription.register(sub)}
+  end
+
+  @doc """
+  Returns the subdocuments linked in the document, in no particular order
+  (yjs `getSubdocs()`).
+
+  A subdocument inserted in an open `transaction/3` is listed once that transaction
+  commits.
+
+  This call is not free of side effects. After a subdocument was destroyed, yrs 0.28
+  leaves the parent listing the destroyed doc (see `destroy/1`). Listing it caches that
+  doc under its guid in place of the live replacement, so the next lookup of the
+  replacement through its container (`Yex.Map.fetch/2`, say) returns a new resource
+  whose `reference` differs from one fetched before this call.
+  """
+  @spec subdocs(t) :: [t]
+  def subdocs(%__MODULE__{} = doc) do
+    run_in_worker_process(doc, do: Yex.Nif.doc_subdocs(doc, cur_txn(doc)))
+  end
+
   @doc false
   # Returns the transaction opened by `transaction/3` in the calling process, or nil.
   # Accepts a doc or any struct holding one in its `:doc` field (shared types, sticky indexes).
   def cur_txn(%__MODULE__{reference: ref}), do: Process.get(ref, nil)
   def cur_txn(%{doc: %__MODULE__{} = doc}), do: cur_txn(doc)
+end
+
+defmodule Yex.TransactionCleanupEvent do
+  @moduledoc """
+  A committed transaction, as sent by `Yex.Doc.monitor_transaction_cleanup/2`.
+
+    * `before_state` - the document's state vector when the transaction started.
+    * `after_state` - the document's state vector after it committed.
+    * `delete_set` - the ids deleted by the transaction.
+  """
+  defstruct [:before_state, :after_state, :delete_set]
+
+  @type t :: %__MODULE__{
+          before_state: Yex.state_vector(),
+          after_state: Yex.state_vector(),
+          delete_set: Yex.delete_set()
+        }
 end

@@ -19,6 +19,15 @@ defmodule Yex do
           any_type
           | Yex.PrelimType.t()
 
+  @typedoc "The highest clock seen from each client: `%{client_id => clock}`."
+  @type state_vector :: %{non_neg_integer() => non_neg_integer()}
+
+  @typedoc """
+  Deleted ids per client: `%{client_id => [{clock, len}]}`, with each client's ranges
+  in ascending clock order and adjacent ranges merged.
+  """
+  @type delete_set :: %{non_neg_integer() => [{non_neg_integer(), non_neg_integer()}]}
+
   @doc """
   Computes the state vector and encodes it into an Binary.
   A state vector describes the state of the local client.

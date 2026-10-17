@@ -10,6 +10,8 @@ rustler::atoms! {
     update_v1,
     update_v2,
     subdocs,
+    transaction_cleanup,
+    destroy,
 
     observe_event,
     observe_deep_event,
