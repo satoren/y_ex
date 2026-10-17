@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 // Standard library imports
 use std::ops::Deref;
-use std::sync::{Mutex, RwLock};
+use std::sync::Mutex;
 
 // External crates
 use rustler::{
@@ -272,7 +272,7 @@ impl NifDoc {
     {
         ENV.set(&mut env.clone(), || match current_transaction {
             Some(txn) => {
-                if let Ok(mut txn_guard) = txn.0.write() {
+                if let Ok(mut txn_guard) = txn.0.lock() {
                     match txn_guard.as_mut() {
                         Some(txn) => {
                             self.reference.deferred.run_unobserves(txn);
@@ -298,7 +298,7 @@ impl NifDoc {
     {
         match current_transaction {
             Some(txn) => {
-                if let Ok(txn_guard) = txn.0.read() {
+                if let Ok(txn_guard) = txn.0.lock() {
                     match txn_guard.as_ref() {
                         Some(txn) => f(&ReadTransaction::ReadWrite(txn)),
                         None => self.with_transaction(|txn| f(&ReadTransaction::ReadOnly(txn))),
@@ -454,21 +454,16 @@ fn doc_begin_transaction(
     doc: NifDoc,
     origin: Term<'_>,
 ) -> NifResult<ResourceArc<TransactionResource>> {
-    if let Some(origin) = term_to_origin_binary(origin) {
-        let txn: TransactionMut =
-            yrs::Transact::try_transact_mut_with(&doc.reference.doc, origin.as_slice())
-                .map_err(Error::from)?;
-        doc.reference.deferred.run_unobserves(&txn);
-        let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
-
-        Ok(TransactionResource(RwLock::new(Some(txn)), doc.reference.clone()).into())
-    } else {
-        let txn: TransactionMut =
-            yrs::Transact::try_transact_mut(&doc.reference.doc).map_err(Error::from)?;
-        doc.reference.deferred.run_unobserves(&txn);
-        let txn: TransactionMut<'static> = unsafe { std::mem::transmute(txn) };
-        Ok(TransactionResource(RwLock::new(Some(txn)), doc.reference.clone()).into())
+    let txn = match term_to_origin_binary(origin) {
+        Some(origin) => yrs::Transact::try_transact_mut_with(&doc.reference.doc, origin.as_slice()),
+        None => yrs::Transact::try_transact_mut(&doc.reference.doc),
     }
+    .map_err(Error::from)?;
+    doc.reference.deferred.run_unobserves(&txn);
+    // SAFETY: the transaction borrows `doc.reference.doc`, which the resource keeps alive
+    // through its second field, and fields drop in order, so it ends before the document.
+    let txn = unsafe { std::mem::transmute::<TransactionMut<'_>, TransactionMut<'static>>(txn) };
+    Ok(TransactionResource(Mutex::new(Some(txn)), doc.reference.clone()).into())
 }
 
 #[rustler::nif]

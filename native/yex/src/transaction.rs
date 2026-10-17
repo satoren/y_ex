@@ -1,5 +1,5 @@
 use rustler::ResourceArc;
-use std::sync::RwLock;
+use std::sync::Mutex;
 use yrs::{ReadTxn, Store, Transaction, TransactionMut};
 
 use crate::doc::DocResource;
@@ -7,7 +7,7 @@ use crate::doc::DocResource;
 /// An open `Yex.Doc.transaction/3`. Its document is kept so that teardown work deferred
 /// while the transaction was open can be carried out on commit.
 pub struct TransactionResource(
-    pub RwLock<Option<TransactionMut<'static>>>,
+    pub Mutex<Option<TransactionMut<'static>>>,
     pub(crate) ResourceArc<DocResource>,
 );
 
@@ -17,13 +17,10 @@ impl rustler::Resource for TransactionResource {}
 /// Takes the value out of `slot`, releases the lock, then drops it. For a transaction the
 /// drop is the commit; if it panics, `slot` already holds `None`, so the resource's
 /// destructor cannot drop the same transaction a second time.
-pub fn take_then_drop<T>(slot: &RwLock<Option<T>>) {
-    let value = slot.write().unwrap_or_else(|e| e.into_inner()).take();
+pub fn take_then_drop<T>(slot: &Mutex<Option<T>>) {
+    let value = slot.lock().unwrap_or_else(|e| e.into_inner()).take();
     drop(value);
 }
-
-unsafe impl Send for TransactionResource {}
-unsafe impl Sync for TransactionResource {}
 
 pub enum ReadTransaction<'a, 'doc> {
     ReadOnly(&'a Transaction<'doc>),
@@ -63,7 +60,7 @@ impl ReadTxn for ReadTransaction<'_, '_> {
 mod tests {
     use super::take_then_drop;
     use std::panic::{catch_unwind, AssertUnwindSafe};
-    use std::sync::RwLock;
+    use std::sync::Mutex;
 
     struct PanicOnDrop;
 
@@ -75,10 +72,10 @@ mod tests {
 
     #[test]
     fn take_then_drop_leaves_none_when_the_drop_panics() {
-        let slot = RwLock::new(Some(PanicOnDrop));
+        let slot = Mutex::new(Some(PanicOnDrop));
         let result = catch_unwind(AssertUnwindSafe(|| take_then_drop(&slot)));
         assert!(result.is_err());
         assert!(!slot.is_poisoned());
-        assert!(slot.read().unwrap().is_none());
+        assert!(slot.lock().unwrap().is_none());
     }
 }
