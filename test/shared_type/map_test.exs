@@ -10,6 +10,20 @@ defmodule Yex.MapTest do
     {:ok, doc: doc, map: map}
   end
 
+  describe "deeply nested values" do
+    # A peer can send a value nested this deep. Encoding recurses once per level, and the
+    # dirty twins run on dirty CPU schedulers, whose stacks are a fraction of a normal one
+    # (40 kilowords by default), so a large frame per level crashes the VM.
+    test "convert on a dirty scheduler", %{map: map} do
+      # 400 maps, each holding a list: 800 levels.
+      nested = Enum.reduce(1..400, "leaf", fn _, acc -> %{"k" => [acc]} end)
+      :ok = Map.set(map, "v", nested)
+
+      assert %{"v" => ^nested} = Yex.Nif.map_to_json_dirty(map, nil)
+      assert %{"v" => ^nested} = Map.to_map(map)
+    end
+  end
+
   describe "basic map operations" do
     test "set/3 adds key-value pair", %{map: map} do
       assert :ok = Map.set(map, "key", "value")
