@@ -232,6 +232,47 @@ fn xml_fragment_parent(
     })
 }
 
+/// The nodes `children/1` streams: the child at index 0, then each node's next sibling,
+/// stopping where `Xml::siblings` does. Returns them in one call instead of one per child.
+fn child_nodes<X: XmlFragment>(xml: &X, txn: &ReadTransaction, doc: &NifDoc) -> Vec<NifYOut> {
+    let mut nodes = Vec::new();
+    let mut next = xml.get(txn, 0);
+    while let Some(node) = next {
+        next = match &node {
+            XmlOut::Element(element) => element.siblings(txn).next(),
+            XmlOut::Text(text) => text.siblings(txn).next(),
+            // A fragment has no siblings to follow: `Xml.next_sibling/1` has no clause for it.
+            XmlOut::Fragment(_) => None,
+        };
+        nodes.push(NifYOut::from_xml_out(node, doc.clone()));
+    }
+    nodes
+}
+
+#[rustler::nif]
+fn xml_fragment_children(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Vec<NifYOut>> {
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(child_nodes(&xml, txn, doc))
+    })
+}
+
+#[rustler::nif]
+fn xml_element_children(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+) -> NifResult<Vec<NifYOut>> {
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(child_nodes(&xml, txn, doc))
+    })
+}
+
 /// Collects every descendant of `xml` in document order (depth-first, pre-order).
 fn tree_walker<X: XmlFragment>(xml: &X, txn: &ReadTransaction, doc: &NifDoc) -> Vec<NifYOut> {
     xml.successors(txn)
