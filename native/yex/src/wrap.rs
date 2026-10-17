@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ops::Deref;
 
 use rustler::sys::{enif_make_map_from_arrays, ERL_NIF_TERM};
@@ -70,37 +71,46 @@ impl<V: rustler::Encoder> rustler::Encoder for NifMapPairs<V> {
     }
 }
 
-/// Maps up to this size are built from arrays on the stack. Erlang keeps maps this small
-/// flat, so this covers most maps a document holds.
-const STACK_MAP_ENTRIES: usize = 32;
+thread_local! {
+    /// Keys and values of the maps being built on this thread. A map nested in another is
+    /// built while its parent's entries are still collected, so its entries go after them.
+    /// They are kept here rather than in arrays on the stack because encoding recurses once
+    /// per nesting level, and dirty schedulers have small stacks.
+    static MAP_ENTRIES: RefCell<(Vec<ERL_NIF_TERM>, Vec<ERL_NIF_TERM>)> =
+        const { RefCell::new((Vec::new(), Vec::new())) };
+}
 
-/// Builds a map from entries with unique keys. Unlike `Term::map_from_term_arrays`, small
-/// maps need no heap allocation for their key and value arrays.
+/// Drops the entries a `make_map` call collected, also when encoding a value panics.
+struct MapEntriesGuard(usize);
+
+impl Drop for MapEntriesGuard {
+    fn drop(&mut self) {
+        MAP_ENTRIES.with_borrow_mut(|(keys, values)| {
+            keys.truncate(self.0);
+            values.truncate(self.0);
+        });
+    }
+}
+
+/// Builds a map from entries with unique keys. Unlike `Term::map_from_term_arrays`, it
+/// reuses per-thread buffers instead of allocating two arrays per map.
 pub fn make_map<'a>(
     env: Env<'a>,
     entries: impl IntoIterator<Item = (Term<'a>, Term<'a>)>,
 ) -> Term<'a> {
-    let entries = entries.into_iter();
-    let fits_stack = entries
-        .size_hint()
-        .1
-        .is_some_and(|max| max <= STACK_MAP_ENTRIES);
-    let map = if fits_stack {
-        let mut keys = [0 as ERL_NIF_TERM; STACK_MAP_ENTRIES];
-        let mut values = [0 as ERL_NIF_TERM; STACK_MAP_ENTRIES];
-        let mut len = 0;
-        for (k, v) in entries.take(STACK_MAP_ENTRIES) {
-            keys[len] = k.as_c_arg();
-            values[len] = v.as_c_arg();
-            len += 1;
-        }
-        map_from_arrays(env, &keys[..len], &values[..len])
-    } else {
-        let (keys, values): (Vec<ERL_NIF_TERM>, Vec<ERL_NIF_TERM>) =
-            entries.map(|(k, v)| (k.as_c_arg(), v.as_c_arg())).unzip();
-        map_from_arrays(env, &keys, &values)
-    };
-    map.expect("map keys are unique")
+    let start = MAP_ENTRIES.with_borrow(|(keys, _)| keys.len());
+    let _guard = MapEntriesGuard(start);
+    // The entries are encoded as they are pulled, which may build nested maps, so the
+    // buffers are only borrowed between pulls.
+    for (k, v) in entries {
+        MAP_ENTRIES.with_borrow_mut(|(keys, values)| {
+            keys.push(k.as_c_arg());
+            values.push(v.as_c_arg());
+        });
+    }
+    MAP_ENTRIES
+        .with_borrow(|(keys, values)| map_from_arrays(env, &keys[start..], &values[start..]))
+        .expect("map keys are unique")
 }
 
 fn map_from_arrays<'a>(
