@@ -42,28 +42,10 @@ pub(crate) fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
         }
         Any::Number(Number::Int(n)) => n.encode(env),
         Any::String(s) => encode_str(env, s),
-        Any::Buffer(b) => encode_buffer(env, b),
-        Any::Array(a) => encode_list(env, a),
-        Any::Map(m) => encode_nested_map(env, m),
+        Any::Buffer(b) => NifBuffer::from_slice(env, b).encode(env),
+        Any::Array(a) => make_list(env, a.iter().map(|item| encode(env, item))),
+        Any::Map(m) => encode_map(env, m.iter()),
     }
-}
-
-// Nested values recurse through `encode`, so it is kept to a small stack frame: the buffer,
-// list and map branches are out of line, and only a value of that kind pays for their
-// frames. Dirty schedulers have small stacks, and each nesting level costs one of each.
-#[inline(never)]
-fn encode_buffer<'a>(env: Env<'a>, bytes: &[u8]) -> Term<'a> {
-    NifBuffer::from_slice(env, bytes).encode(env)
-}
-
-#[inline(never)]
-fn encode_list<'a>(env: Env<'a>, items: &[Any]) -> Term<'a> {
-    make_list(env, items.iter().map(|item| encode(env, item)))
-}
-
-#[inline(never)]
-fn encode_nested_map<'a>(env: Env<'a>, map: &HashMap<String, Any>) -> Term<'a> {
-    encode_map(env, map.iter())
 }
 
 pub(crate) fn encode_str<'a>(env: Env<'a>, s: &str) -> Term<'a> {

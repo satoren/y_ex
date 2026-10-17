@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::ops::Deref;
 
 use rustler::sys::{enif_make_map_from_arrays, ERL_NIF_TERM};
@@ -71,46 +70,17 @@ impl<V: rustler::Encoder> rustler::Encoder for NifMapPairs<V> {
     }
 }
 
-thread_local! {
-    /// Keys and values of the maps being built on this thread. A map nested in another is
-    /// built while its parent's entries are still collected, so its entries go after them.
-    /// They are kept here rather than in arrays on the stack because encoding recurses once
-    /// per nesting level, and dirty schedulers have small stacks.
-    static MAP_ENTRIES: RefCell<(Vec<ERL_NIF_TERM>, Vec<ERL_NIF_TERM>)> =
-        const { RefCell::new((Vec::new(), Vec::new())) };
-}
-
-/// Drops the entries a `make_map` call collected, also when encoding a value panics.
-struct MapEntriesGuard(usize);
-
-impl Drop for MapEntriesGuard {
-    fn drop(&mut self) {
-        MAP_ENTRIES.with_borrow_mut(|(keys, values)| {
-            keys.truncate(self.0);
-            values.truncate(self.0);
-        });
-    }
-}
-
 /// Builds a map from entries with unique keys. Unlike `Term::map_from_term_arrays`, it
-/// reuses per-thread buffers instead of allocating two arrays per map.
+/// collects the raw terms once instead of into `Term` vectors and then again.
 pub fn make_map<'a>(
     env: Env<'a>,
     entries: impl IntoIterator<Item = (Term<'a>, Term<'a>)>,
 ) -> Term<'a> {
-    let start = MAP_ENTRIES.with_borrow(|(keys, _)| keys.len());
-    let _guard = MapEntriesGuard(start);
-    // The entries are encoded as they are pulled, which may build nested maps, so the
-    // buffers are only borrowed between pulls.
-    for (k, v) in entries {
-        MAP_ENTRIES.with_borrow_mut(|(keys, values)| {
-            keys.push(k.as_c_arg());
-            values.push(v.as_c_arg());
-        });
-    }
-    MAP_ENTRIES
-        .with_borrow(|(keys, values)| map_from_arrays(env, &keys[start..], &values[start..]))
-        .expect("map keys are unique")
+    let (keys, values): (Vec<ERL_NIF_TERM>, Vec<ERL_NIF_TERM>) = entries
+        .into_iter()
+        .map(|(k, v)| (k.as_c_arg(), v.as_c_arg()))
+        .unzip();
+    map_from_arrays(env, &keys, &values).expect("map keys are unique")
 }
 
 fn map_from_arrays<'a>(
