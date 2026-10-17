@@ -18,6 +18,8 @@ pub enum DocEvent {
     UpdateV1,
     UpdateV2,
     Subdocs,
+    TransactionCleanup,
+    Destroy,
 }
 
 pub enum AwarenessEvent {
@@ -122,6 +124,8 @@ impl SubscriptionKey {
                 DocEvent::UpdateV1 => txn.unobserve_update_v1(key),
                 DocEvent::UpdateV2 => txn.unobserve_update_v2(key),
                 DocEvent::Subdocs => txn.unobserve_subdocs(key),
+                DocEvent::TransactionCleanup => txn.unobserve_transaction_cleanup(key),
+                DocEvent::Destroy => txn.unobserve_destroy(key),
             };
         });
         self.into_subscription(Target::Doc {

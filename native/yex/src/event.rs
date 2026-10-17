@@ -534,3 +534,80 @@ impl NifSubdocsEvent {
         }
     }
 }
+
+#[derive(NifStruct)]
+#[module = "Yex.TransactionCleanupEvent"]
+pub struct NifTransactionCleanupEvent {
+    pub before_state: HashMap<u64, u32>,
+    pub after_state: HashMap<u64, u32>,
+    pub delete_set: HashMap<u64, Vec<(u32, u32)>>,
+}
+
+impl From<&yrs::TransactionCleanupEvent> for NifTransactionCleanupEvent {
+    /// Copies the state vectors and delete set into Elixir-encodable maps.
+    fn from(event: &yrs::TransactionCleanupEvent) -> Self {
+        NifTransactionCleanupEvent {
+            before_state: state_vector_to_map(&event.before_state),
+            after_state: state_vector_to_map(&event.after_state),
+            delete_set: id_set_to_map(&event.delete_set),
+        }
+    }
+}
+
+/// `%{client_id => clock}`. yrs records a client that starts inserting in a transaction with
+/// clock 0 in `before_state`; a zero clock means nothing was seen from that client, so it is
+/// left out, as in yjs, where `beforeState` has no entry for such a client.
+pub fn state_vector_to_map(sv: &yrs::StateVector) -> HashMap<u64, u32> {
+    sv.iter()
+        .filter(|(_, clock)| **clock > 0)
+        .map(|(client, clock)| (client.get(), *clock))
+        .collect()
+}
+
+/// `%{client_id => [{clock, len}]}`. yrs keeps each client's ranges sorted by clock and
+/// merges adjacent ones on insert, so the lists come out ascending and squashed.
+pub fn id_set_to_map(ids: &yrs::IdSet) -> HashMap<u64, Vec<(u32, u32)>> {
+    ids.iter()
+        .map(|(client, ranges)| {
+            let ranges = ranges
+                .iter()
+                .map(|range| (range.start, range.end - range.start))
+                .collect();
+            (client.get(), ranges)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{id_set_to_map, state_vector_to_map};
+    use std::collections::HashMap;
+    use yrs::{ClientID, IdSet, StateVector, ID};
+
+    #[test]
+    fn state_vector_to_map_keys_by_client_and_drops_zero_clocks() {
+        let sv: StateVector = [
+            (ClientID::new(1), 5),
+            (ClientID::new(7), 2),
+            (ClientID::new(9), 0),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(state_vector_to_map(&sv), HashMap::from([(1, 5), (7, 2)]));
+        assert!(state_vector_to_map(&StateVector::default()).is_empty());
+    }
+
+    #[test]
+    fn id_set_to_map_gives_ascending_squashed_clock_len_pairs() {
+        let mut ids = IdSet::new();
+        ids.insert(ID::new(ClientID::new(1), 10), 2);
+        ids.insert(ID::new(ClientID::new(1), 0), 3);
+        ids.insert(ID::new(ClientID::new(1), 3), 1);
+        ids.insert(ID::new(ClientID::new(2), 4), 1);
+        assert_eq!(
+            id_set_to_map(&ids),
+            HashMap::from([(1, vec![(0, 4), (10, 2)]), (2, vec![(4, 1)])])
+        );
+        assert!(id_set_to_map(&IdSet::new()).is_empty());
+    }
+}
