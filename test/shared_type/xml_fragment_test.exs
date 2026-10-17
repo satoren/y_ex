@@ -502,15 +502,100 @@ defmodule YexXmlFragmentTest do
       XmlFragment.delete(f, 2, 1)
       XmlElement.delete(el, 1, 1)
 
-      # No transaction is open, so the NIFs take nil like the public functions do.
+      # No transaction is open, so the NIFs take nil like the public functions do. A nil
+      # child limit never declines.
       txn = nil
-      assert Yex.Nif.xml_fragment_children(f, txn) == Enum.to_list(XmlFragment.children(f))
-      assert 3 == length(Yex.Nif.xml_fragment_children(f, txn))
-      assert Yex.Nif.xml_element_children(el, txn) == Enum.to_list(XmlElement.children(el))
-      assert 2 == length(Yex.Nif.xml_element_children(el, txn))
+      stream = Enum.to_list(XmlFragment.children(f))
+      assert 3 == length(stream)
+      assert stream == Yex.Nif.xml_fragment_children(f, txn, nil)
+      assert stream == Yex.Nif.xml_fragment_children_dirty(f, txn)
+
+      stream = Enum.to_list(XmlElement.children(el))
+      assert 2 == length(stream)
+      assert stream == Yex.Nif.xml_element_children(el, txn, nil)
+      assert stream == Yex.Nif.xml_element_children_dirty(el, txn)
 
       empty = XmlFragment.push_and_get(f, XmlElementPrelim.empty("empty"))
-      assert [] == Yex.Nif.xml_element_children(empty, txn)
+      assert [] == Yex.Nif.xml_element_children(empty, txn, nil)
+    end
+
+    test "child_index finds what find_index over children/1 finds", %{doc: doc, xml_fragment: f} do
+      XmlFragment.push(f, XmlTextPrelim.from("t0"))
+
+      el =
+        XmlFragment.push_and_get(
+          f,
+          XmlElementPrelim.new("div", [XmlElementPrelim.empty("p"), XmlTextPrelim.from("in")])
+        )
+
+      deleted = XmlFragment.push_and_get(f, XmlElementPrelim.empty("deleted"))
+      XmlFragment.push(f, XmlTextPrelim.from("t1"))
+      XmlFragment.delete(f, 2, 1)
+
+      children = Enum.to_list(XmlFragment.children(f))
+      [grandchild | _] = Enum.to_list(XmlElement.children(el))
+
+      other_doc = Doc.with_options(%Doc.Options{client_id: 1})
+      other = Doc.get_xml_fragment(other_doc, "xml")
+      XmlFragment.push(other, XmlTextPrelim.from("t0"))
+      {:ok, other_child} = XmlFragment.fetch(other, 0)
+
+      for ref <- children ++ [grandchild, deleted, other_child, :not_a_node, nil] do
+        expected = Enum.find_index(children, &(&1 == ref))
+        assert expected == Yex.Nif.xml_fragment_child_index(f, nil, ref)
+      end
+
+      for ref <- Enum.to_list(XmlElement.children(el)) ++ [el] do
+        expected = Enum.find_index(XmlElement.children(el), &(&1 == ref))
+        assert expected == Yex.Nif.xml_element_child_index(el, nil, ref)
+      end
+
+      Doc.transaction(doc, fn ->
+        assert 1 == Yex.Nif.xml_fragment_child_index(f, Process.get(doc.reference), el)
+      end)
+    end
+
+    test "decline above the child limit", %{xml_fragment: f} do
+      el = XmlFragment.push_and_get(f, XmlElementPrelim.new("div", [XmlTextPrelim.from("t")]))
+
+      assert :dirty == Yex.Nif.xml_fragment_children(f, nil, 0)
+      assert [_] = Yex.Nif.xml_fragment_children(f, nil, 1)
+      assert :dirty == Yex.Nif.xml_element_children(el, nil, 0)
+      assert [_] = Yex.Nif.xml_element_children(el, nil, 1)
+    end
+
+    test "as_prelim reads children above the limit with the DirtyCpu twin",
+         %{doc: doc, xml_fragment: f} do
+      count = Yex.Nif.dirty_xml_children() + 1
+      el = XmlFragment.push_and_get(f, XmlElementPrelim.empty("div"))
+
+      Doc.transaction(doc, fn ->
+        for _ <- 2..count, do: XmlFragment.push(f, XmlElementPrelim.empty("p"))
+        for _ <- 1..count, do: XmlElement.push(el, XmlElementPrelim.empty("p"))
+      end)
+
+      assert :dirty == Yex.Nif.xml_fragment_children(f, nil, Yex.Nif.dirty_xml_children())
+      assert :dirty == Yex.Nif.xml_element_children(el, nil, Yex.Nif.dirty_xml_children())
+
+      assert %Yex.XmlFragmentPrelim{children: [%XmlElementPrelim{tag: "div"} = div | rest]} =
+               XmlFragment.as_prelim(f)
+
+      assert count == length(rest) + 1
+      assert count == length(div.children)
+      assert count == length(XmlElement.as_prelim(el).children)
+    end
+
+    test "insert_after finds the last of many children", %{doc: doc, xml_fragment: f} do
+      count = Yex.Nif.dirty_xml_children() + 1
+
+      Doc.transaction(doc, fn ->
+        for _ <- 1..count, do: XmlFragment.push(f, XmlElementPrelim.empty("p"))
+      end)
+
+      {:ok, last} = XmlFragment.fetch(f, count - 1)
+      :ok = XmlFragment.insert_after(f, last, XmlElementPrelim.empty("after"))
+      {:ok, inserted} = XmlFragment.fetch(f, count)
+      assert "after" == XmlElement.get_tag(inserted)
     end
   end
 
@@ -557,6 +642,17 @@ defmodule YexXmlFragmentTest do
       :ok = XmlFragment.insert_after(frag, a, XmlElementPrelim.empty("after-a"))
       {:ok, inserted} = XmlFragment.fetch(frag, 1)
       assert "after-a" == XmlElement.get_tag(inserted)
+    end
+
+    test "insert_after does not find a node past the non-XML child", %{frag: frag} do
+      # <b> is the child at index 2, but children/1 stops at the Y.Map before it, so
+      # insert_after inserts at the beginning as for any node it does not find.
+      {:ok, b} = XmlFragment.fetch(frag, 2)
+      assert nil == Yex.Nif.xml_fragment_child_index(frag, nil, b)
+
+      :ok = XmlFragment.insert_after(frag, b, XmlElementPrelim.empty("first"))
+      {:ok, first} = XmlFragment.fetch(frag, 0)
+      assert "first" == XmlElement.get_tag(first)
     end
 
     test "the non-XML child survives an update round trip", %{doc: doc} do
