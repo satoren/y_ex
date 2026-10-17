@@ -174,7 +174,7 @@ defmodule Yex.XmlElement do
         ) :: :ok | :error
   def insert_after(%__MODULE__{doc: doc} = xml_element, ref, content) do
     Doc.run_in_worker_process doc do
-      index = child_list(xml_element) |> Enum.find_index(&(&1 == ref))
+      index = Yex.Nif.xml_element_child_index(xml_element, cur_txn(xml_element), ref)
 
       if index == nil do
         insert(xml_element, 0, content)
@@ -197,7 +197,7 @@ defmodule Yex.XmlElement do
         ) :: Yex.XmlElement.t() | Yex.XmlText.t()
   def insert_after_and_get(%__MODULE__{doc: doc} = xml_element, ref, content) do
     Doc.run_in_worker_process doc do
-      index = child_list(xml_element) |> Enum.find_index(&(&1 == ref))
+      index = Yex.Nif.xml_element_child_index(xml_element, cur_txn(xml_element), ref)
 
       target_index =
         if index == nil do

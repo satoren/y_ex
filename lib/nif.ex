@@ -183,6 +183,12 @@ defmodule Yex.Nif do
   def xml_element_children_dirty(_xml_element, _cur_txn),
     do: :erlang.nif_error(:nif_not_loaded)
 
+  def xml_fragment_child_index(_xml_fragment, _cur_txn, _node),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def xml_element_child_index(_xml_element, _cur_txn, _node),
+    do: :erlang.nif_error(:nif_not_loaded)
+
   def xml_fragment_query_selector(_xml_fragment, _cur_txn, _tag, _first_only),
     do: :erlang.nif_error(:nif_not_loaded)
 

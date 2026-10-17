@@ -519,6 +519,42 @@ defmodule YexXmlFragmentTest do
       assert [] == Yex.Nif.xml_element_children(empty, txn, nil)
     end
 
+    test "child_index finds what find_index over children/1 finds", %{doc: doc, xml_fragment: f} do
+      XmlFragment.push(f, XmlTextPrelim.from("t0"))
+
+      el =
+        XmlFragment.push_and_get(
+          f,
+          XmlElementPrelim.new("div", [XmlElementPrelim.empty("p"), XmlTextPrelim.from("in")])
+        )
+
+      deleted = XmlFragment.push_and_get(f, XmlElementPrelim.empty("deleted"))
+      XmlFragment.push(f, XmlTextPrelim.from("t1"))
+      XmlFragment.delete(f, 2, 1)
+
+      children = Enum.to_list(XmlFragment.children(f))
+      [grandchild | _] = Enum.to_list(XmlElement.children(el))
+
+      other_doc = Doc.with_options(%Doc.Options{client_id: 1})
+      other = Doc.get_xml_fragment(other_doc, "xml")
+      XmlFragment.push(other, XmlTextPrelim.from("t0"))
+      {:ok, other_child} = XmlFragment.fetch(other, 0)
+
+      for ref <- children ++ [grandchild, deleted, other_child, :not_a_node, nil] do
+        expected = Enum.find_index(children, &(&1 == ref))
+        assert expected == Yex.Nif.xml_fragment_child_index(f, nil, ref)
+      end
+
+      for ref <- Enum.to_list(XmlElement.children(el)) ++ [el] do
+        expected = Enum.find_index(XmlElement.children(el), &(&1 == ref))
+        assert expected == Yex.Nif.xml_element_child_index(el, nil, ref)
+      end
+
+      Doc.transaction(doc, fn ->
+        assert 1 == Yex.Nif.xml_fragment_child_index(f, Process.get(doc.reference), el)
+      end)
+    end
+
     test "decline above the child limit", %{xml_fragment: f} do
       el = XmlFragment.push_and_get(f, XmlElementPrelim.new("div", [XmlTextPrelim.from("t")]))
 
@@ -585,6 +621,17 @@ defmodule YexXmlFragmentTest do
       :ok = XmlFragment.insert_after(frag, a, XmlElementPrelim.empty("after-a"))
       {:ok, inserted} = XmlFragment.fetch(frag, 1)
       assert "after-a" == XmlElement.get_tag(inserted)
+    end
+
+    test "insert_after does not find a node past the non-XML child", %{frag: frag} do
+      # <b> is the child at index 2, but children/1 stops at the Y.Map before it, so
+      # insert_after inserts at the beginning as for any node it does not find.
+      {:ok, b} = XmlFragment.fetch(frag, 2)
+      assert nil == Yex.Nif.xml_fragment_child_index(frag, nil, b)
+
+      :ok = XmlFragment.insert_after(frag, b, XmlElementPrelim.empty("first"))
+      {:ok, first} = XmlFragment.fetch(frag, 0)
+      assert "first" == XmlElement.get_tag(first)
     end
 
     test "the non-XML child survives an update round trip", %{doc: doc} do

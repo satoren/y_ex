@@ -14,10 +14,11 @@ use crate::{
     transaction::{ReadTransaction, TransactionResource},
     utils::{capped_index_and_length, normalize_index, normalize_index_for_insert},
     wrap::NifMapPairs,
-    yinput::{NifWeakPrelim, NifXmlIn, NifYInput, NifYInputDelta},
+    yinput::{NifSharedTypeInput, NifWeakPrelim, NifXmlIn, NifYInput, NifYInputDelta},
     youtput::NifYOut,
     ENV,
 };
+use yrs::branch::BranchID;
 use yrs::Quotable;
 
 pub type XmlFragmentId = SharedTypeId<XmlFragmentRef>;
@@ -232,8 +233,6 @@ fn xml_fragment_parent(
     })
 }
 
-/// The nodes `children/1` streams: the child at index 0, then each node's next sibling,
-/// stopping where `Xml::siblings` does. Returns them in one call instead of one per child.
 /// Returns `:dirty` without reading when `xml` has more than `child_limit` children.
 fn children_term<'a, X: XmlFragment>(
     env: Env<'a>,
@@ -248,19 +247,87 @@ fn children_term<'a, X: XmlFragment>(
     child_nodes(xml, txn, doc).encode(env)
 }
 
+/// The node after `node` in the walk `children/1` streams, or `None` where
+/// `Xml::siblings` stops.
+fn next_child(node: &XmlOut, txn: &ReadTransaction) -> Option<XmlOut> {
+    match node {
+        XmlOut::Element(element) => element.siblings(txn).next(),
+        XmlOut::Text(text) => text.siblings(txn).next(),
+        // A fragment has no siblings to follow: `Xml.next_sibling/1` has no clause for it.
+        XmlOut::Fragment(_) => None,
+    }
+}
+
+/// The nodes `children/1` streams: the child at index 0, then each node's next sibling.
+/// Returns them in one call instead of one per child.
 fn child_nodes<X: XmlFragment>(xml: &X, txn: &ReadTransaction, doc: &NifDoc) -> Vec<NifYOut> {
     let mut nodes = Vec::new();
     let mut next = xml.get(txn, 0);
     while let Some(node) = next {
-        next = match &node {
-            XmlOut::Element(element) => element.siblings(txn).next(),
-            XmlOut::Text(text) => text.siblings(txn).next(),
-            // A fragment has no siblings to follow: `Xml.next_sibling/1` has no clause for it.
-            XmlOut::Fragment(_) => None,
-        };
+        next = next_child(&node, txn);
         nodes.push(NifYOut::from_xml_out(node, doc.clone()));
     }
     nodes
+}
+
+fn branch_id(node: &XmlOut) -> BranchID {
+    match node {
+        XmlOut::Element(xml) => xml.hook().id().clone(),
+        XmlOut::Text(xml) => xml.hook().id().clone(),
+        XmlOut::Fragment(xml) => xml.hook().id().clone(),
+    }
+}
+
+/// The position of `node` among the nodes `children/1` streams, or `None`. Walks only
+/// up to the match and builds no terms. `node` matches a child of the same document
+/// resource and branch; a term that is no shared type matches nothing.
+fn child_index<X: XmlFragment>(
+    xml: &X,
+    txn: &ReadTransaction,
+    doc: &NifDoc,
+    node: Term<'_>,
+) -> Option<u32> {
+    let target: NifSharedTypeInput = node.decode().ok()?;
+    let (target_doc, target_id) = target.doc_and_id();
+    if !std::ptr::eq(&*target_doc.reference, &*doc.reference) {
+        return None;
+    }
+    let mut next = xml.get(txn, 0);
+    let mut index = 0;
+    while let Some(child) = next {
+        if branch_id(&child) == *target_id {
+            return Some(index);
+        }
+        next = next_child(&child, txn);
+        index += 1;
+    }
+    None
+}
+
+#[rustler::nif]
+fn xml_fragment_child_index(
+    xml: NifXmlFragment,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    node: Term<'_>,
+) -> NifResult<Option<u32>> {
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(child_index(&xml, txn, doc, node))
+    })
+}
+
+#[rustler::nif]
+fn xml_element_child_index(
+    xml: NifXmlElement,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    node: Term<'_>,
+) -> NifResult<Option<u32>> {
+    let doc = xml.doc();
+    xml.readonly(current_transaction, |txn| {
+        let xml = xml.get_ref(txn)?;
+        Ok(child_index(&xml, txn, doc, node))
+    })
 }
 
 fn xml_fragment_children_impl<'a>(
