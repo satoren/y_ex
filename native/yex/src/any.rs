@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::wrap::{NifStr, NifWrap};
+use crate::wrap::{make_list, make_map, NifStr, NifWrap};
 use rustler::dynamic::TermType;
 use rustler::types;
 use rustler::{
@@ -28,7 +28,7 @@ impl<'a> NifBuffer<'a> {
     }
 }
 
-fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
+pub(crate) fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
     match any {
         Any::Null => types::atom::nil().to_term(env),
         Any::Undefined => types::atom::undefined().to_term(env),
@@ -43,30 +43,24 @@ fn encode<'a>(env: Env<'a>, any: &Any) -> Term<'a> {
         Any::Number(Number::Int(n)) => n.encode(env),
         Any::String(s) => encode_str(env, s),
         Any::Buffer(b) => NifBuffer::from_slice(env, b).encode(env),
-        Any::Array(a) => {
-            let list: Vec<Term<'a>> = a.iter().map(|item| encode(env, item)).collect();
-            list.encode(env)
-        }
+        Any::Array(a) => make_list(env, a.iter().map(|item| encode(env, item))),
         Any::Map(m) => encode_map(env, m.iter()),
     }
 }
 
-fn encode_str<'a>(env: Env<'a>, s: &str) -> Term<'a> {
+pub(crate) fn encode_str<'a>(env: Env<'a>, s: &str) -> Term<'a> {
     NifStr(s).encode(env)
 }
 
 /// Builds the map straight from term arrays; the keys come from a map, so they are unique.
-fn encode_map<'a, 'b, K: AsRef<str> + 'b>(
+pub(crate) fn encode_map<'a, 'b, K: AsRef<str> + 'b>(
     env: Env<'a>,
-    entries: impl ExactSizeIterator<Item = (&'b K, &'b Any)>,
+    entries: impl Iterator<Item = (&'b K, &'b Any)>,
 ) -> Term<'a> {
-    let mut keys = Vec::with_capacity(entries.len());
-    let mut values = Vec::with_capacity(entries.len());
-    for (k, v) in entries {
-        keys.push(encode_str(env, k.as_ref()));
-        values.push(encode(env, v));
-    }
-    Term::map_from_term_arrays(env, &keys, &values).expect("map keys are unique")
+    make_map(
+        env,
+        entries.map(|(k, v)| (encode_str(env, k.as_ref()), encode(env, v))),
+    )
 }
 impl rustler::Encoder for NifAny {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
@@ -107,18 +101,20 @@ fn decode<'a>(term: Term<'a>) -> NifResult<Any> {
             let values = iter
                 .map(decode)
                 .collect::<Result<Vec<yrs::Any>, rustler::Error>>()?;
-            Ok(Any::from(values))
+            // Not `Any::from`, which copies every element into a new vector first.
+            Ok(Any::Array(values.into()))
         }
         TermType::Map => {
             if let Ok(buffer) = term.decode::<NifBuffer>() {
                 return Ok(Any::Buffer(buffer.data.as_slice().into()));
             }
 
-            let iter = term.decode::<MapIterator<'a>>()?;
-            let values = iter
-                .map(|(k, v)| Ok((k.decode::<String>()?, decode(v)?)))
-                .collect::<Result<HashMap<String, yrs::Any>, rustler::Error>>()?;
-            Ok(Any::from(values))
+            let mut values = HashMap::with_capacity(term.map_size()?);
+            for (k, v) in term.decode::<MapIterator<'a>>()? {
+                values.insert(k.decode::<String>()?, decode(v)?);
+            }
+            // Not `Any::from`, which rehashes every entry into a new map first.
+            Ok(Any::Map(Arc::new(values)))
         }
         _ => Err(rustler::Error::BadArg),
     }

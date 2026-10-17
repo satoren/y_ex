@@ -1,8 +1,7 @@
-use std::collections::HashMap;
-
 use crate::{
+    any::{encode as encode_any, encode_str},
     utils::{capped_index_and_length, normalize_index_for_insert},
-    wrap::NifStr,
+    wrap::{make_map, NifStr},
     yinput::NifWeakPrelim,
 };
 use rustler::{Atom, Encoder, Env, NifResult, NifStruct, ResourceArc, Term};
@@ -258,39 +257,31 @@ pub fn encode_diffs<'a>(
     Ok(deltas.encode(env))
 }
 pub fn encode_diff<'a>(diff: &Diff<YChange>, doc: &NifDoc, env: Env<'a>) -> NifResult<Term<'a>> {
-    let insert = NifYOut::from_native(diff.insert.clone(), doc);
+    let insert = NifYOut::from_native(diff.insert.clone(), doc).encode(env);
 
-    let mut attribute = diff.attributes.as_deref().map(|attr| {
-        attr.iter()
-            .map(|(k, v)| (k.to_string(), v.clone()))
-            .collect::<HashMap<String, Any>>()
-    });
-
-    if let Some(ychange) = &diff.ychange {
-        let ychange = match ychange.kind {
-            types::text::ChangeKind::Added => {
-                HashMap::from([("kind".into(), Any::String("added".into()))])
-            }
-            types::text::ChangeKind::Removed => {
-                HashMap::from([("kind".into(), Any::String("removed".into()))])
-            }
+    let ychange = diff.ychange.as_ref().map(|ychange| {
+        let kind = match ychange.kind {
+            types::text::ChangeKind::Added => "added",
+            types::text::ChangeKind::Removed => "removed",
         };
-
-        if let Some(mut attr) = attribute {
-            attr.insert("ychange".into(), Any::from(ychange));
-            attribute = Some(attr);
-        } else {
-            attribute = Some(HashMap::from([("ychange".into(), Any::from(ychange))]));
+        make_map(env, [(encode_str(env, "kind"), encode_str(env, kind))])
+    });
+    let attributes = match (diff.attributes.as_deref(), ychange) {
+        (None, None) => None,
+        (attrs, ychange) => {
+            // ychange replaces a formatting attribute of the same name.
+            let has_ychange = ychange.is_some();
+            let attrs = attrs
+                .into_iter()
+                .flatten()
+                .filter(move |(k, _)| !has_ychange || k.as_ref() != "ychange");
+            let attrs = attrs.map(|(k, v)| (encode_str(env, k), encode_any(env, v)));
+            let ychange = ychange.map(|ychange| (encode_str(env, "ychange"), ychange));
+            Some(make_map(env, attrs.chain(ychange)))
         }
-    }
+    };
 
-    let mut map = Term::map_new(env);
-
-    map = map.map_put(atoms::insert(), insert.encode(env))?;
-    if let Some(attrs) = attribute {
-        map = map
-            .map_put(atoms::attributes(), NifYOut::Any(Any::from(attrs).into()))
-            .unwrap();
-    }
-    Ok(map)
+    let insert = (atoms::insert().encode(env), insert);
+    let attributes = attributes.map(|attrs| (atoms::attributes().encode(env), attrs));
+    Ok(make_map(env, std::iter::once(insert).chain(attributes)))
 }

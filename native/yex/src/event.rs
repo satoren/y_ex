@@ -17,7 +17,7 @@ use yrs::{
 };
 
 use crate::{
-    any::NifAny,
+    any::{encode_map as encode_any_map, encode_str},
     array::NifArray,
     atoms,
     doc::NifDoc,
@@ -29,8 +29,8 @@ use crate::{
     transaction::TransactionResource,
     utils::origin_to_term,
     weak::NifWeakLink,
-    wrap::NifMapPairs,
     wrap::NifWrap,
+    wrap::{make_list, make_map},
     xml::NifXmlText,
     yinput::{with_shared_type, NifSharedTypeInput},
     youtput::NifYOut,
@@ -79,34 +79,25 @@ pub struct NifYArrayChange {
 
 impl rustler::Encoder for NifYArrayChange {
     fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
-        let v: Vec<Term<'_>> = self
-            .change
-            .iter()
-            .map(|change| match change {
-                Change::Added(content) => {
-                    let content: Vec<Term<'_>> = content
-                        .iter()
-                        .cloned()
-                        .map(|item| NifYOut::from_native(item, &self.doc).encode(env))
-                        .collect();
-
-                    let mut map = Term::map_new(env);
-                    map = map.map_put(atoms::insert(), content).unwrap();
-                    map
-                }
-                Change::Removed(index) => {
-                    let mut map = Term::map_new(env);
-                    map = map.map_put(atoms::delete(), *index).unwrap();
-                    map
-                }
-                Change::Retain(index) => {
-                    let mut map = Term::map_new(env);
-                    map = map.map_put(atoms::retain(), *index).unwrap();
-                    map
-                }
-            })
-            .collect();
-        v.encode(env)
+        make_list(
+            env,
+            self.change.iter().map(|change| {
+                let entry = match change {
+                    Change::Added(content) => {
+                        let content = make_list(
+                            env,
+                            content.iter().map(|item| {
+                                NifYOut::from_native(item.clone(), &self.doc).encode(env)
+                            }),
+                        );
+                        (atoms::insert().encode(env), content)
+                    }
+                    Change::Removed(len) => (atoms::delete().encode(env), len.encode(env)),
+                    Change::Retain(len) => (atoms::retain().encode(env), len.encode(env)),
+                };
+                make_map(env, [entry])
+            }),
+        )
     }
 }
 
@@ -151,43 +142,31 @@ pub struct NifYTextDelta {
 
 impl rustler::Encoder for NifYTextDelta {
     fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
-        let v: Vec<Term<'_>> = self
-            .delta
-            .iter()
-            .map(|change| match change {
-                Delta::Inserted(content, attr) => {
-                    let insert = NifYOut::from_native(content.clone(), &self.doc);
-
-                    let mut map = Term::map_new(env).map_put(atoms::insert(), insert).unwrap();
-                    if let Some(attr) = attr {
-                        let attribute = attr
-                            .iter()
-                            .map(|(k, v)| (k.to_string(), NifAny::from(v.clone())))
-                            .collect::<NifMapPairs<NifAny>>();
-                        map = map.map_put(atoms::attributes(), attribute).unwrap();
-                    }
-                    map
-                }
-                Delta::Deleted(index) => {
-                    let mut map = Term::map_new(env);
-                    map = map.map_put(atoms::delete(), *index).unwrap();
-                    map
-                }
-                Delta::Retain(index, attr) => {
-                    let mut map = Term::map_new(env);
-                    map = map.map_put(atoms::retain(), *index).unwrap();
-                    if let Some(attr) = attr {
-                        let attribute = attr
-                            .iter()
-                            .map(|(k, v)| (k.to_string(), NifAny::from(v.clone())))
-                            .collect::<NifMapPairs<NifAny>>();
-                        map = map.map_put(atoms::attributes(), attribute).unwrap();
-                    }
-                    map
-                }
+        let attributes = |attrs: &Option<Box<yrs::types::Attrs>>| {
+            attrs.as_deref().map(|attrs| {
+                (
+                    atoms::attributes().encode(env),
+                    encode_any_map(env, attrs.iter()),
+                )
             })
-            .collect();
-        v.encode(env)
+        };
+        make_list(
+            env,
+            self.delta.iter().map(|change| match change {
+                Delta::Inserted(content, attrs) => {
+                    let insert = NifYOut::from_native(content.clone(), &self.doc).encode(env);
+                    let insert = (atoms::insert().encode(env), insert);
+                    make_map(env, std::iter::once(insert).chain(attributes(attrs)))
+                }
+                Delta::Deleted(len) => {
+                    make_map(env, [(atoms::delete().encode(env), len.encode(env))])
+                }
+                Delta::Retain(len, attrs) => {
+                    let retain = (atoms::retain().encode(env), len.encode(env));
+                    make_map(env, std::iter::once(retain).chain(attributes(attrs)))
+                }
+            }),
+        )
     }
 }
 
@@ -225,43 +204,40 @@ pub struct NifYMapChange {
 
 impl rustler::Encoder for NifYMapChange {
     fn encode<'a>(&self, env: Env<'a>) -> Term<'a> {
-        let v: NifMapPairs<Term> = self
-            .change
-            .iter()
-            .map(|(key, change)| match change {
-                EntryChange::Inserted(content) => {
-                    let content = NifYOut::from_native(content.clone(), &self.doc);
-                    let map = Term::map_new(env)
-                        .map_put(atoms::action(), atoms::add())
-                        .unwrap()
-                        .map_put(atoms::new_value(), content)
-                        .unwrap();
-                    (key.to_string(), map)
-                }
-                EntryChange::Removed(old_value) => {
-                    let old_value = NifYOut::from_native(old_value.clone(), &self.doc);
-                    let map = Term::map_new(env)
-                        .map_put(atoms::action(), atoms::delete())
-                        .unwrap()
-                        .map_put(atoms::old_value(), old_value)
-                        .unwrap();
-                    (key.to_string(), map)
-                }
-                EntryChange::Updated(old_value, new_value) => {
-                    let old_value = NifYOut::from_native(old_value.clone(), &self.doc);
-                    let new_value = NifYOut::from_native(new_value.clone(), &self.doc);
-                    let map = Term::map_new(env)
-                        .map_put(atoms::action(), atoms::update())
-                        .unwrap()
-                        .map_put(atoms::old_value(), old_value)
-                        .unwrap()
-                        .map_put(atoms::new_value(), new_value)
-                        .unwrap();
-                    (key.to_string(), map)
-                }
-            })
-            .collect();
-        v.encode(env)
+        let value = |out: &yrs::Out| NifYOut::from_native(out.clone(), &self.doc).encode(env);
+        make_map(
+            env,
+            self.change.iter().map(|(key, change)| {
+                let action = atoms::action().encode(env);
+                let old_value = atoms::old_value().encode(env);
+                let new_value = atoms::new_value().encode(env);
+                let entry = match change {
+                    EntryChange::Inserted(content) => make_map(
+                        env,
+                        [
+                            (action, atoms::add().encode(env)),
+                            (new_value, value(content)),
+                        ],
+                    ),
+                    EntryChange::Removed(old) => make_map(
+                        env,
+                        [
+                            (action, atoms::delete().encode(env)),
+                            (old_value, value(old)),
+                        ],
+                    ),
+                    EntryChange::Updated(old, new) => make_map(
+                        env,
+                        [
+                            (action, atoms::update().encode(env)),
+                            (old_value, value(old)),
+                            (new_value, value(new)),
+                        ],
+                    ),
+                };
+                (encode_str(env, key), entry)
+            }),
+        )
     }
 }
 
