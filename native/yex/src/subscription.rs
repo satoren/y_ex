@@ -291,7 +291,7 @@ fn sub_unsubscribe(
             // A transaction on another document can't remove this observer; fall back to
             // the subscription's own document instead of consuming it.
             .filter(|txn| inner.observes_store_of(&txn.1))
-            .and_then(|txn| txn.0.read().ok());
+            .and_then(|txn| txn.0.lock().ok());
         inner.unsubscribe(txn_guard.as_ref().and_then(|guard| guard.as_ref()));
         Ok(atoms::ok())
     })
