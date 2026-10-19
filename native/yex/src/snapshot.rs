@@ -115,6 +115,7 @@ pub fn read_snapshot(bytes: &[u8], v2: bool) -> Result<Snapshot, ReadError> {
     Ok(Snapshot::new(state_map, delete_set))
 }
 
+/// Reads a client id, rejecting ids above the 53-bit limit yjs and yrs accept.
 fn read_client(cursor: &mut Cursor) -> Result<ClientID, ReadError> {
     let client: u64 = cursor.read_var()?;
     if client > MAX_CLIENT {
@@ -196,6 +197,7 @@ pub fn encode_state_from_snapshot<E: UpdatesEncoder>(
     txn.encode_state_from_snapshot(&snapshot, encoder)
 }
 
+/// Decodes snapshot bytes into a `Yex.Snapshot` that is not bound to a document.
 fn decode<'a>(env: Env<'a>, bytes: Binary, v2: bool) -> NifResult<Term<'a>> {
     let snapshot = read_snapshot(bytes.as_slice(), v2).map_err(Error::from)?;
     Ok((
@@ -208,22 +210,26 @@ fn decode<'a>(env: Env<'a>, bytes: Binary, v2: bool) -> NifResult<Term<'a>> {
         .encode(env))
 }
 
+/// `Yex.Snapshot.decode_v1/1`: reads lib0 v1 snapshot bytes.
 #[rustler::nif]
 fn snapshot_decode_v1<'a>(env: Env<'a>, bytes: Binary) -> NifResult<Term<'a>> {
     decode(env, bytes, false)
 }
 
+/// `Yex.Snapshot.decode_v2/1`: reads lib0 v2 snapshot bytes.
 #[rustler::nif]
 fn snapshot_decode_v2<'a>(env: Env<'a>, bytes: Binary) -> NifResult<Term<'a>> {
     decode(env, bytes, true)
 }
 
+/// `Yex.Snapshot.encode_v1/1`: rewrites `reference` in canonical yjs order.
 #[rustler::nif]
 fn snapshot_encode_v1(env: Env<'_>, snapshot: SnapshotRef) -> Term<'_> {
     let bytes = write_snapshot(&snapshot.0, false);
     (atoms::ok(), SliceIntoBinary::new(bytes.as_slice())).encode(env)
 }
 
+/// `Yex.Snapshot.encode_v2/1`: writes the snapshot in yjs v2 format.
 #[rustler::nif]
 fn snapshot_encode_v2(env: Env<'_>, snapshot: SnapshotRef) -> Term<'_> {
     let bytes = write_snapshot(&snapshot.0, true);

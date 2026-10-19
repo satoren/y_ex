@@ -873,6 +873,7 @@ fn xml_text_to_delta(
     encode_diffs(diff, xml.doc(), env)
 }
 
+/// `Yex.XmlText.to_delta/3`: the text delta between two snapshots.
 #[rustler::nif]
 fn xml_text_to_delta_with_snapshots(
     env: Env<'_>,

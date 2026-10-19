@@ -1233,6 +1233,7 @@ fn transaction_snapshot<'a>(
         .encode(env))
 }
 
+/// `Yex.Snapshot.encode_state_v1/2`: the state of `doc` as of `snapshot`, in lib0 v1.
 #[rustler::nif]
 fn transaction_encode_state_from_snapshot_v1<'a>(
     env: Env<'a>,
@@ -1251,6 +1252,7 @@ fn transaction_encode_state_from_snapshot_v1<'a>(
     Ok((atoms::ok(), SliceIntoBinary::new(update.as_slice())).encode(env))
 }
 
+/// `Yex.Snapshot.encode_state_v2/2`: the state of `doc` as of `snapshot`, in lib0 v2.
 #[rustler::nif]
 fn transaction_encode_state_from_snapshot_v2<'a>(
     env: Env<'a>,
