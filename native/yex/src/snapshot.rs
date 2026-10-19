@@ -128,16 +128,25 @@ fn read_client(cursor: &mut Cursor) -> Result<ClientID, ReadError> {
 /// `Text::diff_range` panics on a delete set client the store does not know
 /// (`get_client(..).unwrap()` in yrs `id_set::Blocks::next`). Items of such clients are
 /// not in the store, so dropping them cannot change the visibility of any walked item.
+/// In the common case, where every delete set client is known, the snapshot is returned
+/// as is.
 pub fn known_clients_only(snapshot: Snapshot, local: &StateVector) -> Snapshot {
+    if snapshot
+        .delete_set
+        .client_ids()
+        .all(|c| local.contains_client(&c))
+    {
+        return snapshot;
+    }
     let Snapshot {
         state_map,
         delete_set,
     } = snapshot;
     let mut known = IdSet::new();
-    for (client, ranges) in delete_set.iter() {
-        if local.contains_client(client) {
-            for range in ranges.iter() {
-                known.insert(ID::new(*client, range.start), range.end - range.start);
+    for client in delete_set.client_ids() {
+        if local.contains_client(&client) {
+            if let Some(range) = delete_set.get(&client) {
+                known.insert_range(client, range.clone());
             }
         }
     }
@@ -160,9 +169,13 @@ pub fn known_clients_only(snapshot: Snapshot, local: &StateVector) -> Snapshot {
 /// from clock 0 onwards, so they are left out of the state map.
 pub fn encode_state_from_snapshot<E: UpdatesEncoder>(
     txn: &mut TransactionMut,
-    snapshot: &Snapshot,
+    snapshot: Snapshot,
     encoder: &mut E,
 ) -> Result<(), yrs::error::Error> {
+    // Fail before the split below mutates the store.
+    if !txn.doc().skip_gc() {
+        return Err(yrs::error::Error::Gc);
+    }
     let local = txn.state_vector();
     let state_map: StateVector = snapshot
         .state_map
@@ -171,14 +184,15 @@ pub fn encode_state_from_snapshot<E: UpdatesEncoder>(
         .map(|(client, clock)| (*client, *clock))
         .collect();
     let detached = Branch::new(TypeRef::Text);
-    let split = Snapshot::new(state_map.clone(), IdSet::default());
+    let split = Snapshot::new(state_map, IdSet::default());
     TextRef::from(BranchPtr::from(&*detached)).diff_range(
         txn,
         Some(&split),
         None,
         YChange::identity,
     );
-    let snapshot = Snapshot::new(state_map, snapshot.delete_set.clone());
+    let Snapshot { state_map, .. } = split;
+    let snapshot = Snapshot::new(state_map, snapshot.delete_set);
     txn.encode_state_from_snapshot(&snapshot, encoder)
 }
 
@@ -202,6 +216,12 @@ fn snapshot_decode_v1<'a>(env: Env<'a>, bytes: Binary) -> NifResult<Term<'a>> {
 #[rustler::nif]
 fn snapshot_decode_v2<'a>(env: Env<'a>, bytes: Binary) -> NifResult<Term<'a>> {
     decode(env, bytes, true)
+}
+
+#[rustler::nif]
+fn snapshot_encode_v1(env: Env<'_>, snapshot: SnapshotRef) -> Term<'_> {
+    let bytes = write_snapshot(&snapshot.0, false);
+    (atoms::ok(), SliceIntoBinary::new(bytes.as_slice())).encode(env)
 }
 
 #[rustler::nif]
@@ -254,9 +274,9 @@ mod tests {
         t.insert(&mut a.transact_mut(), 1, "Y");
 
         let mut v1 = EncoderV1::new();
-        encode_state_from_snapshot(&mut a.transact_mut(), &s, &mut v1).unwrap();
+        encode_state_from_snapshot(&mut a.transact_mut(), s.clone(), &mut v1).unwrap();
         let mut v2 = EncoderV2::new();
-        encode_state_from_snapshot(&mut a.transact_mut(), &s, &mut v2).unwrap();
+        encode_state_from_snapshot(&mut a.transact_mut(), s, &mut v2).unwrap();
         for update in [
             Update::decode_v1(&v1.to_vec()).unwrap(),
             Update::decode_v2(&v2.to_vec()).unwrap(),
@@ -267,6 +287,21 @@ mod tests {
             assert_eq!(text.get_string(&target.transact()), "Xabc");
         }
         assert_eq!(t.get_string(&a.transact()), "XYabc");
+    }
+
+    #[test]
+    fn rejects_a_store_with_gc_enabled() {
+        let a = Doc::with_options(Options {
+            client_id: ClientID::new(1),
+            skip_gc: false,
+            ..Options::default()
+        });
+        let t = a.get_or_insert_text("text");
+        t.insert(&mut a.transact_mut(), 0, "abc");
+        let s = a.transact().snapshot();
+        let mut v1 = EncoderV1::new();
+        let result = encode_state_from_snapshot(&mut a.transact_mut(), s, &mut v1);
+        assert!(matches!(result, Err(yrs::error::Error::Gc)));
     }
 
     #[test]
@@ -295,9 +330,9 @@ mod tests {
             IdSet::default(),
         );
         let mut v1 = EncoderV1::new();
-        encode_state_from_snapshot(&mut b.transact_mut(), &snapshot, &mut v1).unwrap();
+        encode_state_from_snapshot(&mut b.transact_mut(), snapshot.clone(), &mut v1).unwrap();
         let mut v2 = EncoderV2::new();
-        encode_state_from_snapshot(&mut b.transact_mut(), &snapshot, &mut v2).unwrap();
+        encode_state_from_snapshot(&mut b.transact_mut(), snapshot, &mut v2).unwrap();
         // client 1 is left out entirely: an empty update
         assert_eq!(v1.to_vec(), vec![0, 0]);
     }
@@ -650,9 +685,11 @@ mod tests {
                     "encode_state",
                     catch_unwind(AssertUnwindSafe(|| {
                         let mut v1 = EncoderV1::new();
-                        encode_state_from_snapshot(&mut d.transact_mut(), &hi, &mut v1).unwrap();
+                        encode_state_from_snapshot(&mut d.transact_mut(), hi.clone(), &mut v1)
+                            .unwrap();
                         let mut v2 = EncoderV2::new();
-                        encode_state_from_snapshot(&mut d.transact_mut(), &hi, &mut v2).unwrap();
+                        encode_state_from_snapshot(&mut d.transact_mut(), hi.clone(), &mut v2)
+                            .unwrap();
                         // the update must be valid: create_doc applies it to a fresh doc
                         let u = Update::decode_v2(&v2.to_vec()).unwrap();
                         Doc::new().transact_mut().apply_update(u).unwrap();
@@ -681,7 +718,8 @@ mod tests {
                                     t,
                                     h.clone().map(SnapshotRef::new),
                                     l.clone().map(SnapshotRef::new),
-                                );
+                                )
+                                .unwrap();
                             }
                         })),
                     );

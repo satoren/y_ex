@@ -883,12 +883,7 @@ fn xml_text_to_delta_with_snapshots(
 ) -> NifResult<rustler::Term<'_>> {
     let diff = xml.mutably(env, current_transaction, |txn| {
         let xml_ref = xml.get_ref(txn)?;
-        Ok(diff_between_snapshots(
-            txn,
-            &xml_ref,
-            snapshot,
-            prev_snapshot,
-        ))
+        diff_between_snapshots(txn, &xml_ref, snapshot, prev_snapshot)
     })?;
     encode_diffs(diff, xml.doc(), env)
 }

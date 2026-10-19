@@ -11,9 +11,9 @@ defmodule Yex.Snapshot do
   have garbage collection disabled (`Yex.Doc.Options.skip_gc == true`).
 
   The struct is opaque. `doc` is the document the snapshot was taken from, or `nil` for a
-  decoded snapshot. `reference` holds the snapshot's canonical lib0 v1 bytes: delete set
-  ranges sorted and merged, clock-0 state vector entries dropped, and clients written in
-  descending order as yjs writes them.
+  decoded snapshot. `reference` holds the snapshot's lib0 v1 bytes; use `encode_v1/1` or
+  `equal?/2` rather than reading it, since a struct kept from an older y_ex may hold them
+  in a different order.
 
   Arrays, maps and XML elements have no snapshot readers (yrs has none); restore the state
   with `create_doc/3` and read it there.
@@ -33,9 +33,11 @@ defmodule Yex.Snapshot do
   @doc """
   Encodes the snapshot itself in lib0 v1 format, byte-identical to yjs `encodeSnapshot`.
 
-  y_ex 0.12.1 and earlier wrote these bytes in yrs order, which differs from yjs for
-  documents with several clients. Such bytes still decode; pass them through
-  `decode_v1/1` before comparing them with `equal?/2`.
+  y_ex 0.13.0 and earlier wrote these bytes in yrs order, which differs from yjs for
+  documents with several clients. Such bytes, and `%Yex.Snapshot{}` structs kept from
+  those versions (for example with `:erlang.term_to_binary/1`), are re-canonicalised by
+  this function and by `equal?/2`. A hand-built struct whose `reference` does not decode
+  raises `ArgumentError`.
 
   ## Examples
       iex> {:ok, snapshot} = Yex.Snapshot.decode_v1(<<0, 1, 1, 3>>)
@@ -43,7 +45,7 @@ defmodule Yex.Snapshot do
       {:ok, <<0, 1, 1, 3>>}
   """
   @spec encode_v1(t()) :: {:ok, binary()}
-  def encode_v1(%__MODULE__{reference: reference}), do: {:ok, reference}
+  def encode_v1(%__MODULE__{reference: reference}), do: Yex.Nif.snapshot_encode_v1(reference)
 
   @doc """
   Encodes the snapshot itself in lib0 v2 format, byte-identical to yjs `encodeSnapshotV2`.
@@ -87,7 +89,7 @@ defmodule Yex.Snapshot do
       true
   """
   @spec equal?(t(), t()) :: boolean()
-  def equal?(%__MODULE__{reference: a}, %__MODULE__{reference: b}), do: a == b
+  def equal?(%__MODULE__{} = a, %__MODULE__{} = b), do: encode_v1(a) == encode_v1(b)
 
   @doc """
   Encodes the state of the snapshot's document as of the snapshot, in lib0 v1 format.
@@ -142,8 +144,9 @@ defmodule Yex.Snapshot do
   @doc """
   Restores `origin_doc` as of `snapshot` into `target`, like yjs `createDocFromSnapshot`.
 
-  `target` defaults to a new document owned by the calling process. Raises
-  `ArgumentError` when `origin_doc` has garbage collection enabled.
+  `target` defaults to a new document, owned by the calling process and created after the
+  snapshot is read. Raises `ArgumentError` when `origin_doc` has garbage collection
+  enabled. Returns `{:error, reason}` when applying the update to `target` fails.
 
   ## Examples
       iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{skip_gc: true})
@@ -155,19 +158,39 @@ defmodule Yex.Snapshot do
       iex> Yex.Doc.get_text(restored, "text") |> Yex.Text.to_string()
       "world!"
   """
-  @spec create_doc(t(), Yex.Doc.t(), Yex.Doc.t()) :: {:ok, Yex.Doc.t()}
-  def create_doc(%__MODULE__{} = snapshot, %Yex.Doc{} = origin_doc, target \\ Doc.new()) do
-    ensure_skip_gc!(origin_doc)
-    {:ok, update} = encode_state_v2(snapshot, origin_doc)
-    :ok = Yex.apply_update_v2(target, update)
-    {:ok, target}
+  @spec create_doc(t(), Yex.Doc.t(), Yex.Doc.t() | nil) :: {:ok, Yex.Doc.t()} | {:error, term()}
+  def create_doc(%__MODULE__{reference: reference}, %Yex.Doc{} = origin_doc, target \\ nil) do
+    encoded =
+      Doc.run_in_worker_process origin_doc do
+        ensure_skip_gc!(origin_doc)
+
+        Yex.Nif.transaction_encode_state_from_snapshot_v2(
+          origin_doc,
+          cur_txn(origin_doc),
+          reference
+        )
+      end
+
+    with {:ok, update} <- encoded,
+         target = target || Doc.new(),
+         :ok <- Yex.apply_update_v2(target, update),
+         do: {:ok, target}
   end
 
   @doc false
-  # Shared precondition of every function that reads a document through a snapshot.
+  # Shared body of Yex.Text.to_delta/3 and Yex.XmlText.to_delta/3.
+  def to_delta(%{doc: doc} = shared, nif, snapshot, prev_snapshot) do
+    Doc.run_in_worker_process doc do
+      nif.(shared, cur_txn(shared), reference(snapshot), reference(prev_snapshot))
+    end
+  end
+
+  defp reference(nil), do: nil
+  defp reference(%__MODULE__{reference: reference}), do: reference
+
+  # Precondition of create_doc/3; the NIFs check it themselves elsewhere.
   # `skip_gc` is fixed when the document is created, so the check cannot go stale.
-  @spec ensure_skip_gc!(Yex.Doc.t()) :: :ok
-  def ensure_skip_gc!(%Yex.Doc{} = doc) do
+  defp ensure_skip_gc!(%Yex.Doc{} = doc) do
     if Doc.skip_gc(doc) do
       :ok
     else

@@ -27,6 +27,16 @@ defmodule Yex.SnapshotTest do
   @multi_v1 Base.decode16!("0205010001010101010205020106", case: :lower)
   @multi_v2 Base.decode16!("0205010000010101000205020106", case: :lower)
 
+  # Owns docs in the cross-process tests; runs what Yex.Doc.run_in_worker_process sends.
+  defmodule Worker do
+    use GenServer
+    def start_link(_), do: GenServer.start_link(__MODULE__, nil)
+    @impl true
+    def init(state), do: {:ok, state}
+    @impl true
+    def handle_call({Yex.Doc, :run, fun}, _from, state), do: {:reply, fun.(), state}
+  end
+
   defp doc_with(update, client_id \\ 1, skip_gc \\ true) do
     doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: client_id, skip_gc: skip_gc})
     :ok = Yex.apply_update_v1(doc, update)
@@ -116,6 +126,21 @@ defmodule Yex.SnapshotTest do
 
       assert {:error, {:encoding_exception, _}} =
                Yex.Snapshot.encode_state_v2(snapshot)
+    end
+
+    test "a gc doc returns encoding_exception and stays usable" do
+      doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 1, skip_gc: false})
+      text = Yex.Doc.get_text(doc, "text")
+      snapshot = mid_block_snapshot(doc, text)
+      {:ok, state_vector} = Yex.encode_state_vector(doc)
+      {:ok, _} = Yex.Doc.monitor_update(doc)
+
+      assert {:error, {:encoding_exception, _}} = Yex.Snapshot.encode_state_v1(snapshot, doc)
+      assert {:error, {:encoding_exception, _}} = Yex.Snapshot.encode_state_v2(snapshot, doc)
+
+      refute_receive {:update_v1, _, _, _}, 50
+      assert Yex.encode_state_vector(doc) == {:ok, state_vector}
+      assert Yex.Text.to_string(text) == "XYabc"
     end
 
     test "snapshot APIs work inside explicit transaction context" do
@@ -308,6 +333,24 @@ defmodule Yex.SnapshotTest do
       assert Yex.Snapshot.equal?(live, decode!(@s2_v1, :v1))
       assert Yex.Snapshot.equal?(live, other)
       refute Yex.Snapshot.equal?(live, decode!(@s1_v1, :v1))
+    end
+
+    test "structs holding bytes in yrs order from older y_ex are re-canonicalised" do
+      # client 1 before client 5, one order y_ex 0.13.0 and earlier could write @multi_v1 in
+      old = %Yex.Snapshot{doc: nil, reference: <<2, 1, 1, 1, 1, 5, 1, 0, 1, 2, 1, 6, 5, 2>>}
+      assert Yex.Snapshot.encode_v1(old) == {:ok, @multi_v1}
+      assert Yex.Snapshot.equal?(old, decode!(@multi_v1, :v1))
+      {:ok, live} = Yex.snapshot(doc_with(@update_b, 5))
+      assert Yex.Snapshot.equal?(old, live)
+
+      # state vector entries swapped, plus a clock-0 client
+      swapped = %Yex.Snapshot{
+        doc: nil,
+        reference: <<2, 1, 1, 1, 1, 5, 1, 0, 1, 3, 5, 2, 1, 6, 9, 0>>
+      }
+
+      assert Yex.Snapshot.equal?(swapped, decode!(@multi_v1, :v1))
+      assert Yex.Snapshot.equal?(swapped, old)
     end
 
     test "all snapshot functions work inside a transaction" do
@@ -515,6 +558,28 @@ defmodule Yex.SnapshotTest do
       assert_raise ArgumentError, fn -> Yex.Text.to_delta(text, decode!(@s1_v1, :v1)) end
       assert_raise ArgumentError, fn -> Yex.Text.to_delta(text, nil, decode!(@s1_v1, :v1)) end
       assert Yex.Text.to_delta(text, nil, nil) == Yex.Text.to_delta(text)
+    end
+
+    test "raises on a gc-enabled doc inside a transaction and leaves the doc usable" do
+      doc = doc_with(@update_a, 1, false)
+      text = Yex.Doc.get_text(doc, "text")
+
+      Yex.Doc.transaction(doc, fn ->
+        assert_raise ArgumentError, fn -> Yex.Text.to_delta(text, decode!(@s1_v1, :v1)) end
+      end)
+
+      Yex.Text.insert(text, 0, "x")
+      assert Yex.Text.to_string(text) == "xacd"
+    end
+
+    test "raises on a gc-enabled doc when called from another process" do
+      worker = start_supervised!(__MODULE__.Worker)
+      doc = Yex.Doc.with_options(%Yex.Doc.Options{client_id: 1, skip_gc: false}, worker)
+      :ok = Yex.apply_update_v1(doc, @update_a)
+      text = Yex.Doc.get_text(doc, "text")
+
+      assert_raise ArgumentError, fn -> Yex.Text.to_delta(text, decode!(@s1_v1, :v1)) end
+      assert Yex.Text.to_string(text) == "acd"
     end
 
     test "raises on a deleted text" do

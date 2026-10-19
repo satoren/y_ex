@@ -1242,7 +1242,7 @@ fn transaction_encode_state_from_snapshot_v1<'a>(
 ) -> NifResult<Term<'a>> {
     let update: Vec<u8> = doc.mutably(env, current_transaction, |txn| {
         let mut encoder = EncoderV1::new();
-        encode_state_from_snapshot(txn, &snapshot.0, &mut encoder).map_err(|e| {
+        encode_state_from_snapshot(txn, snapshot.0, &mut encoder).map_err(|e| {
             rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
         })?;
         Ok(encoder.to_vec())
@@ -1260,7 +1260,7 @@ fn transaction_encode_state_from_snapshot_v2<'a>(
 ) -> NifResult<Term<'a>> {
     let update: Vec<u8> = doc.mutably(env, current_transaction, |txn| {
         let mut encoder = EncoderV2::new();
-        encode_state_from_snapshot(txn, &snapshot.0, &mut encoder).map_err(|e| {
+        encode_state_from_snapshot(txn, snapshot.0, &mut encoder).map_err(|e| {
             rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
         })?;
         Ok(encoder.to_vec())

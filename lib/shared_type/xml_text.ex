@@ -259,22 +259,14 @@ defmodule Yex.XmlText do
   def to_delta(text, snapshot, prev_snapshot \\ nil)
   def to_delta(%__MODULE__{} = text, nil, nil), do: to_delta(text)
 
-  def to_delta(%__MODULE__{doc: doc} = text, snapshot, prev_snapshot) do
-    Yex.Snapshot.ensure_skip_gc!(doc)
-
-    Doc.run_in_worker_process(doc,
-      do:
-        Yex.Nif.xml_text_to_delta_with_snapshots(
-          text,
-          cur_txn(text),
-          reference(snapshot),
-          reference(prev_snapshot)
-        )
-    )
-  end
-
-  defp reference(nil), do: nil
-  defp reference(%Yex.Snapshot{reference: reference}), do: reference
+  def to_delta(%__MODULE__{} = text, snapshot, prev_snapshot),
+    do:
+      Yex.Snapshot.to_delta(
+        text,
+        &Yex.Nif.xml_text_to_delta_with_snapshots/4,
+        snapshot,
+        prev_snapshot
+      )
 
   @doc """
   Converts the XML text node to a preliminary representation.

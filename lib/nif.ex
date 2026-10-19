@@ -399,6 +399,7 @@ defmodule Yex.Nif do
 
   def snapshot_decode_v1(_bytes), do: :erlang.nif_error(:nif_not_loaded)
   def snapshot_decode_v2(_bytes), do: :erlang.nif_error(:nif_not_loaded)
+  def snapshot_encode_v1(_reference), do: :erlang.nif_error(:nif_not_loaded)
   def snapshot_encode_v2(_reference), do: :erlang.nif_error(:nif_not_loaded)
 
   def transaction_json_path_all(_doc, _cur_txn, _path),

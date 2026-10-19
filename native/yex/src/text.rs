@@ -12,6 +12,7 @@ use crate::{
     any::NifAttr,
     atoms,
     doc::{NifDoc, SnapshotRef},
+    error::ArgumentError,
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
     snapshot::known_clients_only,
@@ -215,7 +216,12 @@ pub fn diff_between_snapshots<T: Text>(
     text: &T,
     hi: Option<SnapshotRef>,
     lo: Option<SnapshotRef>,
-) -> Vec<Diff<YChange>> {
+) -> NifResult<Vec<Diff<YChange>>> {
+    if !txn.doc().skip_gc() {
+        return Err(ArgumentError::raise(
+            "garbage collection must be disabled (skip_gc: true) to read a document through a snapshot",
+        ));
+    }
     let local = txn.state_vector();
     // yrs only marks changes when `hi` is given, so a missing `hi` becomes the current
     // snapshot, under which every integrated item is visible exactly when not deleted.
@@ -224,7 +230,7 @@ pub fn diff_between_snapshots<T: Text>(
         None => txn.snapshot(),
     };
     let lo = lo.map(|snapshot| known_clients_only(snapshot.0, &local));
-    text.diff_range(txn, Some(&hi), lo.as_ref(), YChange::identity)
+    Ok(text.diff_range(txn, Some(&hi), lo.as_ref(), YChange::identity))
 }
 
 #[rustler::nif]
@@ -237,12 +243,7 @@ fn text_to_delta_with_snapshots(
 ) -> NifResult<rustler::Term<'_>> {
     let diff = text.mutably(env, current_transaction, |txn| {
         let text_ref = text.get_ref(txn)?;
-        Ok(diff_between_snapshots(
-            txn,
-            &text_ref,
-            snapshot,
-            prev_snapshot,
-        ))
+        diff_between_snapshots(txn, &text_ref, snapshot, prev_snapshot)
     })?;
     encode_diffs(diff, &text.doc, env)
 }
