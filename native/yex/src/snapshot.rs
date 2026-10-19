@@ -296,6 +296,32 @@ mod tests {
     }
 
     #[test]
+    fn splits_the_block_at_a_snapshot_clock() {
+        // Observes the split itself, not only a valid update. If this fails after a yrs
+        // bump, diff_range stopped splitting: encode_state_from_snapshot needs another
+        // way to split unless that release fixes y-crdt/y-crdt#696.
+        let a = doc(1);
+        let t = a.get_or_insert_text("text");
+        t.insert(&mut a.transact_mut(), 0, "abc");
+        t.insert(&mut a.transact_mut(), 0, "X");
+        let s = a.transact().snapshot();
+        t.insert(&mut a.transact_mut(), 1, "Y");
+        // lib0 v1 update of one client: [client count, struct count, ...]
+        let structs = |update: Vec<u8>| update[1];
+        let full = StateVector::default();
+        // "abc" and "XY"
+        assert_eq!(structs(a.transact().encode_state_as_update_v1(&full)), 2);
+
+        let mut txn = a.transact_mut();
+        encode_state_from_snapshot(&mut txn, s, &mut EncoderV1::new()).unwrap();
+        // "abc", "X" and "Y": split at the snapshot clock
+        assert_eq!(structs(txn.encode_state_as_update_v1(&full)), 3);
+        drop(txn);
+        // merged back when the transaction commits
+        assert_eq!(structs(a.transact().encode_state_as_update_v1(&full)), 2);
+    }
+
+    #[test]
     fn rejects_a_store_with_gc_enabled() {
         let a = Doc::with_options(Options {
             client_id: ClientID::new(1),
