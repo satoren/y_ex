@@ -16,6 +16,7 @@ defmodule Yex.Sync.SharedDoc do
   @default_auto_exit_timeout 5_000
   @auto_exit_check {__MODULE__, :auto_exit_check}
   @delayed_auto_exit {__MODULE__, :delayed_auto_exit}
+  @flush {__MODULE__, :flush}
 
   @typedoc """
   Launch Parameters
@@ -25,6 +26,7 @@ defmodule Yex.Sync.SharedDoc do
     * `:auto_exit` - Automatically terminate the SharedDoc process when there is no longer a process to receive update notifications.
     * `:auto_exit_timeout` - With `:auto_exit`, how long (in milliseconds) to wait for the first observer after start before terminating. Defaults to 5000. `:infinity` disables this check.
     * `:auto_exit_delay` - With `:auto_exit`, how long (in milliseconds) to wait after the last observer left before terminating. An observer joining in the meantime cancels it, which avoids reloading the document when a client reconnects. Defaults to 0: terminate immediately.
+    * `:flush_interval` - With a persistence implementing `c:PersistenceBehaviour.flush/3`, how long (in milliseconds) a change to the document waits before `flush/3` is called. The changes made in the meantime are flushed together, and nothing is flushed while the document does not change. Defaults to `nil`: `flush/3` is never called.
     * `:doc_option` - Options for the document.
 
   """
@@ -34,6 +36,7 @@ defmodule Yex.Sync.SharedDoc do
           | {:auto_exit, boolean()}
           | {:auto_exit_timeout, timeout()}
           | {:auto_exit_delay, non_neg_integer()}
+          | {:flush_interval, pos_integer() | nil}
           | {:doc_option, Yex.Doc.Options.t()}
 
   @doc """
@@ -149,6 +152,8 @@ defmodule Yex.Sync.SharedDoc do
           auto_exit: auto_exit,
           auto_exit_delay: Keyword.get(option, :auto_exit_delay, 0),
           delayed_auto_exit: nil,
+          flush_interval: Keyword.get(option, :flush_interval),
+          flush_scheduled: false,
           observer_process: %{},
           origin_client_map: %{}
         }
@@ -253,6 +258,13 @@ defmodule Yex.Sync.SharedDoc do
 
   def handle_info({@delayed_auto_exit, _stale_ref}, state), do: {:noreply, state}
 
+  def handle_info(@flush, %{assigns: assigns} = state) do
+    persistence_state =
+      assigns.persistence.flush(assigns.persistence_state, assigns.doc_name, state.doc)
+
+    {:noreply, assign(state, %{persistence_state: persistence_state, flush_scheduled: false})}
+  end
+
   # An exit already pending is kept: a duplicate departure does not restart it.
   defp delay_auto_exit(%{assigns: %{delayed_auto_exit: ref}} = state) when ref != nil, do: state
 
@@ -339,6 +351,8 @@ defmodule Yex.Sync.SharedDoc do
         state
       end
 
+    state = schedule_flush(state)
+
     with {:ok, s} <- Sync.get_update(update),
          {:ok, message} <- Sync.message_encode({:sync, s}) do
       broadcast_to_users(message, origin, state)
@@ -349,6 +363,19 @@ defmodule Yex.Sync.SharedDoc do
 
     {:noreply, state}
   end
+
+  # Flushes once per interval at most, and only after a change.
+  defp schedule_flush(%{assigns: %{flush_interval: interval, flush_scheduled: false}} = state)
+       when is_integer(interval) do
+    if function_exported?(state.assigns.persistence, :flush, 3) do
+      Process.send_after(self(), @flush, interval)
+      assign(state, :flush_scheduled, true)
+    else
+      state
+    end
+  end
+
+  defp schedule_flush(state), do: state
 
   @impl true
   def terminate(_reason, %{assigns: assigns} = state) do
@@ -419,6 +446,22 @@ defmodule Yex.Sync.SharedDoc do
                 doc :: Doc.t()
               ) :: term()
 
-    @optional_callbacks update_v1: 4, unbind: 3
+    @doc """
+    Invoked periodically while the document changes, with the `:flush_interval`
+    launch parameter: at most once per interval, and only if the document
+    changed since the previous call.
+
+    Use it to save the document regularly instead of only at `unbind/3`, which
+    is still invoked on exit.
+
+    ## Examples save the state to the filesystem
+        def flush(state, doc_name, doc) do
+          File.write!("path/to/" <> doc_name, Yex.encode_state_as_update!(doc))
+          state
+        end
+    """
+    @callback flush(state :: term(), doc_name :: String.t(), doc :: Doc.t()) :: term()
+
+    @optional_callbacks update_v1: 4, unbind: 3, flush: 3
   end
 end
