@@ -35,6 +35,8 @@ defmodule Yex.Sync.SharedDocTest do
     :crypto.strong_rand_bytes(10)
   end
 
+  defp delayed_auto_exit(pid), do: :sys.get_state(pid).assigns.delayed_auto_exit
+
   test "Observe SharedDoc on multiple clients, each of which will be synchronized" do
     docname = random_docname()
     {:ok, remote_shared_doc} = SharedDoc.start_link(doc_name: docname)
@@ -458,17 +460,46 @@ defmodule Yex.Sync.SharedDocTest do
       refute_receive {:DOWN, ^ref, :process, ^pid, _}, 200
     end
 
-    test "with auto_exit_delay, the delay restarts when the last observer leaves again" do
+    test "with auto_exit_delay, a new departure supersedes the previous delayed exit" do
       {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_delay: 100)
       ref = Process.monitor(pid)
       :ok = SharedDoc.observe(pid)
       :ok = SharedDoc.unobserve(pid)
-      Process.sleep(60)
+      first_exit = delayed_auto_exit(pid)
       :ok = SharedDoc.observe(pid)
       :ok = SharedDoc.unobserve(pid)
 
-      # The first delay would have ended 40 ms from now.
-      refute_receive {:DOWN, ^ref, :process, ^pid, _}, 80
+      # The timer of the first departure fires: it is ignored.
+      send(pid, {{SharedDoc, :delayed_auto_exit}, first_exit})
+      _ = :sys.get_state(pid)
+      refute_received {:DOWN, ^ref, :process, ^pid, _}
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
+    end
+
+    test "with auto_exit_delay, a duplicate departure does not restart the delay" do
+      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_delay: 100)
+      :ok = SharedDoc.observe(pid)
+      :ok = SharedDoc.unobserve(pid)
+      pending_exit = delayed_auto_exit(pid)
+      :ok = SharedDoc.unobserve(pid)
+
+      assert delayed_auto_exit(pid) == pending_exit
+    end
+
+    test "with auto_exit_delay, the initial auto_exit_timeout check does not cut the delay" do
+      {:ok, pid} =
+        SharedDoc.start(doc_name: random_docname(), auto_exit_timeout: 10, auto_exit_delay: 100)
+
+      ref = Process.monitor(pid)
+      :ok = SharedDoc.observe(pid)
+      :ok = SharedDoc.unobserve(pid)
+
+      # The initial check fires while the delayed exit is pending: it is ignored.
+      send(pid, {SharedDoc, :auto_exit_check})
+      _ = :sys.get_state(pid)
+      refute_received {:DOWN, ^ref, :process, ^pid, _}
+
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
     end
   end

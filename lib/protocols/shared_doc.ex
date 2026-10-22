@@ -238,14 +238,23 @@ defmodule Yex.Sync.SharedDoc do
 
   def handle_info(:timeout, state), do: maybe_auto_exit(state)
 
+  # Once observers have come and gone, the delayed exit decides, not the
+  # initial check.
+  def handle_info(@auto_exit_check, %{assigns: %{delayed_auto_exit: ref}} = state)
+      when ref != nil,
+      do: {:noreply, state}
+
   def handle_info(@auto_exit_check, state), do: maybe_auto_exit(state)
 
   # Only the latest delayed exit counts: an observer joining since cleared it,
-  # and an observer leaving since scheduled a new one.
+  # and the next departure scheduled a new one.
   def handle_info({@delayed_auto_exit, ref}, %{assigns: %{delayed_auto_exit: ref}} = state),
     do: maybe_auto_exit(state)
 
   def handle_info({@delayed_auto_exit, _stale_ref}, state), do: {:noreply, state}
+
+  # An exit already pending is kept: a duplicate departure does not restart it.
+  defp delay_auto_exit(%{assigns: %{delayed_auto_exit: ref}} = state) when ref != nil, do: state
 
   defp delay_auto_exit(state) do
     if state.assigns.auto_exit and state.assigns.observer_process === %{} do
