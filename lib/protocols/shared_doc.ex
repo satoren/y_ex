@@ -258,11 +258,13 @@ defmodule Yex.Sync.SharedDoc do
 
   def handle_info({@delayed_auto_exit, _stale_ref}, state), do: {:noreply, state}
 
-  def handle_info(@flush, %{assigns: assigns} = state) do
+  def handle_info(@flush, state), do: {:noreply, assign(state, flush(state))}
+
+  defp flush(%{assigns: assigns} = state) do
     persistence_state =
       assigns.persistence.flush(assigns.persistence_state, assigns.doc_name, state.doc)
 
-    {:noreply, assign(state, %{persistence_state: persistence_state, flush_scheduled: false})}
+    %{persistence_state: persistence_state, flush_scheduled: false}
   end
 
   # An exit already pending is kept: a duplicate departure does not restart it.
@@ -379,6 +381,14 @@ defmodule Yex.Sync.SharedDoc do
 
   @impl true
   def terminate(_reason, %{assigns: assigns} = state) do
+    # Changes still waiting for their flush are not lost on exit.
+    assigns =
+      if assigns.flush_scheduled do
+        %{assigns | persistence_state: flush(state).persistence_state}
+      else
+        assigns
+      end
+
     if function_exported?(assigns.persistence, :unbind, 3) do
       state.assigns.persistence.unbind(assigns.persistence_state, assigns.doc_name, state.doc)
     end
@@ -451,8 +461,9 @@ defmodule Yex.Sync.SharedDoc do
     launch parameter: at most once per interval, and only if the document
     changed since the previous call.
 
-    Use it to save the document regularly instead of only at `unbind/3`, which
-    is still invoked on exit.
+    Use it to save the document regularly instead of only at `unbind/3`. Changes
+    still waiting for their flush when the SharedDoc stops are flushed before
+    `unbind/3`, which is still invoked on exit.
 
     ## Examples save the state to the filesystem
         def flush(state, doc_name, doc) do
