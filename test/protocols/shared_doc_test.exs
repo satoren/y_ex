@@ -484,6 +484,27 @@ defmodule Yex.Sync.SharedDocTest do
       refute_receive {:flushed, _}, 100
     end
 
+    test "flushes pending changes when it stops" do
+      pid = start_flushing(10_000)
+      ref = Process.monitor(pid)
+      push(pid, "a")
+      :ok = SharedDoc.unobserve(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
+      assert_received {:flushed, ["a"]}
+    end
+
+    test "does not flush on stop without pending changes" do
+      pid = start_flushing(10)
+      ref = Process.monitor(pid)
+      push(pid, "a")
+      assert_receive {:flushed, ["a"]}, 500
+      :ok = SharedDoc.unobserve(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
+      refute_received {:flushed, _}
+    end
+
     test "never flushes without flush_interval" do
       {:ok, pid} =
         SharedDoc.start_link(doc_name: random_docname(), persistence: {FlushPersistence, self()})
