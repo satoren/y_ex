@@ -427,5 +427,49 @@ defmodule Yex.Sync.SharedDocTest do
       Process.sleep(50)
       assert Process.alive?(pid)
     end
+
+    test "with auto_exit_delay, stops once the delay has passed without observers" do
+      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_delay: 100)
+      ref = Process.monitor(pid)
+      :ok = SharedDoc.observe(pid)
+      :ok = SharedDoc.unobserve(pid)
+
+      refute_receive {:DOWN, ^ref, :process, ^pid, _}, 50
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
+    end
+
+    test "with auto_exit_delay, waits after the last observer process went down" do
+      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_delay: 100)
+      ref = Process.monitor(pid)
+
+      Task.async(fn -> SharedDoc.observe(pid) end) |> Task.await()
+
+      refute_receive {:DOWN, ^ref, :process, ^pid, _}, 50
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
+    end
+
+    test "with auto_exit_delay, an observer joining in the meantime cancels the exit" do
+      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_delay: 100)
+      ref = Process.monitor(pid)
+      :ok = SharedDoc.observe(pid)
+      :ok = SharedDoc.unobserve(pid)
+      :ok = SharedDoc.observe(pid)
+
+      refute_receive {:DOWN, ^ref, :process, ^pid, _}, 200
+    end
+
+    test "with auto_exit_delay, the delay restarts when the last observer leaves again" do
+      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_delay: 100)
+      ref = Process.monitor(pid)
+      :ok = SharedDoc.observe(pid)
+      :ok = SharedDoc.unobserve(pid)
+      Process.sleep(60)
+      :ok = SharedDoc.observe(pid)
+      :ok = SharedDoc.unobserve(pid)
+
+      # The first delay would have ended 40 ms from now.
+      refute_receive {:DOWN, ^ref, :process, ^pid, _}, 80
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
+    end
   end
 end
