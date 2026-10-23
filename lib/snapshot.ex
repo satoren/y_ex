@@ -26,9 +26,9 @@ defmodule Yex.Snapshot do
   defstruct [:doc, :reference]
 
   @type t :: %__MODULE__{
-          doc: Yex.Doc.t() | nil,
-          reference: binary()
-        }
+            doc: Yex.Doc.t() | nil,
+            reference: binary()
+          }
 
   @doc """
   Encodes the snapshot itself in lib0 v1 format, byte-identical to yjs `encodeSnapshot`.
@@ -145,8 +145,9 @@ defmodule Yex.Snapshot do
   Restores `origin_doc` as of `snapshot` into `target`, like yjs `createDocFromSnapshot`.
 
   `target` defaults to a new document, owned by the calling process and created after the
-  snapshot is read. Raises `ArgumentError` when `origin_doc` has garbage collection
-  enabled. Returns `{:error, reason}` when applying the update to `target` fails.
+  snapshot is read. Returns `{:error, {:encoding_exception, _}}` when `origin_doc` has
+  garbage collection enabled, like `encode_state_v2/2`, and `{:error, reason}` when
+  applying the update to `target` fails.
 
   ## Examples
       iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{skip_gc: true})
@@ -159,19 +160,8 @@ defmodule Yex.Snapshot do
       "world!"
   """
   @spec create_doc(t(), Yex.Doc.t(), Yex.Doc.t() | nil) :: {:ok, Yex.Doc.t()} | {:error, term()}
-  def create_doc(%__MODULE__{reference: reference}, %Yex.Doc{} = origin_doc, target \\ nil) do
-    encoded =
-      Doc.run_in_worker_process origin_doc do
-        ensure_skip_gc!(origin_doc)
-
-        Yex.Nif.transaction_encode_state_from_snapshot_v2(
-          origin_doc,
-          cur_txn(origin_doc),
-          reference
-        )
-      end
-
-    with {:ok, update} <- encoded,
+  def create_doc(%__MODULE__{} = snapshot, %Yex.Doc{} = origin_doc, target \\ nil) do
+    with {:ok, update} <- encode_state_v2(snapshot, origin_doc),
          target = target || Doc.new(),
          :ok <- Yex.apply_update_v2(target, update),
          do: {:ok, target}
@@ -187,17 +177,6 @@ defmodule Yex.Snapshot do
 
   defp reference(nil), do: nil
   defp reference(%__MODULE__{reference: reference}), do: reference
-
-  # Precondition of create_doc/3; the NIFs check it themselves elsewhere.
-  # `skip_gc` is fixed when the document is created, so the check cannot go stale.
-  defp ensure_skip_gc!(%Yex.Doc{} = doc) do
-    if Doc.skip_gc(doc) do
-      :ok
-    else
-      raise ArgumentError,
-            "garbage collection must be disabled (skip_gc: true) to read a document through a snapshot"
-    end
-  end
 
   defp bound_doc(%__MODULE__{doc: %Yex.Doc{} = doc}), do: doc
 
