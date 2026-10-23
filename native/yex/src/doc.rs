@@ -1234,7 +1234,8 @@ fn transaction_snapshot<'a>(
 }
 
 /// `Yex.Snapshot.encode_state_v1/2`: the state of `doc` as of `snapshot`, in lib0 v1.
-#[rustler::nif]
+/// Walks every block in the document, so it stays off the normal schedulers.
+#[rustler::nif(schedule = "DirtyCpu")]
 fn transaction_encode_state_from_snapshot_v1<'a>(
     env: Env<'a>,
     doc: NifDoc,
@@ -1253,7 +1254,8 @@ fn transaction_encode_state_from_snapshot_v1<'a>(
 }
 
 /// `Yex.Snapshot.encode_state_v2/2`: the state of `doc` as of `snapshot`, in lib0 v2.
-#[rustler::nif]
+/// Walks every block in the document, so it stays off the normal schedulers.
+#[rustler::nif(schedule = "DirtyCpu")]
 fn transaction_encode_state_from_snapshot_v2<'a>(
     env: Env<'a>,
     doc: NifDoc,

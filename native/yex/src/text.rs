@@ -233,8 +233,9 @@ pub fn diff_between_snapshots<T: Text>(
     Ok(text.diff_range(txn, Some(&hi), lo.as_ref(), YChange::identity))
 }
 
-/// `Yex.Text.to_delta/3`: the text delta between two snapshots.
-#[rustler::nif]
+/// `Yex.Text.to_delta/3`: the text delta between two snapshots. Walks the whole text,
+/// deleted items included, so it stays off the normal schedulers.
+#[rustler::nif(schedule = "DirtyCpu")]
 fn text_to_delta_with_snapshots(
     env: Env<'_>,
     text: NifText,
