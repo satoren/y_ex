@@ -22,6 +22,7 @@ use crate::{
     decode::{catch_decode_v2, decode_update_v2},
     deferred::Deferred,
     error::Error,
+    snapshot::{encode_state_from_snapshot, read_snapshot, write_snapshot},
     subscription::{DocEvent, NifSubscription, SubscriptionKey},
     term_box::TermBox,
     transaction::{take_then_drop, ReadTransaction, TransactionResource},
@@ -68,7 +69,7 @@ impl SnapshotRef {
 
 impl Encoder for SnapshotRef {
     fn encode<'b>(&self, env: Env<'b>) -> Term<'b> {
-        let encoded = self.0.encode_v1();
+        let encoded = write_snapshot(&self.0, false);
         SliceIntoBinary::new(encoded.as_slice()).encode(env)
     }
 }
@@ -76,7 +77,9 @@ impl Encoder for SnapshotRef {
 impl<'a> Decoder<'a> for SnapshotRef {
     fn decode(term: Term<'a>) -> NifResult<Self> {
         let bin = term.decode_as_binary()?;
-        let snapshot = Snapshot::decode_v1(bin.as_slice()).map_err(Error::from)?;
+        // `reference` is only ever written by this module, so bytes that do not decode
+        // come from a hand-built struct: misuse, raised as ArgumentError.
+        let snapshot = read_snapshot(bin.as_slice(), false).map_err(|_| rustler::Error::BadArg)?;
         Ok(SnapshotRef::new(snapshot))
     }
 }
@@ -84,7 +87,7 @@ impl<'a> Decoder<'a> for SnapshotRef {
 #[derive(NifStruct)]
 #[module = "Yex.Snapshot"]
 pub struct NifSnapshot {
-    pub doc: NifDoc,
+    pub doc: Option<NifDoc>,
     pub reference: SnapshotRef,
 }
 
@@ -1223,43 +1226,47 @@ fn transaction_snapshot<'a>(
     Ok((
         atoms::ok(),
         NifSnapshot {
-            doc,
+            doc: Some(doc),
             reference: SnapshotRef::new(snapshot),
         },
     )
         .encode(env))
 }
 
-#[rustler::nif]
+/// `Yex.Snapshot.encode_state_v1/2`: the state of `doc` as of `snapshot`, in lib0 v1.
+/// Walks every block in the document, so it stays off the normal schedulers.
+#[rustler::nif(schedule = "DirtyCpu")]
 fn transaction_encode_state_from_snapshot_v1<'a>(
     env: Env<'a>,
+    doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    snapshot: NifSnapshot,
+    snapshot: SnapshotRef,
 ) -> NifResult<Term<'a>> {
-    let update: Vec<u8> = snapshot.doc.readonly(current_transaction, |txn| {
+    let update: Vec<u8> = doc.mutably(env, current_transaction, |txn| {
         let mut encoder = EncoderV1::new();
-        txn.encode_state_from_snapshot(&snapshot.reference.0, &mut encoder)
-            .map_err(|e| {
-                rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
-            })?;
+        encode_state_from_snapshot(txn, snapshot.0, &mut encoder).map_err(|e| {
+            rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
+        })?;
         Ok(encoder.to_vec())
     })?;
 
     Ok((atoms::ok(), SliceIntoBinary::new(update.as_slice())).encode(env))
 }
 
-#[rustler::nif]
+/// `Yex.Snapshot.encode_state_v2/2`: the state of `doc` as of `snapshot`, in lib0 v2.
+/// Walks every block in the document, so it stays off the normal schedulers.
+#[rustler::nif(schedule = "DirtyCpu")]
 fn transaction_encode_state_from_snapshot_v2<'a>(
     env: Env<'a>,
+    doc: NifDoc,
     current_transaction: Option<ResourceArc<TransactionResource>>,
-    snapshot: NifSnapshot,
+    snapshot: SnapshotRef,
 ) -> NifResult<Term<'a>> {
-    let update: Vec<u8> = snapshot.doc.readonly(current_transaction, |txn| {
+    let update: Vec<u8> = doc.mutably(env, current_transaction, |txn| {
         let mut encoder = EncoderV2::new();
-        txn.encode_state_from_snapshot(&snapshot.reference.0, &mut encoder)
-            .map_err(|e| {
-                rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
-            })?;
+        encode_state_from_snapshot(txn, snapshot.0, &mut encoder).map_err(|e| {
+            rustler::Error::Term(Box::new((atoms::encoding_exception(), e.to_string())))
+        })?;
         Ok(encoder.to_vec())
     })?;
 

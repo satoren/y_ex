@@ -11,9 +11,11 @@ use yrs::*;
 use crate::{
     any::NifAttr,
     atoms,
-    doc::NifDoc,
+    doc::{NifDoc, SnapshotRef},
+    error::ArgumentError,
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
+    snapshot::known_clients_only,
     transaction::TransactionResource,
     yinput::{NifYInput, NifYInputDelta},
     youtput::NifYOut,
@@ -207,6 +209,47 @@ fn text_to_delta(
     encode_diffs(diff, &text.doc, env)
 }
 
+/// Text delta covering everything visible at `hi` or `lo`, with `ychange` marking strings
+/// added since `lo` or removed by `hi`. A missing `hi` means the current state.
+pub fn diff_between_snapshots<T: Text>(
+    txn: &mut TransactionMut,
+    text: &T,
+    hi: Option<SnapshotRef>,
+    lo: Option<SnapshotRef>,
+) -> NifResult<Vec<Diff<YChange>>> {
+    if !txn.doc().skip_gc() {
+        return Err(ArgumentError::raise(
+            "garbage collection must be disabled (skip_gc: true) to read a document through a snapshot",
+        ));
+    }
+    let local = txn.state_vector();
+    // yrs only marks changes when `hi` is given, so a missing `hi` becomes the current
+    // snapshot, under which every integrated item is visible exactly when not deleted.
+    let hi = match hi {
+        Some(snapshot) => known_clients_only(snapshot.0, &local),
+        None => txn.snapshot(),
+    };
+    let lo = lo.map(|snapshot| known_clients_only(snapshot.0, &local));
+    Ok(text.diff_range(txn, Some(&hi), lo.as_ref(), YChange::identity))
+}
+
+/// `Yex.Text.to_delta/3`: the text delta between two snapshots. Walks the whole text,
+/// deleted items included, so it stays off the normal schedulers.
+#[rustler::nif(schedule = "DirtyCpu")]
+fn text_to_delta_with_snapshots(
+    env: Env<'_>,
+    text: NifText,
+    current_transaction: Option<ResourceArc<TransactionResource>>,
+    snapshot: Option<SnapshotRef>,
+    prev_snapshot: Option<SnapshotRef>,
+) -> NifResult<rustler::Term<'_>> {
+    let diff = text.mutably(env, current_transaction, |txn| {
+        let text_ref = text.get_ref(txn)?;
+        diff_between_snapshots(txn, &text_ref, snapshot, prev_snapshot)
+    })?;
+    encode_diffs(diff, &text.doc, env)
+}
+
 #[rustler::nif]
 fn text_quote(
     env: Env<'_>,
@@ -264,7 +307,23 @@ pub fn encode_diff<'a>(diff: &Diff<YChange>, doc: &NifDoc, env: Env<'a>) -> NifR
             types::text::ChangeKind::Added => "added",
             types::text::ChangeKind::Removed => "removed",
         };
-        make_map(env, [(encode_str(env, "kind"), encode_str(env, kind))])
+        let id = make_map(
+            env,
+            [
+                (
+                    encode_str(env, "client"),
+                    ychange.id.client.get().encode(env),
+                ),
+                (encode_str(env, "clock"), ychange.id.clock.encode(env)),
+            ],
+        );
+        make_map(
+            env,
+            [
+                (encode_str(env, "type"), encode_str(env, kind)),
+                (encode_str(env, "id"), id),
+            ],
+        )
     });
     let attributes = match (diff.attributes.as_deref(), ychange) {
         (None, None) => None,
