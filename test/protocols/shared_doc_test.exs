@@ -441,6 +441,19 @@ defmodule Yex.Sync.SharedDocTest do
       end
     end
 
+    defmodule FailingFlushPersistence do
+      @behaviour Yex.Sync.SharedDoc.PersistenceBehaviour
+
+      def bind(test_pid, _doc_name, _doc), do: test_pid
+
+      def flush(test_pid, _doc_name, _doc) do
+        send(test_pid, :flush_called)
+        raise "flush failed"
+      end
+
+      def unbind(test_pid, _doc_name, _doc), do: send(test_pid, :unbound)
+    end
+
     defp start_flushing(flush_interval) do
       {:ok, pid} =
         SharedDoc.start_link(
@@ -503,6 +516,24 @@ defmodule Yex.Sync.SharedDocTest do
 
       assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
       refute_received {:flushed, _}
+    end
+
+    @tag :capture_log
+    test "unbind is still called when flush fails" do
+      {:ok, pid} =
+        SharedDoc.start(
+          doc_name: random_docname(),
+          persistence: {FailingFlushPersistence, self()},
+          flush_interval: 10
+        )
+
+      ref = Process.monitor(pid)
+      :ok = SharedDoc.observe(pid)
+      push(pid, "a")
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 500
+      assert_received :flush_called
+      assert_received :unbound
     end
 
     test "never flushes without flush_interval" do

@@ -338,10 +338,17 @@ defmodule Yex.Sync.SharedDoc do
 
   @impl true
   def terminate(_reason, %{assigns: assigns} = state) do
-    # Changes still waiting for their flush are not lost on exit.
+    # Changes still waiting for their flush are not lost on exit. A failing
+    # flush must not prevent unbind/3.
     assigns =
       if assigns.flush_scheduled do
-        %{assigns | persistence_state: flush(state).persistence_state}
+        try do
+          %{assigns | persistence_state: flush(state).persistence_state}
+        rescue
+          error ->
+            Logger.error("Failed to flush on terminate: #{Exception.message(error)}")
+            assigns
+        end
       else
         assigns
       end
