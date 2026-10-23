@@ -64,6 +64,13 @@ defmodule Yex.SnapshotTest do
     assert Yex.Text.to_string(Yex.Doc.get_text(restored, "text")) == expected
   end
 
+  # The monitors that saw nothing still report a real edit.
+  defp assert_monitors_live(doc, text) do
+    Yex.Text.insert(text, 0, "!")
+    assert_receive {:update_v1, _, _, ^doc}
+    assert_receive {:transaction_cleanup, _, _, ^doc}
+  end
+
   describe "snapshot / encode_state_from_snapshot" do
     test "Yex.Snapshot.encode_state_v1/1 and encode_state_v2/1 are available" do
       doc = Yex.Doc.with_options(%Yex.Doc.Options{skip_gc: true})
@@ -250,16 +257,19 @@ defmodule Yex.SnapshotTest do
       snapshot = mid_block_snapshot(doc, text)
       {:ok, state_vector} = Yex.encode_state_vector(doc)
       {:ok, _} = Yex.Doc.monitor_update(doc)
+      {:ok, _} = Yex.Doc.monitor_transaction_cleanup(doc)
 
       {:ok, update_v1} = Yex.Snapshot.encode_state_v1(snapshot)
       {:ok, update_v2} = Yex.Snapshot.encode_state_v2(snapshot)
 
       assert_restores(update_v1, &Yex.apply_update_v1/2, "Xabc")
       assert_restores(update_v2, &Yex.apply_update_v2/2, "Xabc")
-      # the split leaves the content and state vector unchanged and emits no update
+      # the split leaves the content and state vector unchanged and emits no event
       refute_receive {:update_v1, _, _, _}, 50
+      refute_receive {:transaction_cleanup, _, _, _}
       assert Yex.encode_state_vector(doc) == {:ok, state_vector}
       assert Yex.Text.to_string(text) == "XYabc"
+      assert_monitors_live(doc, text)
     end
 
     test "a snapshot clock inside a block encodes a valid update inside a transaction" do
@@ -419,6 +429,7 @@ defmodule Yex.SnapshotTest do
       detached = decode!(bytes, :v1)
       {:ok, state_vector} = Yex.encode_state_vector(doc)
       {:ok, _} = Yex.Doc.monitor_update(doc)
+      {:ok, _} = Yex.Doc.monitor_transaction_cleanup(doc)
 
       for snapshot <- [snapshot, detached] do
         {:ok, update_v1} = Yex.Snapshot.encode_state_v1(snapshot, doc)
@@ -429,10 +440,12 @@ defmodule Yex.SnapshotTest do
 
       assert {:ok, restored} = Yex.Snapshot.create_doc(detached, doc)
       assert Yex.Text.to_string(Yex.Doc.get_text(restored, "text")) == "Xabc"
-      # the split leaves the content and state vector unchanged and emits no update
+      # the split leaves the content and state vector unchanged and emits no event
       refute_receive {:update_v1, _, _, _}, 50
+      refute_receive {:transaction_cleanup, _, _, _}
       assert Yex.encode_state_vector(doc) == {:ok, state_vector}
       assert Yex.Text.to_string(text) == "XYabc"
+      assert_monitors_live(doc, text)
     end
 
     test "encode_state_v1/1 raises for a detached snapshot" do
@@ -470,10 +483,14 @@ defmodule Yex.SnapshotTest do
       assert Yex.Array.to_list(Yex.Doc.get_array(target, "array")) == ["x"]
     end
 
-    test "raises when the origin doc has gc enabled" do
+    test "returns encoding_exception when the origin doc has gc enabled" do
       doc = Yex.Doc.new()
       {:ok, snapshot} = Yex.snapshot(doc)
-      assert_raise ArgumentError, fn -> Yex.Snapshot.create_doc(snapshot, doc) end
+      assert {:error, {:encoding_exception, _}} = Yex.Snapshot.create_doc(snapshot, doc)
+
+      target = Yex.Doc.new()
+      assert {:error, {:encoding_exception, _}} = Yex.Snapshot.create_doc(snapshot, doc, target)
+      assert Yex.encode_state_vector(target) == {:ok, <<0>>}
     end
   end
 
@@ -534,13 +551,16 @@ defmodule Yex.SnapshotTest do
       plain = Yex.Text.to_delta(text)
       {:ok, undo} = Yex.UndoManager.new(doc, text)
       {:ok, _} = Yex.Doc.monitor_update(doc)
+      {:ok, _} = Yex.Doc.monitor_transaction_cleanup(doc)
 
       Yex.Text.to_delta(text, decode!(@s2_v1, :v1), decode!(@s1_v1, :v1))
 
       refute_receive {:update_v1, _, _, _}, 50
+      refute_receive {:transaction_cleanup, _, _, _}
       refute Yex.UndoManager.can_undo?(undo)
       assert Yex.Text.to_delta(text) == plain
       assert Yex.encode_state_as_update(doc) == {:ok, before}
+      assert_monitors_live(doc, text)
     end
 
     test "joins an open transaction, including its uncommitted changes", %{doc: doc, text: text} do
