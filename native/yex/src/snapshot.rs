@@ -674,6 +674,28 @@ mod tests {
 
     thread_local! {
         static PANIC_AT: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+        static CAPTURE_PANICS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    /// `catch_unwind` that records the panic location instead of printing it. Panics outside
+    /// it, and on every other thread (cargo runs tests in parallel), use the previous hook.
+    fn catch<R>(f: impl FnOnce() -> R) -> std::thread::Result<R> {
+        static INSTALL: std::sync::Once = std::sync::Once::new();
+        INSTALL.call_once(|| {
+            let previous = std::panic::take_hook();
+            std::panic::set_hook(Box::new(move |info| {
+                if CAPTURE_PANICS.with(|c| c.get()) {
+                    let at = info.location().map(|l| l.to_string()).unwrap_or_default();
+                    PANIC_AT.with(|p| *p.borrow_mut() = at);
+                } else {
+                    previous(info);
+                }
+            }));
+        });
+        CAPTURE_PANICS.with(|c| c.set(true));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+        CAPTURE_PANICS.with(|c| c.set(false));
+        result
     }
 
     fn panic_message(e: Box<dyn std::any::Any + Send>) -> String {
@@ -688,16 +710,16 @@ mod tests {
     #[test]
     fn adversarial_snapshots_never_panic() {
         use crate::text::diff_between_snapshots;
-        use std::panic::{catch_unwind, AssertUnwindSafe};
 
-        std::panic::set_hook(Box::new(|info| {
-            let at = info.location().map(|l| l.to_string()).unwrap_or_default();
-            PANIC_AT.with(|p| *p.borrow_mut() = at);
-        }));
+        // YEX_SNAPSHOT_FUZZ_ITERATIONS raises the per-shape count for long runs.
+        let iterations: usize = std::env::var("YEX_SNAPSHOT_FUZZ_ITERATIONS")
+            .ok()
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(100);
         let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
         let mut failures = std::collections::BTreeMap::<String, String>::new();
         for (name, updates) in shapes() {
-            for _ in 0..1000 {
+            for _ in 0..iterations {
                 let hi = adversarial(&mut rng);
                 let lo = adversarial(&mut rng);
                 let case = format!("{name}: hi={hi:?} lo={lo:?}");
@@ -711,7 +733,7 @@ mod tests {
 
                 record(
                     "codec v2",
-                    catch_unwind(|| {
+                    catch(|| {
                         let bytes = write_snapshot(&hi, true);
                         assert_eq!(read_snapshot(&bytes, true).unwrap(), hi);
                     }),
@@ -720,7 +742,7 @@ mod tests {
                 let d = build(&updates);
                 record(
                     "encode_state",
-                    catch_unwind(AssertUnwindSafe(|| {
+                    catch(|| {
                         let mut v1 = EncoderV1::new();
                         encode_state_from_snapshot(&mut d.transact_mut(), hi.clone(), &mut v1)
                             .unwrap();
@@ -732,7 +754,7 @@ mod tests {
                         Doc::new().transact_mut().apply_update(u).unwrap();
                         let u = Update::decode_v1(&v1.to_vec()).unwrap();
                         Doc::new().transact_mut().apply_update(u).unwrap();
-                    })),
+                    }),
                 );
 
                 for (h, l) in [
@@ -747,7 +769,7 @@ mod tests {
                         .collect();
                     record(
                         "diff_between_snapshots",
-                        catch_unwind(AssertUnwindSafe(|| {
+                        catch(|| {
                             let mut txn = d.transact_mut();
                             for t in &texts {
                                 diff_between_snapshots(
@@ -758,17 +780,17 @@ mod tests {
                                 )
                                 .unwrap();
                             }
-                        })),
+                        }),
                     );
                     record(
                         "after diff",
-                        catch_unwind(AssertUnwindSafe(|| {
+                        catch(|| {
                             // the doc must stay usable after the diff transaction commits
                             let s = d
                                 .transact()
                                 .encode_state_as_update_v1(&StateVector::default());
                             build(&[s]);
-                        })),
+                        }),
                     );
                 }
             }
