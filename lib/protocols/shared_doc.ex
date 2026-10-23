@@ -232,7 +232,7 @@ defmodule Yex.Sync.SharedDoc do
   # single message. Updates from different origins are sent to every observer.
   def handle_info(@awareness_flush, %{assigns: %{awareness_pending: {clients, origin}}} = state) do
     if MapSet.size(clients) > 0 do
-      origin = if origin == :mixed, do: nil, else: origin
+      origin = if origin in [:mixed, :none], do: nil, else: origin
       broadcast_awareness(state.awareness, MapSet.to_list(clients), origin, state)
     end
 
@@ -266,7 +266,7 @@ defmodule Yex.Sync.SharedDoc do
       %{awareness_pending: {clients, pending_origin}} ->
         pending = {
           MapSet.union(clients, MapSet.new(updated_clients)),
-          if(pending_origin == origin, do: origin, else: :mixed)
+          if(pending_origin in [:none, origin], do: origin, else: :mixed)
         }
 
         {:noreply, assign(state, :awareness_pending, pending)}
@@ -274,7 +274,9 @@ defmodule Yex.Sync.SharedDoc do
       %{awareness_throttle: throttle} ->
         broadcast_awareness(awareness, updated_clients, origin, state)
         Process.send_after(self(), @awareness_flush, throttle)
-        {:noreply, assign(state, :awareness_pending, {MapSet.new(), origin})}
+        # The window starts empty: the update above was already broadcast, so
+        # its origin does not count.
+        {:noreply, assign(state, :awareness_pending, {MapSet.new(), :none})}
     end
   end
 

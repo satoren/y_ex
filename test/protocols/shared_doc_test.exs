@@ -479,6 +479,36 @@ defmodule Yex.Sync.SharedDocTest do
       assert [%{"cursor" => "3"}] = Map.values(Awareness.get_states(observer))
     end
 
+    test "the window's only origin does not receive its own updates back" do
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname(), awareness_throttle: 100)
+      :ok = SharedDoc.observe(pid)
+
+      send_own_awareness_update = fn awareness, cursor ->
+        Awareness.set_local_state(awareness, %{"cursor" => cursor})
+        {:ok, update} = Awareness.encode_update(awareness, [Awareness.client_id(awareness)])
+        SharedDoc.send_yjs_message(pid, Sync.message_encode!({:awareness, update}))
+      end
+
+      # Opens the window from the test process.
+      {:ok, awareness} = Awareness.new(Doc.new())
+      send_own_awareness_update.(awareness, "0")
+
+      # Another observer is the only origin of the window's updates.
+      received =
+        Task.async(fn ->
+          :ok = SharedDoc.observe(pid)
+          {:ok, awareness} = Awareness.new(Doc.new())
+          send_own_awareness_update.(awareness, "1")
+          send_own_awareness_update.(awareness, "2")
+          receive_awareness_broadcasts(300)
+        end)
+        |> Task.await()
+
+      assert received == []
+      # The test process got the window's updates (then the task's removal).
+      assert [_ | _] = receive_awareness_broadcasts(100)
+    end
+
     test "broadcasts every update without awareness_throttle" do
       {:ok, pid} = SharedDoc.start_link(doc_name: random_docname())
       :ok = SharedDoc.observe(pid)
