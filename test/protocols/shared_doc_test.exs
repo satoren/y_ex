@@ -462,9 +462,12 @@ defmodule Yex.Sync.SharedDocTest do
       :ok = SharedDoc.observe(pid)
 
       send_awareness_updates(pid, 3)
+      [first, _last] = receive_awareness_broadcasts(300)
 
-      assert length(receive_awareness_broadcasts(50)) == 1
-      assert length(receive_awareness_broadcasts(200)) == 1
+      # The first broadcast carries only the first update.
+      {:ok, observer} = Awareness.new(Doc.new())
+      Awareness.apply_update(observer, elem(Sync.message_decode!(first), 1))
+      assert [%{"cursor" => "1"}] = Map.values(Awareness.get_states(observer))
     end
 
     test "broadcasts the latest state at the end of the window" do
