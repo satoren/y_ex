@@ -428,4 +428,122 @@ defmodule Yex.Sync.SharedDocTest do
       assert Process.alive?(pid)
     end
   end
+
+  describe "flush" do
+    defmodule FlushPersistence do
+      @behaviour Yex.Sync.SharedDoc.PersistenceBehaviour
+
+      def bind(test_pid, _doc_name, _doc), do: test_pid
+
+      def flush(test_pid, _doc_name, doc) do
+        send(test_pid, {:flushed, Doc.get_array(doc, "array") |> Array.to_json()})
+        test_pid
+      end
+    end
+
+    defmodule FailingFlushPersistence do
+      @behaviour Yex.Sync.SharedDoc.PersistenceBehaviour
+
+      def bind(test_pid, _doc_name, _doc), do: test_pid
+
+      def flush(test_pid, _doc_name, _doc) do
+        send(test_pid, :flush_called)
+        raise "flush failed"
+      end
+
+      def unbind(test_pid, _doc_name, _doc), do: send(test_pid, :unbound)
+    end
+
+    defp start_flushing(flush_interval) do
+      {:ok, pid} =
+        SharedDoc.start_link(
+          doc_name: random_docname(),
+          persistence: {FlushPersistence, self()},
+          flush_interval: flush_interval
+        )
+
+      :ok = SharedDoc.observe(pid)
+      pid
+    end
+
+    defp push(pid, value) do
+      doc = Doc.new()
+      Doc.get_array(doc, "array") |> Array.push(value)
+      update = Yex.encode_state_as_update!(doc)
+      SharedDoc.send_yjs_message(pid, Sync.message_encode!({:sync, {:sync_update, update}}))
+    end
+
+    test "flushes a change once flush_interval has passed" do
+      pid = start_flushing(100)
+      push(pid, "a")
+
+      refute_receive {:flushed, _}, 50
+      assert_receive {:flushed, ["a"]}, 500
+    end
+
+    test "flushes the changes of an interval together" do
+      pid = start_flushing(100)
+      push(pid, "a")
+      push(pid, "b")
+
+      assert_receive {:flushed, data}, 500
+      assert Enum.sort(data) == ["a", "b"]
+      refute_receive {:flushed, _}, 200
+    end
+
+    test "does not flush while the document does not change" do
+      _pid = start_flushing(10)
+
+      refute_receive {:flushed, _}, 100
+    end
+
+    test "flushes pending changes when it stops" do
+      pid = start_flushing(10_000)
+      ref = Process.monitor(pid)
+      push(pid, "a")
+      :ok = SharedDoc.unobserve(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
+      assert_received {:flushed, ["a"]}
+    end
+
+    test "does not flush on stop without pending changes" do
+      pid = start_flushing(10)
+      ref = Process.monitor(pid)
+      push(pid, "a")
+      assert_receive {:flushed, ["a"]}, 500
+      :ok = SharedDoc.unobserve(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
+      refute_received {:flushed, _}
+    end
+
+    @tag :capture_log
+    test "unbind is still called when flush fails" do
+      {:ok, pid} =
+        SharedDoc.start(
+          doc_name: random_docname(),
+          persistence: {FailingFlushPersistence, self()},
+          flush_interval: 10
+        )
+
+      ref = Process.monitor(pid)
+      :ok = SharedDoc.observe(pid)
+      push(pid, "a")
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 500
+      assert_received :flush_called
+      assert_received :unbound
+    end
+
+    test "never flushes without flush_interval" do
+      {:ok, pid} =
+        SharedDoc.start_link(doc_name: random_docname(), persistence: {FlushPersistence, self()})
+
+      :ok = SharedDoc.observe(pid)
+      push(pid, "a")
+
+      refute_receive {:flushed, _}, 100
+    end
+  end
 end
