@@ -164,6 +164,11 @@ pub fn known_clients_only(snapshot: Snapshot, local: &StateVector) -> Snapshot {
 /// `Text::diff_range`; it runs here on a detached branch, so it walks no items. The split
 /// leaves the content and state vector unchanged and emits no update.
 ///
+/// This relies on `diff_range` splitting the store's blocks before it walks the branch,
+/// which yrs does not promise. When bumping yrs, keep this until a release fixes
+/// y-crdt/y-crdt#696; `splits_the_block_at_a_snapshot_clock` fails if the split stops,
+/// and without it the encoded updates are corrupt again.
+///
 /// When a client's first blocks are missing, yrs integrates the later ones behind a gap
 /// and reports clock 0 for that client; `Store::write_blocks_to` then computes
 /// `find_index(clock - 1)` and panics. Clients at local clock 0 have nothing encodable
