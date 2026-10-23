@@ -25,7 +25,7 @@ defmodule Yex.Snapshot do
 
   defstruct [:doc, :reference]
 
-  @type t :: %__MODULE__{
+  @opaque t :: %__MODULE__{
             doc: Yex.Doc.t() | nil,
             reference: binary()
           }
