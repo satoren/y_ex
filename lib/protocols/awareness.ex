@@ -167,6 +167,9 @@ defmodule Yex.Awareness do
   @doc """
     Applies an update (incoming from remote channel or generated using [Awareness.encode_update] method) and modifies a state of a current instance.
 
+  Returns `{:error, {:encoding_exception, message}}`, applying nothing, when the update
+  is malformed or names a client id outside `0..9007199254740991`.
+
   ## Examples
       iex> {:ok, awareness} = Yex.Awareness.new(Yex.Doc.new())
       iex> Yex.Awareness.clean_local_state(awareness)
@@ -175,7 +178,8 @@ defmodule Yex.Awareness do
       iex> Yex.Awareness.get_client_ids(awareness)
       [2230489810]
   """
-  @spec apply_update(t, binary(), origin :: term() | nil) :: :ok
+  @spec apply_update(t, binary(), origin :: term() | nil) ::
+          :ok | {:error, {:encoding_exception, String.t()} | String.t()}
   def apply_update(awareness, update, origin \\ nil) do
     Yex.Nif.awareness_apply_update_v1(awareness, update, origin)
   end

@@ -1,9 +1,9 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, sync::Arc, sync::Mutex};
 
 use crate::error::Error;
 use crate::subscription::{AwarenessEvent, NifSubscription, SubscriptionKey};
 use crate::term_box::TermBox;
-use crate::utils::{client_id, origin_to_term, term_to_origin_binary};
+use crate::utils::{client_id, origin_to_term, term_to_origin_binary, MAX_CLIENT_ID};
 use crate::{
     atoms,
     wrap::{NifWrap, SliceIntoBinary},
@@ -14,8 +14,9 @@ use rustler::{
 };
 use yrs::{
     block::ClientID,
-    sync::{Awareness, AwarenessUpdate},
-    updates::{decoder::Decode, encoder::Encode},
+    encoding::read::{Cursor, Error as ReadError, Read},
+    sync::{awareness::AwarenessUpdateEntry, Awareness, AwarenessUpdate},
+    updates::encoder::Encode,
 };
 
 pub type AwarenessResource = NifWrap<Mutex<Awareness>>;
@@ -226,6 +227,32 @@ pub fn awareness_encode_update_v1(
     )
         .encode(env))
 }
+/// Decodes a v1 awareness update, rejecting client ids of 2^53 or more.
+///
+/// yrs 0.28 `AwarenessUpdate::decode` passes the raw `u64` to `ClientID::new`, which only
+/// debug-asserts the 53-bit range and masks the high bits away in release builds. A remote
+/// entry for client `2^53 + n` would then overwrite or remove the state of client `n`,
+/// including the local one. The wire format is `len, (client, clock, json)*`, as in yjs.
+fn decode_awareness_update_v1(bytes: &[u8]) -> Result<AwarenessUpdate, ReadError> {
+    let mut cursor = Cursor::new(bytes);
+    let len: usize = cursor.read_var()?;
+    let mut clients = HashMap::new();
+    // `len` comes from the network: reserve fallibly, as yrs does.
+    clients.try_reserve(len)?;
+    for _ in 0..len {
+        let client: u64 = cursor.read_var()?;
+        if client > MAX_CLIENT_ID {
+            return Err(ReadError::Custom(format!(
+                "awareness client id {client} is out of range 0..{MAX_CLIENT_ID}"
+            )));
+        }
+        let clock: u32 = cursor.read_var()?;
+        let json: Arc<str> = cursor.read_string()?.into();
+        clients.insert(ClientID::new(client), AwarenessUpdateEntry { clock, json });
+    }
+    Ok(AwarenessUpdate { clients })
+}
+
 #[rustler::nif]
 pub fn awareness_apply_update_v1(
     env: Env<'_>,
@@ -234,7 +261,7 @@ pub fn awareness_apply_update_v1(
     origin: Term<'_>,
 ) -> NifResult<Atom> {
     ENV.set(&mut env.clone(), || {
-        let update = AwarenessUpdate::decode_v1(update.as_slice()).map_err(Error::from)?;
+        let update = decode_awareness_update_v1(update.as_slice()).map_err(Error::from)?;
 
         let mut awareness = awareness.lock();
         if let Some(origin) = term_to_origin_binary(origin) {
@@ -268,4 +295,47 @@ pub fn awareness_remove_states(
         }
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use yrs::encoding::write::Write;
+    use yrs::updates::decoder::Decode;
+
+    fn encode(entries: &[(u64, u32, &str)]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.write_var(entries.len());
+        for (client, clock, json) in entries {
+            buf.write_var(*client);
+            buf.write_var(*clock);
+            buf.write_string(json);
+        }
+        buf
+    }
+
+    #[test]
+    fn decodes_like_yrs() {
+        let bytes = encode(&[(1, 3, "{\"a\":1}"), (MAX_CLIENT_ID, 1, "null")]);
+        let ours = decode_awareness_update_v1(&bytes).unwrap();
+        let theirs = AwarenessUpdate::decode_v1(&bytes).unwrap();
+        assert_eq!(ours, theirs);
+    }
+
+    #[test]
+    fn rejects_client_ids_of_2_pow_53_or_more() {
+        for client in [MAX_CLIENT_ID + 1, (1 << 53) + 7, u64::MAX] {
+            let bytes = encode(&[(1, 1, "{}"), (client, 2, "null")]);
+            assert!(matches!(
+                decode_awareness_update_v1(&bytes),
+                Err(ReadError::Custom(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn truncated_input_is_an_error() {
+        let bytes = encode(&[(1, 1, "{}")]);
+        assert!(decode_awareness_update_v1(&bytes[..bytes.len() - 1]).is_err());
+    }
 }
