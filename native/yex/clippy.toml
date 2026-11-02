@@ -1,4 +1,4 @@
-# Bytes from outside the VM are decoded and applied only in src/wire.rs, which guards
+# Bytes from outside the VM are decoded and applied only in core/src/wire.rs, which guards
 # every call against yrs panics and adds the checks yrs leaves out. Use the wire::*
 # functions instead of these.
 disallowed-methods = [
@@ -12,5 +12,5 @@ disallowed-methods = [
   { path = "yrs::merge_updates_v2", reason = "use crate::wire::merge_updates_v2" },
   { path = "yrs::diff_updates_v1", reason = "use crate::wire::diff_update_v1" },
   { path = "yrs::diff_updates_v2", reason = "use crate::wire::diff_update_v2" },
-  { path = "crate::snapshot::read_snapshot", reason = "use crate::wire::snapshot" },
+  { path = "yex_core::snapshot::read_snapshot", reason = "use wire::snapshot" },
 ]

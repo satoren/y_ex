@@ -57,6 +57,8 @@ defmodule Yex.MixProject do
         "lib",
         "native/yex/src",
         "native/yex/Cargo.*",
+        "native/yex/core/src",
+        "native/yex/core/Cargo.toml",
         "native/yex/Cross.*",
         "native/yex/README.md",
         "README.md",

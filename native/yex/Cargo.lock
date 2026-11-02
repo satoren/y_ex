@@ -617,6 +617,14 @@ dependencies = [
  "scoped_thread_local",
  "serde",
  "serde_json",
+ "yex-core",
+ "yrs",
+]
+
+[[package]]
+name = "yex-core"
+version = "0.7.2"
+dependencies = [
  "yrs",
 ]
 

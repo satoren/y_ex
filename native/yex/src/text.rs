@@ -15,7 +15,6 @@ use crate::{
     error::ArgumentError,
     event::{NifSharedTypeDeepObservable, NifSharedTypeObservable, NifTextEvent},
     shared_type::{NifSharedType, SharedTypeId},
-    snapshot::known_clients_only,
     transaction::TransactionResource,
     yinput::{NifYInput, NifYInputDelta},
     youtput::NifYOut,
@@ -209,28 +208,19 @@ fn text_to_delta(
     encode_diffs(diff, &text.doc, env)
 }
 
-/// Text delta covering everything visible at `hi` or `lo`, with `ychange` marking strings
-/// added since `lo` or removed by `hi`. A missing `hi` means the current state.
+/// [yex_core::snapshot::diff_between_snapshots], raising `ArgumentError` when GC is on.
 pub fn diff_between_snapshots<T: Text>(
     txn: &mut TransactionMut,
     text: &T,
     hi: Option<SnapshotRef>,
     lo: Option<SnapshotRef>,
 ) -> NifResult<Vec<Diff<YChange>>> {
-    if !txn.doc().skip_gc() {
-        return Err(ArgumentError::raise(
-            "garbage collection must be disabled (skip_gc: true) to read a document through a snapshot",
-        ));
-    }
-    let local = txn.state_vector();
-    // yrs only marks changes when `hi` is given, so a missing `hi` becomes the current
-    // snapshot, under which every integrated item is visible exactly when not deleted.
-    let hi = match hi {
-        Some(snapshot) => known_clients_only(snapshot.0, &local),
-        None => txn.snapshot(),
-    };
-    let lo = lo.map(|snapshot| known_clients_only(snapshot.0, &local));
-    Ok(text.diff_range(txn, Some(&hi), lo.as_ref(), YChange::identity))
+    yex_core::snapshot::diff_between_snapshots(txn, text, hi.map(|s| s.0), lo.map(|s| s.0))
+        .map_err(|_| {
+            ArgumentError::raise(
+                "garbage collection must be disabled (skip_gc: true) to read a document through a snapshot",
+            )
+        })
 }
 
 /// `Yex.Text.to_delta/3`: the text delta between two snapshots. Walks the whole text,

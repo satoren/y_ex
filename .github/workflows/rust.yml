@@ -18,10 +18,14 @@ jobs:
     steps:
     - uses: actions/checkout@v7
     - name: Run clippy
-      run: cargo clippy -- -D warnings
+      run: cargo clippy --workspace --all-targets -- -D warnings
       working-directory: native/yex
     - name: format check
       run: cargo fmt --check
+      working-directory: native/yex
+    - name: Test yex-core
+      # yex-core does not depend on rustler, so it builds and tests as plain Rust.
+      run: cargo test -p yex-core
       working-directory: native/yex
     - name: Test
       # Since rustler 0.39 the `enif_*` functions are linked directly on Linux and are

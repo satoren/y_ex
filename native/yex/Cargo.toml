@@ -9,6 +9,9 @@ name = "yex"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
 
+[workspace]
+members = [".", "core"]
+
 [dependencies]
 flexbuffers = "25.0.0"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
@@ -16,6 +19,7 @@ rustler = "0.39.0"
 scoped_thread_local = "1.0.0"
 serde = "1.0.210"
 serde_json = "1.0.120"
+yex-core = { path = "core" }
 yrs = { version = "0.28.0", features=["sync", "weak"] }
 
 [features]

@@ -59,6 +59,15 @@ impl rustler::Encoder for Error {
     }
 }
 
+impl From<yex_core::WireError> for Error {
+    fn from(e: yex_core::WireError) -> Self {
+        match e {
+            yex_core::WireError::Encoding(e) => Error::Encoding(e),
+            yex_core::WireError::Update(e) => Error::Update(e),
+        }
+    }
+}
+
 impl From<yrs::error::UpdateError> for Error {
     fn from(error: yrs::error::UpdateError) -> Self {
         Error::Update(error)

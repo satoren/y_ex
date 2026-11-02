@@ -1,0 +1,43 @@
+name: Fuzz
+
+# Fuzzes yex_core::wire, where the NIF decodes and applies bytes from outside.
+# See native/yex/core/fuzz/README.md. Not run on pull requests: a run takes minutes
+# and a finding usually needs an upstream yrs fix rather than a change in the PR.
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Seconds per target
+        default: '300'
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [update_v1, update_v2, small_values, merge_and_diff]
+    steps:
+    - uses: actions/checkout@v7
+    - name: Install nightly and cargo-fuzz
+      run: |
+        rustup toolchain install nightly --profile minimal
+        cargo install cargo-fuzz --locked
+    - name: Fuzz
+      working-directory: native/yex/core
+      env:
+        CARGO_PROFILE_RELEASE_LTO: 'false'
+        ASAN_OPTIONS: allocator_may_return_null=1
+      run: >
+        cargo +nightly fuzz run -O ${{ matrix.target }} --
+        -max_total_time=${{ github.event.inputs.seconds || '300' }}
+        -malloc_limit_mb=65536 -rss_limit_mb=4096
+    - name: Upload findings
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: fuzz-${{ matrix.target }}
+        path: native/yex/core/fuzz/artifacts

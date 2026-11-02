@@ -1,0 +1,48 @@
+[package]
+name = "yex-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+yex-core = { path = ".." }
+yrs = { version = "0.28.0", features=["sync", "weak"] }
+
+# Not part of the native/yex workspace: cargo-fuzz needs nightly and its own lock file.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "update_v1"
+path = "fuzz_targets/update_v1.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "update_v2"
+path = "fuzz_targets/update_v2.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "small_values"
+path = "fuzz_targets/small_values.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "merge_and_diff"
+path = "fuzz_targets/merge_and_diff.rs"
+test = false
+doc = false
+bench = false

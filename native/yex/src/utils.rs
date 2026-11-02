@@ -102,7 +102,7 @@ fn test_capped_index_and_length() {
 }
 
 /// Largest client id yjs allows (`2^53 - 1`).
-pub const MAX_CLIENT_ID: u64 = (1 << 53) - 1;
+pub use yex_core::MAX_CLIENT_ID;
 
 /// Converts a client id from Elixir, raising `ArgumentError` outside `0..=MAX_CLIENT_ID`.
 /// `yrs::block::ClientID::new` only debug-asserts the range, so in release builds a larger

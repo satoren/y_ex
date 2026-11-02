@@ -1,0 +1,10 @@
+[package]
+name = "yex-core"
+version = "0.7.2"
+authors = []
+edition = "2021"
+description = "The rustler-free part of the y_ex NIF: decoding untrusted bytes and the snapshot codec."
+publish = false
+
+[dependencies]
+yrs = { version = "0.28.0", features=["sync", "weak"] }
