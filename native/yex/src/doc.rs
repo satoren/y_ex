@@ -1146,7 +1146,11 @@ fn doc_force_gc(
     current_transaction: Option<ResourceArc<TransactionResource>>,
 ) -> NifResult<Atom> {
     doc.mutably(env, current_transaction, |txn| {
-        txn.gc(None);
+        // Leave items deleted by the open transaction alone: its observers run at commit and
+        // build their deltas from those items' content. commit() collects them after observers
+        // when GC is on; with `skip_gc` they are collected by the next force_gc.
+        let deleted = txn.snapshot().delete_set.diff(txn.delete_set());
+        txn.gc(Some(&deleted));
         Ok(atoms::ok())
     })
 }

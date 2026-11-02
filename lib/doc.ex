@@ -352,7 +352,10 @@ defmodule Yex.Doc do
   Deleted items are replaced by lightweight placeholders, so their content can no
   longer be restored (for example from a snapshot taken before the deletion).
   Content kept on an `Yex.UndoManager`'s stacks is not collected. Works both inside
-  and outside `transaction/3`.
+  and outside `transaction/3`. Inside a transaction, content deleted by that same
+  transaction is not collected, so its observers still see the deletions; it is
+  collected when the transaction commits, or by the next `force_gc/1` when the
+  document was created with `skip_gc: true`.
 
   ## Examples
       iex> doc = Yex.Doc.with_options(%Yex.Doc.Options{skip_gc: true})
