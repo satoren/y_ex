@@ -24,5 +24,10 @@ jobs:
       run: cargo fmt --check
       working-directory: native/yex
     - name: Test
-      run: cargo test --workspace
+      # Since rustler 0.39 the `enif_*` functions are linked directly on Linux and are
+      # only provided by the BEAM at load time, so a test executable cannot resolve
+      # them. Link it statically and leave them unresolved; the tests never call them.
+      run: cargo test --workspace --target x86_64-unknown-linux-gnu
       working-directory: native/yex
+      env:
+        RUSTFLAGS: -C target-feature=+crt-static -C link-arg=-Wl,--unresolved-symbols=ignore-all
