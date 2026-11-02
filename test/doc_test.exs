@@ -1169,6 +1169,46 @@ defmodule Yex.DocTest do
 
       assert Text.to_string(text) == "World"
     end
+
+    test "inside a transaction keeps that transaction's deletes in observer events" do
+      doc = Doc.new()
+      text = Doc.get_text(doc, "text")
+      Text.insert(text, 0, "abcdef")
+      ref = Yex.SharedType.observe(text)
+
+      Doc.transaction(doc, fn ->
+        Text.delete(text, 0, 6)
+        assert :ok = Doc.force_gc(doc)
+      end)
+
+      assert_receive {:observe_event, ^ref, %{delta: [%{delete: 6}]}, _origin, _meta}
+      assert Text.to_string(text) == ""
+    end
+
+    test "inside a transaction collects earlier deletes but not that transaction's" do
+      doc = Doc.with_options(%Doc.Options{skip_gc: true})
+      text = Doc.get_text(doc, "text")
+      Text.insert(text, 0, String.duplicate("a", 1000))
+      Text.insert(text, 1000, String.duplicate("b", 1000))
+      Text.delete(text, 0, 1000)
+
+      {:ok, before_gc} = Yex.encode_state_as_update(doc)
+
+      Doc.transaction(doc, fn ->
+        Text.delete(text, 0, 1000)
+        assert :ok = Doc.force_gc(doc)
+      end)
+
+      {:ok, after_txn} = Yex.encode_state_as_update(doc)
+      # The "a"s deleted before the transaction are collected, the "b"s deleted in it are kept.
+      assert byte_size(after_txn) < byte_size(before_gc)
+      assert byte_size(after_txn) > 1000
+
+      assert :ok = Doc.force_gc(doc)
+      {:ok, after_gc} = Yex.encode_state_as_update(doc)
+      assert byte_size(after_gc) < 1000
+      assert Text.to_string(text) == ""
+    end
   end
 
   describe "transaction/3 when the function does not return" do
