@@ -15,6 +15,7 @@ defmodule Yex.Sync.SharedDoc do
 
   @default_auto_exit_timeout 5_000
   @auto_exit_check {__MODULE__, :auto_exit_check}
+  @delayed_auto_exit {__MODULE__, :delayed_auto_exit}
 
   @typedoc """
   Launch Parameters
@@ -23,6 +24,7 @@ defmodule Yex.Sync.SharedDoc do
     * `:persistence` - Persistence module that implements PersistenceBehaviour.
     * `:auto_exit` - Automatically terminate the SharedDoc process when there is no longer a process to receive update notifications.
     * `:auto_exit_timeout` - With `:auto_exit`, how long (in milliseconds) to wait for the first observer after start before terminating. Defaults to 5000. `:infinity` disables this check.
+    * `:auto_exit_delay` - With `:auto_exit`, how long (in milliseconds) to wait after the last observer left before terminating. An observer joining in the meantime cancels it, which avoids reloading the document when a client reconnects. Defaults to 0: terminate immediately.
     * `:doc_option` - Options for the document.
 
   """
@@ -31,6 +33,7 @@ defmodule Yex.Sync.SharedDoc do
           | {:persistence, {module() | {module(), init_arg :: term()}}}
           | {:auto_exit, boolean()}
           | {:auto_exit_timeout, timeout()}
+          | {:auto_exit_delay, non_neg_integer()}
           | {:doc_option, Yex.Doc.Options.t()}
 
   @doc """
@@ -144,6 +147,8 @@ defmodule Yex.Sync.SharedDoc do
           persistence: persistence,
           persistence_state: persistence_state,
           auto_exit: auto_exit,
+          auto_exit_delay: Keyword.get(option, :auto_exit_delay, 0),
+          delayed_auto_exit: nil,
           observer_process: %{},
           origin_client_map: %{}
         }
@@ -166,14 +171,22 @@ defmodule Yex.Sync.SharedDoc do
     observer_process =
       Map.put_new_lazy(state.assigns.observer_process, client, fn -> Process.monitor(client) end)
 
-    {:reply, :ok, assign(state, :observer_process, observer_process)}
+    state =
+      state
+      |> assign(:observer_process, observer_process)
+      |> assign(:delayed_auto_exit, nil)
+
+    {:reply, :ok, state}
   end
 
   @impl true
   def handle_call({:unobserve, client}, _from, state) do
     state = do_remove_observer_process(client, state)
 
-    {:reply, :ok, state, 0}
+    case state.assigns.auto_exit_delay do
+      0 -> {:reply, :ok, state, 0}
+      _delay -> {:reply, :ok, delay_auto_exit(state)}
+    end
   end
 
   @impl true
@@ -216,12 +229,42 @@ defmodule Yex.Sync.SharedDoc do
   @impl true
   def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
     state = do_remove_observer_process(pid, state)
-    maybe_auto_exit(state)
+
+    case state.assigns.auto_exit_delay do
+      0 -> maybe_auto_exit(state)
+      _delay -> {:noreply, delay_auto_exit(state)}
+    end
   end
 
   def handle_info(:timeout, state), do: maybe_auto_exit(state)
 
+  # Once observers have come and gone, the delayed exit decides, not the
+  # initial check.
+  def handle_info(@auto_exit_check, %{assigns: %{delayed_auto_exit: ref}} = state)
+      when ref != nil,
+      do: {:noreply, state}
+
   def handle_info(@auto_exit_check, state), do: maybe_auto_exit(state)
+
+  # Only the latest delayed exit counts: an observer joining since cleared it,
+  # and the next departure scheduled a new one.
+  def handle_info({@delayed_auto_exit, ref}, %{assigns: %{delayed_auto_exit: ref}} = state),
+    do: maybe_auto_exit(state)
+
+  def handle_info({@delayed_auto_exit, _stale_ref}, state), do: {:noreply, state}
+
+  # An exit already pending is kept: a duplicate departure does not restart it.
+  defp delay_auto_exit(%{assigns: %{delayed_auto_exit: ref}} = state) when ref != nil, do: state
+
+  defp delay_auto_exit(state) do
+    if state.assigns.auto_exit and state.assigns.observer_process === %{} do
+      ref = make_ref()
+      Process.send_after(self(), {@delayed_auto_exit, ref}, state.assigns.auto_exit_delay)
+      assign(state, :delayed_auto_exit, ref)
+    else
+      state
+    end
+  end
 
   defp maybe_auto_exit(state) do
     if state.assigns.auto_exit and state.assigns.observer_process === %{} do
