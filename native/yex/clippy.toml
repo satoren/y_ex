@@ -1,0 +1,16 @@
+# Bytes from outside the VM are decoded and applied only in src/wire.rs, which guards
+# every call against yrs panics and adds the checks yrs leaves out. Use the wire::*
+# functions instead of these.
+disallowed-methods = [
+  { path = "yrs::updates::decoder::Decode::decode", reason = "use crate::wire" },
+  { path = "yrs::updates::decoder::Decode::decode_v1", reason = "use crate::wire" },
+  { path = "yrs::updates::decoder::Decode::decode_v2", reason = "use crate::wire" },
+  { path = "yrs::updates::decoder::DecoderV2::new", reason = "use crate::wire::message_decoder_v2" },
+  { path = "yrs::TransactionMut::apply_update", reason = "use crate::wire::apply" },
+  { path = "yrs::Update::merge_updates", reason = "use crate::wire::merge_updates_v2" },
+  { path = "yrs::merge_updates_v1", reason = "use crate::wire::merge_updates_v1" },
+  { path = "yrs::merge_updates_v2", reason = "use crate::wire::merge_updates_v2" },
+  { path = "yrs::diff_updates_v1", reason = "use crate::wire::diff_update_v1" },
+  { path = "yrs::diff_updates_v2", reason = "use crate::wire::diff_update_v2" },
+  { path = "crate::snapshot::read_snapshot", reason = "use crate::wire::snapshot" },
+]

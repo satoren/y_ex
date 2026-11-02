@@ -57,6 +57,7 @@ impl ReadTxn for ReadTransaction<'_, '_> {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::take_then_drop;
     use std::panic::{catch_unwind, AssertUnwindSafe};

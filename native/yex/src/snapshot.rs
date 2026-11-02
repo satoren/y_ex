@@ -17,7 +17,6 @@ use yrs::{ClientID, IdSet, ReadTxn, Snapshot, StateVector, Text, TextRef, Transa
 use crate::{
     atoms,
     doc::{NifSnapshot, SnapshotRef},
-    error::Error,
     wrap::SliceIntoBinary,
 };
 
@@ -204,7 +203,7 @@ pub fn encode_state_from_snapshot<E: UpdatesEncoder>(
 
 /// Decodes snapshot bytes into a `Yex.Snapshot` that is not bound to a document.
 fn decode<'a>(env: Env<'a>, bytes: Binary, v2: bool) -> NifResult<Term<'a>> {
-    let snapshot = read_snapshot(bytes.as_slice(), v2).map_err(Error::from)?;
+    let snapshot = crate::wire::snapshot(bytes.as_slice(), v2)?;
     Ok((
         atoms::ok(),
         NifSnapshot {
@@ -242,6 +241,7 @@ fn snapshot_encode_v2(env: Env<'_>, snapshot: SnapshotRef) -> Term<'_> {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use yrs::updates::decoder::Decode;

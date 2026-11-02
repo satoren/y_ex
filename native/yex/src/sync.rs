@@ -1,21 +1,21 @@
 use crate::atoms;
 use crate::awareness::NifAwareness;
-use crate::decode::{catch_apply, catch_decode_v2};
 use crate::doc::NifDoc;
 use crate::error::Error;
 use crate::transaction::TransactionResource;
+use crate::wire;
 use crate::wrap::SliceIntoBinary;
 use rustler::{Atom, Binary, Encoder as NifEncoder, Env, NifResult, ResourceArc, Term};
 
-use yrs::encoding::read::{Cursor, Read};
+use yrs::encoding::read::Read;
 use yrs::encoding::write::Write;
 use yrs::sync::protocol::{
     MSG_AUTH, MSG_AWARENESS, MSG_QUERY_AWARENESS, MSG_SYNC, MSG_SYNC_STEP_1, MSG_SYNC_STEP_2,
     MSG_SYNC_UPDATE, PERMISSION_DENIED, PERMISSION_GRANTED,
 };
-use yrs::updates::decoder::{Decode, Decoder, DecoderV1, DecoderV2};
+use yrs::updates::decoder::Decoder;
 use yrs::updates::encoder::{Encode, Encoder, EncoderV1, EncoderV2};
-use yrs::{ReadTxn, StateVector, Update};
+use yrs::ReadTxn;
 
 fn read_var_u64(bytes: &[u8], pos: &mut usize) -> Option<u64> {
     let mut value: u64 = 0;
@@ -216,10 +216,12 @@ fn sync_message_decode_v1<'a>(env: Env<'a>, msg: Binary<'a>) -> NifResult<(Atom,
         return Ok((atoms::ok(), term));
     }
 
-    let mut decoder = DecoderV1::new(Cursor::new(msg.as_slice()));
-    decode_message(env, &mut decoder)
-        .map(|term| (atoms::ok(), term))
-        .map_err(|e| e.into())
+    wire::guard("v1 message", || {
+        let mut decoder = wire::message_decoder_v1(msg.as_slice());
+        decode_message(env, &mut decoder)
+    })
+    .map(|term| (atoms::ok(), term))
+    .map_err(|e| e.into())
 }
 
 fn apply_sync_update_payload_v1_impl(
@@ -228,12 +230,12 @@ fn apply_sync_update_payload_v1_impl(
     current_transaction: Option<ResourceArc<TransactionResource>>,
     payload: Binary,
 ) -> NifResult<Atom> {
-    let mut decoder = DecoderV1::new(Cursor::new(payload.as_slice()));
+    let mut decoder = wire::message_decoder_v1(payload.as_slice());
     let update_bytes = decoder.read_buf().map_err(Error::from)?;
-    let update = Update::decode_v1(update_bytes).map_err(Error::from)?;
+    let update = wire::update_v1(update_bytes)?;
 
     doc.mutably(env, current_transaction, |txn| {
-        catch_apply(|| txn.apply_update(update))
+        wire::apply(txn, update)
             .map(|()| atoms::ok())
             .map_err(|e| e.into())
     })
@@ -321,9 +323,9 @@ fn encode_sync_step1_response_v1_impl<'a>(
     awareness: Option<NifAwareness>,
     item_limit: Option<u64>,
 ) -> NifResult<Term<'a>> {
-    let mut decoder = DecoderV1::new(Cursor::new(sv_payload.as_slice()));
+    let mut decoder = wire::message_decoder_v1(sv_payload.as_slice());
     let sv_bytes = decoder.read_buf().map_err(Error::from)?;
-    let sv = StateVector::decode_v1(sv_bytes).map_err(Error::from)?;
+    let sv = wire::state_vector_v1(sv_bytes)?;
 
     let encoded = doc.readonly(current_transaction, |txn| {
         if txn.exceeds_item_limit(item_limit) {
@@ -395,10 +397,12 @@ fn awareness_message_encode_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResul
 
 #[rustler::nif]
 fn sync_message_decode_v2<'a>(env: Env<'a>, msg: Binary<'a>) -> NifResult<(Atom, Term<'a>)> {
-    let mut decoder = catch_decode_v2(|| DecoderV2::new(Cursor::new(msg.as_slice())))?;
-    decode_message(env, &mut decoder)
-        .map(|term| (atoms::ok(), term))
-        .map_err(|e| e.into())
+    wire::guard("v2 message", || {
+        let mut decoder = wire::message_decoder_v2(msg.as_slice())?;
+        decode_message(env, &mut decoder)
+    })
+    .map(|term| (atoms::ok(), term))
+    .map_err(|e| e.into())
 }
 
 #[rustler::nif]
