@@ -272,6 +272,48 @@ defmodule YexTest do
     end
   end
 
+  describe "malformed-but-decodable update that panics on apply" do
+    # A v1 update carrying a WeakLink whose quoted range points past the referenced
+    # block's content. It decodes cleanly, but applying it makes yrs panic in
+    # ItemContent::splice (y-crdt/y-crdt#733). The NIF catches the panic and returns an
+    # encoding error instead of crashing the caller.
+    @weak_link_apply_panic_v1_b64 "ARIBAAQBAXQBaIQBAAFlgQEBAoEBAwGEAQQGIHdvcmxkxgEAAQEEYm9sZAR0cnVlxgEDAQQEYm9sZARudWxsAQEBYQGIAQ0CfQJ9A8cBDQEOASgAARABawF3AXYnAQFvAWEAJwEBbQRsaW5rBwEBDwEOJwEBbQIEBwEBeAMBcAcAARUGBAABFgNhYmMpAQFtA2RvYyQ5MGMzNDY2Yy04MjYxLTQ4NmItOWU5My1kODdiMjk0YmM1M2R2BAJnY3gIZW5jb2Rpbmd9AQhhdXRvTG9hZHkKc2hvdWxkTG9hZHgBAQICAw0B"
+
+    test "apply_update_v1 returns an encoding error instead of crashing" do
+      update = Base.decode64!(@weak_link_apply_panic_v1_b64)
+      doc = Yex.Doc.new()
+      assert {:error, {:encoding_exception, _}} = Yex.apply_update(doc, update)
+    end
+
+    test "the document stays usable after a caught apply panic" do
+      update = Base.decode64!(@weak_link_apply_panic_v1_b64)
+      doc = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc, "text")
+      Yex.Text.insert(text, 0, "hello")
+
+      assert {:error, {:encoding_exception, _}} = Yex.apply_update(doc, update)
+
+      # The doc is still readable and writable.
+      assert {:ok, _} = Yex.encode_state_as_update(doc)
+      Yex.Text.insert(text, 0, "X")
+      assert Yex.Text.to_string(text) == "Xhello"
+    end
+
+    test "apply inside a transaction returns an encoding error and the transaction commits" do
+      update = Base.decode64!(@weak_link_apply_panic_v1_b64)
+      doc = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc, "text")
+
+      Yex.Doc.transaction(doc, fn ->
+        Yex.Text.insert(text, 0, "a")
+        assert {:error, {:encoding_exception, _}} = Yex.apply_update(doc, update)
+        Yex.Text.insert(text, 1, "b")
+      end)
+
+      assert Yex.Text.to_string(text) == "ab"
+    end
+  end
+
   describe "encode_state_as_update" do
     test "encode_state_as_update" do
       doc = Yex.Doc.new()

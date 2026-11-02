@@ -19,7 +19,7 @@ use crate::event::{NifSubdocsEvent, NifTransactionCleanupEvent};
 // Internal imports
 use crate::{
     atoms,
-    decode::{catch_decode_v2, decode_update_v2},
+    decode::{catch_apply, catch_decode_v2, decode_update_v2},
     deferred::Deferred,
     error::Error,
     snapshot::{encode_state_from_snapshot, read_snapshot, write_snapshot},
@@ -565,9 +565,9 @@ fn apply_update_v1_impl(
     let update = Update::decode_v1(update.as_slice()).map_err(Error::from)?;
 
     doc.mutably(env, current_transaction, |txn| {
-        txn.apply_update(update)
-            .map(|_| atoms::ok())
-            .map_err(|e| Error::from(e).into())
+        catch_apply(|| txn.apply_update(update))
+            .map(|()| atoms::ok())
+            .map_err(|e| e.into())
     })
 }
 
@@ -600,9 +600,9 @@ fn apply_update_v2_impl(
     let update = decode_update_v2(update.as_slice())?;
 
     doc.mutably(env, current_transaction, |txn| {
-        txn.apply_update(update)
-            .map(|_| atoms::ok())
-            .map_err(|e| Error::from(e).into())
+        catch_apply(|| txn.apply_update(update))
+            .map(|()| atoms::ok())
+            .map_err(|e| e.into())
     })
 }
 
