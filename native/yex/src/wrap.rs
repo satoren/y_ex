@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::ops::Deref;
 
-use rustler::sys::{enif_make_map_from_arrays, ERL_NIF_TERM};
+use rustler::sys::{enif_make_map_from_arrays, ErlNifTerm};
 use rustler::{Env, Term};
 
 pub struct NifWrap<T>(pub T);
@@ -76,7 +76,7 @@ thread_local! {
     /// built while its parent's entries are still collected, so its entries go after them.
     /// They are kept here rather than in arrays on the stack because encoding recurses once
     /// per nesting level, and dirty schedulers have small stacks.
-    static MAP_ENTRIES: RefCell<(Vec<ERL_NIF_TERM>, Vec<ERL_NIF_TERM>)> =
+    static MAP_ENTRIES: RefCell<(Vec<ErlNifTerm>, Vec<ErlNifTerm>)> =
         const { RefCell::new((Vec::new(), Vec::new())) };
 }
 
@@ -115,11 +115,11 @@ pub fn make_map<'a>(
 
 fn map_from_arrays<'a>(
     env: Env<'a>,
-    keys: &[ERL_NIF_TERM],
-    values: &[ERL_NIF_TERM],
+    keys: &[ErlNifTerm],
+    values: &[ErlNifTerm],
 ) -> Option<Term<'a>> {
     debug_assert_eq!(keys.len(), values.len());
-    let mut map: ERL_NIF_TERM = 0;
+    let mut map = ErlNifTerm::default();
     // SAFETY: both arrays hold `keys.len()` terms of `env`, and `map` is written on success.
     let ok = unsafe {
         enif_make_map_from_arrays(
