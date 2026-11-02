@@ -49,7 +49,7 @@ defmodule Yex.Doc do
     @type t :: %__MODULE__{
             client_id: non_neg_integer() | nil,
             guid: String.t() | nil,
-            collection_id: String.t(),
+            collection_id: String.t() | nil,
             offset_kind: :bytes | :utf16,
             skip_gc: boolean(),
             auto_load: boolean(),
