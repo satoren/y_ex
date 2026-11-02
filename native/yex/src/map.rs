@@ -124,25 +124,15 @@ fn map_clear_impl(
     })
 }
 
+nif_with_dirty_twin! {
 /// Returns `:dirty` without clearing when the doc holds more than `item_limit` items.
-#[rustler::nif]
-fn map_clear(
-    env: Env<'_>,
-    map: NifMap,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    item_limit: Option<u64>,
-) -> NifResult<Atom> {
-    map_clear_impl(env, map, current_transaction, item_limit)
+    fn map_clear / map_clear_dirty(
+        env: Env<'_>,
+        map: NifMap,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+    ) + [item_limit: Option<u64>] -> NifResult<Atom> = map_clear_impl(env, map, current_transaction);
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-fn map_clear_dirty(
-    env: Env<'_>,
-    map: NifMap,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<Atom> {
-    map_clear_impl(env, map, current_transaction, None)
-}
 #[rustler::nif]
 fn map_to_map(
     map: NifMap,
@@ -172,25 +162,15 @@ fn map_to_json_impl(
     })
 }
 
+nif_with_dirty_twin! {
 /// Returns `:dirty` without converting when the doc holds more than `item_limit` items.
-#[rustler::nif]
-fn map_to_json(
-    env: Env<'_>,
-    map: NifMap,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    item_limit: Option<u64>,
-) -> NifResult<Term<'_>> {
-    map_to_json_impl(env, map, current_transaction, item_limit)
+    fn map_to_json / map_to_json_dirty(
+        env: Env<'_>,
+        map: NifMap,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+    ) + [item_limit: Option<u64>] -> NifResult<Term<'_>> = map_to_json_impl(env, map, current_transaction);
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-fn map_to_json_dirty(
-    env: Env<'_>,
-    map: NifMap,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<Term<'_>> {
-    map_to_json_impl(env, map, current_transaction, None)
-}
 #[rustler::nif]
 fn map_keys(
     map: NifMap,

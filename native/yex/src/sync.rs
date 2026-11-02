@@ -241,24 +241,13 @@ fn apply_sync_update_payload_v1_impl(
     })
 }
 
-#[rustler::nif]
-fn apply_sync_update_payload_v1(
-    env: Env<'_>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    payload: Binary,
-) -> NifResult<Atom> {
-    apply_sync_update_payload_v1_impl(env, doc, current_transaction, payload)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn apply_sync_update_payload_v1_dirty(
-    env: Env<'_>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    payload: Binary,
-) -> NifResult<Atom> {
-    apply_sync_update_payload_v1_impl(env, doc, current_transaction, payload)
+nif_with_dirty_twin! {
+    fn apply_sync_update_payload_v1 / apply_sync_update_payload_v1_dirty(
+        env: Env<'_>,
+        doc: NifDoc,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+        payload: Binary,
+    ) -> NifResult<Atom> = apply_sync_update_payload_v1_impl(env, doc, current_transaction, payload);
 }
 
 #[rustler::nif]
@@ -357,37 +346,17 @@ fn encode_sync_step1_response_v1_impl<'a>(
     Ok((atoms::ok(), bins).encode(env))
 }
 
+nif_with_dirty_twin! {
 /// Decode sync_step1 sv_payload, compute diff+sv, encode awareness, return all message binaries.
 /// sv_payload is the raw bytes after MSG_SYNC + MSG_SYNC_STEP_1 (i.e. varint_len + sv_bytes).
 /// Returns `:dirty` without encoding when the doc holds more than `item_limit` items.
-#[rustler::nif]
-fn encode_sync_step1_response_v1<'a>(
-    env: Env<'a>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    sv_payload: Binary<'a>,
-    awareness: Option<NifAwareness>,
-    item_limit: Option<u64>,
-) -> NifResult<Term<'a>> {
-    encode_sync_step1_response_v1_impl(
-        env,
-        doc,
-        current_transaction,
-        sv_payload,
-        awareness,
-        item_limit,
-    )
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn encode_sync_step1_response_v1_dirty<'a>(
-    env: Env<'a>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    sv_payload: Binary<'a>,
-    awareness: Option<NifAwareness>,
-) -> NifResult<Term<'a>> {
-    encode_sync_step1_response_v1_impl(env, doc, current_transaction, sv_payload, awareness, None)
+    fn encode_sync_step1_response_v1<'a> / encode_sync_step1_response_v1_dirty(
+        env: Env<'a>,
+        doc: NifDoc,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+        sv_payload: Binary<'a>,
+        awareness: Option<NifAwareness>,
+    ) + [item_limit: Option<u64>] -> NifResult<Term<'a>> = encode_sync_step1_response_v1_impl(env, doc, current_transaction, sv_payload, awareness);
 }
 
 #[rustler::nif]

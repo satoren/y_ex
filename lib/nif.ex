@@ -49,6 +49,40 @@ defmodule Yex.Nif do
   # 500 (about 2_250 with no observers). See benchmark/dirty_map_clear.exs.
   def dirty_clear_items(), do: 256
 
+  # Every NIF that has a DirtyCpu twin (`nif_with_dirty_twin!` in native/yex/src/lib.rs),
+  # with the twin's arity. A twin takes the same arguments as its normal NIF, minus the
+  # trailing size limit for the NIFs that have one.
+  @dirty_twins [
+    array_to_json: 2,
+    map_clear: 2,
+    map_to_json: 2,
+    xml_fragment_children: 2,
+    xml_element_children: 2,
+    encode_state_as_update_v1: 3,
+    encode_diff_and_state_vector_v1: 3,
+    apply_update_v1: 3,
+    merge_updates_v1: 1,
+    encode_state_as_update_v2: 3,
+    apply_update_v2: 3,
+    merge_updates_v2: 1,
+    diff_update_v1: 2,
+    diff_update_v2: 2,
+    encode_state_vector_from_update_v1: 1,
+    encode_state_vector_from_update_v2: 1,
+    convert_update_format_v1_to_v2: 1,
+    convert_update_format_v2_to_v1: 1,
+    parse_update_meta_v1: 1,
+    parse_update_meta_v2: 1,
+    decode_state_vector: 1,
+    encode_sync_step1_response_v1: 4,
+    apply_sync_update_payload_v1: 3
+  ]
+
+  for {name, arity} <- @dirty_twins do
+    args = Enum.map(1..arity, &Macro.var(:"_arg#{&1}", __MODULE__))
+    def unquote(:"#{name}_dirty")(unquote_splicing(args)), do: :erlang.nif_error(:nif_not_loaded)
+  end
+
   def doc_new(), do: :erlang.nif_error(:nif_not_loaded)
   def doc_with_options(_option), do: :erlang.nif_error(:nif_not_loaded)
   def doc_get_or_insert_text(_doc, _cur_txn, _name), do: :erlang.nif_error(:nif_not_loaded)
@@ -153,7 +187,6 @@ defmodule Yex.Nif do
   def array_quote(_array, _cur_txn, _index, _len), do: :erlang.nif_error(:nif_not_loaded)
 
   def array_to_json(_array, _cur_txn, _item_limit), do: :erlang.nif_error(:nif_not_loaded)
-  def array_to_json_dirty(_array, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
 
   def map_set(_map, _cur_txn, _key, _value), do: :erlang.nif_error(:nif_not_loaded)
   def map_size(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -161,12 +194,10 @@ defmodule Yex.Nif do
   def map_contains_key(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_delete(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
   def map_clear(_map, _cur_txn, _item_limit), do: :erlang.nif_error(:nif_not_loaded)
-  def map_clear_dirty(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_map(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_keys(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_values(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_to_json(_map, _cur_txn, _item_limit), do: :erlang.nif_error(:nif_not_loaded)
-  def map_to_json_dirty(_map, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def map_link(_map, _cur_txn, _key), do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_insert(_xml_fragment, _cur_txn, _index, _content),
@@ -188,14 +219,10 @@ defmodule Yex.Nif do
   def xml_fragment_children(_xml_fragment, _cur_txn, _child_limit),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def xml_fragment_children_dirty(_xml_fragment, _cur_txn),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_element_children(_xml_element, _cur_txn, _child_limit),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def xml_element_children_dirty(_xml_element, _cur_txn),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def xml_fragment_child_index(_xml_fragment, _cur_txn, _node),
     do: :erlang.nif_error(:nif_not_loaded)
@@ -332,19 +359,13 @@ defmodule Yex.Nif do
   def encode_state_as_update_v1(_doc, _cur_txn, _diff, _item_limit),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def encode_state_as_update_v1_dirty(_doc, _cur_txn, _diff),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def encode_diff_and_state_vector_v1(_doc, _cur_txn, _remote_sv, _item_limit),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def encode_diff_and_state_vector_v1_dirty(_doc, _cur_txn, _remote_sv),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def apply_update_v1(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
-  def apply_update_v1_dirty(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
   def merge_updates_v1(_updates), do: :erlang.nif_error(:nif_not_loaded)
-  def merge_updates_v1_dirty(_updates), do: :erlang.nif_error(:nif_not_loaded)
   def update_debug_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
 
   def encode_state_vector_v2(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -352,39 +373,24 @@ defmodule Yex.Nif do
   def encode_state_as_update_v2(_doc, _cur_txn, _diff, _item_limit),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def encode_state_as_update_v2_dirty(_doc, _cur_txn, _diff),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def apply_update_v2(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
-  def apply_update_v2_dirty(_doc, _cur_txn, _update), do: :erlang.nif_error(:nif_not_loaded)
   def merge_updates_v2(_updates), do: :erlang.nif_error(:nif_not_loaded)
-  def merge_updates_v2_dirty(_updates), do: :erlang.nif_error(:nif_not_loaded)
   def update_debug_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
 
   def diff_update_v1(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
-  def diff_update_v1_dirty(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
   def diff_update_v2(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
-  def diff_update_v2_dirty(_update, _sv), do: :erlang.nif_error(:nif_not_loaded)
   def encode_state_vector_from_update_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
 
-  def encode_state_vector_from_update_v1_dirty(_update),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def encode_state_vector_from_update_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
 
-  def encode_state_vector_from_update_v2_dirty(_update),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def convert_update_format_v1_to_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
-  def convert_update_format_v1_to_v2_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
   def convert_update_format_v2_to_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
-  def convert_update_format_v2_to_v1_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
   def parse_update_meta_v1(_update), do: :erlang.nif_error(:nif_not_loaded)
-  def parse_update_meta_v1_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
   def parse_update_meta_v2(_update), do: :erlang.nif_error(:nif_not_loaded)
-  def parse_update_meta_v2_dirty(_update), do: :erlang.nif_error(:nif_not_loaded)
   def decode_state_vector(_state_vector), do: :erlang.nif_error(:nif_not_loaded)
-  def decode_state_vector_dirty(_state_vector), do: :erlang.nif_error(:nif_not_loaded)
 
   def get_pending_update_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
   def get_pending_ds_v1(_doc, _cur_txn), do: :erlang.nif_error(:nif_not_loaded)
@@ -417,16 +423,12 @@ defmodule Yex.Nif do
   def encode_sync_step1_response_v1(_doc, _current_txn, _sv_payload, _awareness, _item_limit),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def encode_sync_step1_response_v1_dirty(_doc, _current_txn, _sv_payload, _awareness),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def encode_awareness_reply_v1(_awareness), do: :erlang.nif_error(:nif_not_loaded)
 
   def apply_sync_update_payload_v1(_doc, _cur_txn, _payload),
     do: :erlang.nif_error(:nif_not_loaded)
 
-  def apply_sync_update_payload_v1_dirty(_doc, _cur_txn, _payload),
-    do: :erlang.nif_error(:nif_not_loaded)
 
   def sync_message_decode_v2(_message), do: :erlang.nif_error(:nif_not_loaded)
   def sync_message_encode_v2(_message), do: :erlang.nif_error(:nif_not_loaded)

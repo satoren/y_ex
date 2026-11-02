@@ -567,24 +567,13 @@ fn apply_update_v1_impl(
     })
 }
 
-#[rustler::nif]
-fn apply_update_v1(
-    env: Env<'_>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    update: Binary,
-) -> NifResult<Atom> {
-    apply_update_v1_impl(env, doc, current_transaction, update)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn apply_update_v1_dirty(
-    env: Env<'_>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    update: Binary,
-) -> NifResult<Atom> {
-    apply_update_v1_impl(env, doc, current_transaction, update)
+nif_with_dirty_twin! {
+    fn apply_update_v1 / apply_update_v1_dirty(
+        env: Env<'_>,
+        doc: NifDoc,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+        update: Binary,
+    ) -> NifResult<Atom> = apply_update_v1_impl(env, doc, current_transaction, update);
 }
 
 fn apply_update_v2_impl(
@@ -602,24 +591,13 @@ fn apply_update_v2_impl(
     })
 }
 
-#[rustler::nif]
-fn apply_update_v2(
-    env: Env<'_>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    update: Binary,
-) -> NifResult<Atom> {
-    apply_update_v2_impl(env, doc, current_transaction, update)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn apply_update_v2_dirty(
-    env: Env<'_>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    update: Binary,
-) -> NifResult<Atom> {
-    apply_update_v2_impl(env, doc, current_transaction, update)
+nif_with_dirty_twin! {
+    fn apply_update_v2 / apply_update_v2_dirty(
+        env: Env<'_>,
+        doc: NifDoc,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+        update: Binary,
+    ) -> NifResult<Atom> = apply_update_v2_impl(env, doc, current_transaction, update);
 }
 
 fn merge_updates_v1_impl<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
@@ -628,14 +606,11 @@ fn merge_updates_v1_impl<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResul
     Ok((atoms::ok(), SliceIntoBinary::new(merged.as_slice())).encode(env))
 }
 
-#[rustler::nif]
-fn merge_updates_v1<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
-    merge_updates_v1_impl(env, updates)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn merge_updates_v1_dirty<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
-    merge_updates_v1_impl(env, updates)
+nif_with_dirty_twin! {
+    fn merge_updates_v1<'a> / merge_updates_v1_dirty(
+        env: Env<'a>,
+        updates: Vec<Binary<'a>>,
+    ) -> NifResult<Term<'a>> = merge_updates_v1_impl(env, updates);
 }
 
 fn merge_updates_v2_impl<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
@@ -644,14 +619,11 @@ fn merge_updates_v2_impl<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResul
     Ok((atoms::ok(), SliceIntoBinary::new(merged.as_slice())).encode(env))
 }
 
-#[rustler::nif]
-fn merge_updates_v2<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
-    merge_updates_v2_impl(env, updates)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn merge_updates_v2_dirty<'a>(env: Env<'a>, updates: Vec<Binary<'a>>) -> NifResult<Term<'a>> {
-    merge_updates_v2_impl(env, updates)
+nif_with_dirty_twin! {
+    fn merge_updates_v2<'a> / merge_updates_v2_dirty(
+        env: Env<'a>,
+        updates: Vec<Binary<'a>>,
+    ) -> NifResult<Term<'a>> = merge_updates_v2_impl(env, updates);
 }
 
 #[rustler::nif]
@@ -679,22 +651,12 @@ fn diff_update_v1_impl<'a>(
     ok_binary(env, diff)
 }
 
-#[rustler::nif]
-fn diff_update_v1<'a>(
-    env: Env<'a>,
-    update: Binary<'a>,
-    state_vector: Binary<'a>,
-) -> NifResult<Term<'a>> {
-    diff_update_v1_impl(env, update, state_vector)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn diff_update_v1_dirty<'a>(
-    env: Env<'a>,
-    update: Binary<'a>,
-    state_vector: Binary<'a>,
-) -> NifResult<Term<'a>> {
-    diff_update_v1_impl(env, update, state_vector)
+nif_with_dirty_twin! {
+    fn diff_update_v1<'a> / diff_update_v1_dirty(
+        env: Env<'a>,
+        update: Binary<'a>,
+        state_vector: Binary<'a>,
+    ) -> NifResult<Term<'a>> = diff_update_v1_impl(env, update, state_vector);
 }
 
 fn diff_update_v2_impl<'a>(
@@ -707,22 +669,12 @@ fn diff_update_v2_impl<'a>(
     ok_binary(env, diff)
 }
 
-#[rustler::nif]
-fn diff_update_v2<'a>(
-    env: Env<'a>,
-    update: Binary<'a>,
-    state_vector: Binary<'a>,
-) -> NifResult<Term<'a>> {
-    diff_update_v2_impl(env, update, state_vector)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn diff_update_v2_dirty<'a>(
-    env: Env<'a>,
-    update: Binary<'a>,
-    state_vector: Binary<'a>,
-) -> NifResult<Term<'a>> {
-    diff_update_v2_impl(env, update, state_vector)
+nif_with_dirty_twin! {
+    fn diff_update_v2<'a> / diff_update_v2_dirty(
+        env: Env<'a>,
+        update: Binary<'a>,
+        state_vector: Binary<'a>,
+    ) -> NifResult<Term<'a>> = diff_update_v2_impl(env, update, state_vector);
 }
 
 fn encode_state_vector_from_update_v1_impl<'a>(
@@ -733,17 +685,11 @@ fn encode_state_vector_from_update_v1_impl<'a>(
     ok_binary(env, update.state_vector().encode_v1())
 }
 
-#[rustler::nif]
-fn encode_state_vector_from_update_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
-    encode_state_vector_from_update_v1_impl(env, update)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn encode_state_vector_from_update_v1_dirty<'a>(
-    env: Env<'a>,
-    update: Binary<'a>,
-) -> NifResult<Term<'a>> {
-    encode_state_vector_from_update_v1_impl(env, update)
+nif_with_dirty_twin! {
+    fn encode_state_vector_from_update_v1<'a> / encode_state_vector_from_update_v1_dirty(
+        env: Env<'a>,
+        update: Binary<'a>,
+    ) -> NifResult<Term<'a>> = encode_state_vector_from_update_v1_impl(env, update);
 }
 
 fn encode_state_vector_from_update_v2_impl<'a>(
@@ -755,17 +701,11 @@ fn encode_state_vector_from_update_v2_impl<'a>(
     ok_binary(env, update.state_vector().encode_v1())
 }
 
-#[rustler::nif]
-fn encode_state_vector_from_update_v2<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
-    encode_state_vector_from_update_v2_impl(env, update)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn encode_state_vector_from_update_v2_dirty<'a>(
-    env: Env<'a>,
-    update: Binary<'a>,
-) -> NifResult<Term<'a>> {
-    encode_state_vector_from_update_v2_impl(env, update)
+nif_with_dirty_twin! {
+    fn encode_state_vector_from_update_v2<'a> / encode_state_vector_from_update_v2_dirty(
+        env: Env<'a>,
+        update: Binary<'a>,
+    ) -> NifResult<Term<'a>> = encode_state_vector_from_update_v2_impl(env, update);
 }
 
 fn convert_update_format_v1_to_v2_impl<'a>(
@@ -775,17 +715,11 @@ fn convert_update_format_v1_to_v2_impl<'a>(
     ok_binary(env, wire::update_v1_exact(update.as_slice())?.encode_v2())
 }
 
-#[rustler::nif]
-fn convert_update_format_v1_to_v2<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
-    convert_update_format_v1_to_v2_impl(env, update)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn convert_update_format_v1_to_v2_dirty<'a>(
-    env: Env<'a>,
-    update: Binary<'a>,
-) -> NifResult<Term<'a>> {
-    convert_update_format_v1_to_v2_impl(env, update)
+nif_with_dirty_twin! {
+    fn convert_update_format_v1_to_v2<'a> / convert_update_format_v1_to_v2_dirty(
+        env: Env<'a>,
+        update: Binary<'a>,
+    ) -> NifResult<Term<'a>> = convert_update_format_v1_to_v2_impl(env, update);
 }
 
 fn convert_update_format_v2_to_v1_impl<'a>(
@@ -796,17 +730,11 @@ fn convert_update_format_v2_to_v1_impl<'a>(
     ok_binary(env, update.encode_v1())
 }
 
-#[rustler::nif]
-fn convert_update_format_v2_to_v1<'a>(env: Env<'a>, update: Binary<'a>) -> NifResult<Term<'a>> {
-    convert_update_format_v2_to_v1_impl(env, update)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn convert_update_format_v2_to_v1_dirty<'a>(
-    env: Env<'a>,
-    update: Binary<'a>,
-) -> NifResult<Term<'a>> {
-    convert_update_format_v2_to_v1_impl(env, update)
+nif_with_dirty_twin! {
+    fn convert_update_format_v2_to_v1<'a> / convert_update_format_v2_to_v1_dirty(
+        env: Env<'a>,
+        update: Binary<'a>,
+    ) -> NifResult<Term<'a>> = convert_update_format_v2_to_v1_impl(env, update);
 }
 
 #[derive(rustler::NifMap)]
@@ -843,14 +771,10 @@ fn parse_update_meta_v1_impl(update: Binary) -> NifResult<(Atom, NifUpdateMeta)>
     Ok((atoms::ok(), update_meta(&update)))
 }
 
-#[rustler::nif]
-fn parse_update_meta_v1(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
-    parse_update_meta_v1_impl(update)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn parse_update_meta_v1_dirty(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
-    parse_update_meta_v1_impl(update)
+nif_with_dirty_twin! {
+    fn parse_update_meta_v1 / parse_update_meta_v1_dirty(
+        update: Binary,
+    ) -> NifResult<(Atom, NifUpdateMeta)> = parse_update_meta_v1_impl(update);
 }
 
 fn parse_update_meta_v2_impl(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
@@ -858,14 +782,10 @@ fn parse_update_meta_v2_impl(update: Binary) -> NifResult<(Atom, NifUpdateMeta)>
     Ok((atoms::ok(), update_meta(&update)))
 }
 
-#[rustler::nif]
-fn parse_update_meta_v2(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
-    parse_update_meta_v2_impl(update)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn parse_update_meta_v2_dirty(update: Binary) -> NifResult<(Atom, NifUpdateMeta)> {
-    parse_update_meta_v2_impl(update)
+nif_with_dirty_twin! {
+    fn parse_update_meta_v2 / parse_update_meta_v2_dirty(
+        update: Binary,
+    ) -> NifResult<(Atom, NifUpdateMeta)> = parse_update_meta_v2_impl(update);
 }
 
 fn decode_state_vector_impl(state_vector: Binary) -> NifResult<(Atom, HashMap<u64, u32>)> {
@@ -877,14 +797,10 @@ fn decode_state_vector_impl(state_vector: Binary) -> NifResult<(Atom, HashMap<u6
     Ok((atoms::ok(), clocks))
 }
 
-#[rustler::nif]
-fn decode_state_vector(state_vector: Binary) -> NifResult<(Atom, HashMap<u64, u32>)> {
-    decode_state_vector_impl(state_vector)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn decode_state_vector_dirty(state_vector: Binary) -> NifResult<(Atom, HashMap<u64, u32>)> {
-    decode_state_vector_impl(state_vector)
+nif_with_dirty_twin! {
+    fn decode_state_vector / decode_state_vector_dirty(
+        state_vector: Binary,
+    ) -> NifResult<(Atom, HashMap<u64, u32>)> = decode_state_vector_impl(state_vector);
 }
 
 #[rustler::nif]
@@ -921,26 +837,14 @@ fn encode_state_as_update_v1_impl<'a>(
     })
 }
 
+nif_with_dirty_twin! {
 /// Returns `:dirty` without encoding when the doc holds more than `item_limit` items.
-#[rustler::nif]
-fn encode_state_as_update_v1<'a>(
-    env: Env<'a>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    state_vector: Option<Binary>,
-    item_limit: Option<u64>,
-) -> NifResult<Term<'a>> {
-    encode_state_as_update_v1_impl(env, doc, current_transaction, state_vector, item_limit)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn encode_state_as_update_v1_dirty<'a>(
-    env: Env<'a>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    state_vector: Option<Binary>,
-) -> NifResult<Term<'a>> {
-    encode_state_as_update_v1_impl(env, doc, current_transaction, state_vector, None)
+    fn encode_state_as_update_v1<'a> / encode_state_as_update_v1_dirty(
+        env: Env<'a>,
+        doc: NifDoc,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+        state_vector: Option<Binary>,
+    ) + [item_limit: Option<u64>] -> NifResult<Term<'a>> = encode_state_as_update_v1_impl(env, doc, current_transaction, state_vector);
 }
 
 fn encode_diff_and_state_vector_v1_impl<'a>(
@@ -966,33 +870,15 @@ fn encode_diff_and_state_vector_v1_impl<'a>(
     })
 }
 
+nif_with_dirty_twin! {
 /// Single read transaction for sync step1 response: missing diff vs remote SV + local encoded SV.
 /// Returns `:dirty` without encoding when the doc holds more than `item_limit` items.
-#[rustler::nif]
-fn encode_diff_and_state_vector_v1<'a>(
-    env: Env<'a>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    remote_state_vector: Binary<'a>,
-    item_limit: Option<u64>,
-) -> NifResult<Term<'a>> {
-    encode_diff_and_state_vector_v1_impl(
-        env,
-        doc,
-        current_transaction,
-        remote_state_vector,
-        item_limit,
-    )
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn encode_diff_and_state_vector_v1_dirty<'a>(
-    env: Env<'a>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    remote_state_vector: Binary<'a>,
-) -> NifResult<Term<'a>> {
-    encode_diff_and_state_vector_v1_impl(env, doc, current_transaction, remote_state_vector, None)
+    fn encode_diff_and_state_vector_v1<'a> / encode_diff_and_state_vector_v1_dirty(
+        env: Env<'a>,
+        doc: NifDoc,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+        remote_state_vector: Binary<'a>,
+    ) + [item_limit: Option<u64>] -> NifResult<Term<'a>> = encode_diff_and_state_vector_v1_impl(env, doc, current_transaction, remote_state_vector);
 }
 
 #[rustler::nif]
@@ -1028,26 +914,14 @@ fn encode_state_as_update_v2_impl<'a>(
     })
 }
 
+nif_with_dirty_twin! {
 /// Returns `:dirty` without encoding when the doc holds more than `item_limit` items.
-#[rustler::nif]
-fn encode_state_as_update_v2<'a>(
-    env: Env<'a>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    state_vector: Option<Binary>,
-    item_limit: Option<u64>,
-) -> NifResult<Term<'a>> {
-    encode_state_as_update_v2_impl(env, doc, current_transaction, state_vector, item_limit)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn encode_state_as_update_v2_dirty<'a>(
-    env: Env<'a>,
-    doc: NifDoc,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    state_vector: Option<Binary>,
-) -> NifResult<Term<'a>> {
-    encode_state_as_update_v2_impl(env, doc, current_transaction, state_vector, None)
+    fn encode_state_as_update_v2<'a> / encode_state_as_update_v2_dirty(
+        env: Env<'a>,
+        doc: NifDoc,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+        state_vector: Option<Binary>,
+    ) + [item_limit: Option<u64>] -> NifResult<Term<'a>> = encode_state_as_update_v2_impl(env, doc, current_transaction, state_vector);
 }
 
 #[rustler::nif]

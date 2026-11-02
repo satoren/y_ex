@@ -343,23 +343,12 @@ fn xml_fragment_children_impl<'a>(
     })
 }
 
-#[rustler::nif]
-fn xml_fragment_children<'a>(
-    env: Env<'a>,
-    xml: NifXmlFragment,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    child_limit: Option<u32>,
-) -> NifResult<Term<'a>> {
-    xml_fragment_children_impl(env, xml, current_transaction, child_limit)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn xml_fragment_children_dirty<'a>(
-    env: Env<'a>,
-    xml: NifXmlFragment,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<Term<'a>> {
-    xml_fragment_children_impl(env, xml, current_transaction, None)
+nif_with_dirty_twin! {
+    fn xml_fragment_children<'a> / xml_fragment_children_dirty(
+        env: Env<'a>,
+        xml: NifXmlFragment,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+    ) + [child_limit: Option<u32>] -> NifResult<Term<'a>> = xml_fragment_children_impl(env, xml, current_transaction);
 }
 
 fn xml_element_children_impl<'a>(
@@ -375,23 +364,12 @@ fn xml_element_children_impl<'a>(
     })
 }
 
-#[rustler::nif]
-fn xml_element_children<'a>(
-    env: Env<'a>,
-    xml: NifXmlElement,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-    child_limit: Option<u32>,
-) -> NifResult<Term<'a>> {
-    xml_element_children_impl(env, xml, current_transaction, child_limit)
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-fn xml_element_children_dirty<'a>(
-    env: Env<'a>,
-    xml: NifXmlElement,
-    current_transaction: Option<ResourceArc<TransactionResource>>,
-) -> NifResult<Term<'a>> {
-    xml_element_children_impl(env, xml, current_transaction, None)
+nif_with_dirty_twin! {
+    fn xml_element_children<'a> / xml_element_children_dirty(
+        env: Env<'a>,
+        xml: NifXmlElement,
+        current_transaction: Option<ResourceArc<TransactionResource>>,
+    ) + [child_limit: Option<u32>] -> NifResult<Term<'a>> = xml_element_children_impl(env, xml, current_transaction);
 }
 
 /// Collects every descendant of `xml` in document order (depth-first, pre-order).
