@@ -272,6 +272,58 @@ defmodule YexTest do
     end
   end
 
+  describe "malformed-but-decodable update that panics on apply" do
+    # A v1 update carrying a WeakLink whose quoted range points past the referenced
+    # block's content. It decodes cleanly, but applying it makes yrs panic in
+    # ItemContent::splice (y-crdt/y-crdt#733). The NIF catches the panic and returns an
+    # encoding error instead of crashing the caller.
+    @weak_link_apply_panic_v1 <<1, 18, 1, 0, 4, 1, 1, 116, 1, 104, 132, 1, 0, 1, 101, 129, 1, 1,
+                                2, 129, 1, 3, 1, 132, 1, 4, 6, 32, 119, 111, 114, 108, 100, 198,
+                                1, 0, 1, 1, 4, 98, 111, 108, 100, 4, 116, 114, 117, 101, 198, 1,
+                                3, 1, 4, 4, 98, 111, 108, 100, 4, 110, 117, 108, 108, 1, 1, 1, 97,
+                                1, 136, 1, 13, 2, 125, 2, 125, 3, 199, 1, 13, 1, 14, 1, 40, 0, 1,
+                                16, 1, 107, 1, 119, 1, 118, 39, 1, 1, 111, 1, 97, 0, 39, 1, 1, 109,
+                                4, 108, 105, 110, 107, 7, 1, 1, 15, 1, 14, 39, 1, 1, 109, 2, 4, 7,
+                                1, 1, 120, 3, 1, 112, 7, 0, 1, 21, 6, 4, 0, 1, 22, 3, 97, 98, 99,
+                                41, 1, 1, 109, 3, 100, 111, 99, 36, 57, 48, 99, 51, 52, 54, 54, 99,
+                                45, 56, 50, 54, 49, 45, 52, 56, 54, 98, 45, 57, 101, 57, 51, 45,
+                                100, 56, 55, 98, 50, 57, 52, 98, 99, 53, 51, 100, 118, 4, 2, 103,
+                                99, 120, 8, 101, 110, 99, 111, 100, 105, 110, 103, 125, 1, 8, 97,
+                                117, 116, 111, 76, 111, 97, 100, 121, 10, 115, 104, 111, 117, 108,
+                                100, 76, 111, 97, 100, 120, 1, 1, 2, 2, 3, 13, 1>>
+
+    test "apply_update_v1 returns an encoding error instead of crashing" do
+      doc = Yex.Doc.new()
+      assert {:error, {:encoding_exception, _}} = Yex.apply_update(doc, @weak_link_apply_panic_v1)
+    end
+
+    test "the document stays usable after a caught apply panic" do
+      doc = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc, "text")
+      Yex.Text.insert(text, 0, "hello")
+
+      assert {:error, {:encoding_exception, _}} = Yex.apply_update(doc, @weak_link_apply_panic_v1)
+
+      # The doc is still readable and writable.
+      assert {:ok, _} = Yex.encode_state_as_update(doc)
+      Yex.Text.insert(text, 0, "X")
+      assert Yex.Text.to_string(text) == "Xhello"
+    end
+
+    test "apply inside a transaction returns an encoding error and the transaction commits" do
+      doc = Yex.Doc.new()
+      text = Yex.Doc.get_text(doc, "text")
+
+      Yex.Doc.transaction(doc, fn ->
+        Yex.Text.insert(text, 0, "a")
+        assert {:error, {:encoding_exception, _}} = Yex.apply_update(doc, @weak_link_apply_panic_v1)
+        Yex.Text.insert(text, 1, "b")
+      end)
+
+      assert Yex.Text.to_string(text) == "ab"
+    end
+  end
+
   describe "encode_state_as_update" do
     test "encode_state_as_update" do
       doc = Yex.Doc.new()

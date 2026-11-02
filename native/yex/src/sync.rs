@@ -1,6 +1,6 @@
 use crate::atoms;
 use crate::awareness::NifAwareness;
-use crate::decode::catch_decode_v2;
+use crate::decode::{catch_apply, catch_decode_v2};
 use crate::doc::NifDoc;
 use crate::error::Error;
 use crate::transaction::TransactionResource;
@@ -233,9 +233,9 @@ fn apply_sync_update_payload_v1_impl(
     let update = Update::decode_v1(update_bytes).map_err(Error::from)?;
 
     doc.mutably(env, current_transaction, |txn| {
-        txn.apply_update(update)
-            .map(|_| atoms::ok())
-            .map_err(|e| Error::from(e).into())
+        catch_apply(|| txn.apply_update(update))
+            .map(|()| atoms::ok())
+            .map_err(|e| e.into())
     })
 }
 
