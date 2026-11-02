@@ -87,6 +87,19 @@ defmodule Yex.AwarenessTest do
     assert [5] === Awareness.get_client_ids(awareness)
   end
 
+  test "apply_update rejects a client id of 2^53 or more instead of aliasing it" do
+    {:ok, awareness} = Awareness.new(Yex.Doc.with_options(%Yex.Doc.Options{client_id: 5}))
+    Awareness.set_local_state(awareness, %{"key" => "value"})
+
+    # One entry for client 2^53 + 5 (varint), clock 100, state "null". Before the check
+    # it was applied to client 5 and removed the local state.
+    update = <<1, 133, 128, 128, 128, 128, 128, 128, 16, 100, 4, "null">>
+
+    assert {:error, {:encoding_exception, _}} = Awareness.apply_update(awareness, update)
+    assert [5] === Awareness.get_client_ids(awareness)
+    assert %{"key" => "value"} === Awareness.get_local_state(awareness)
+  end
+
   test "apply_update with origin" do
     {:ok, awareness} = Yex.Awareness.new(Yex.Doc.new())
     Yex.Awareness.monitor_change(awareness)
