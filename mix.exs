@@ -68,7 +68,7 @@ defmodule Yex.MixProject do
 
   defp deps do
     [
-      {:rustler, "~> 0.37", optional: true},
+      {:rustler, "~> 0.38", optional: true},
       {:rustler_precompiled, ">= 0.6.0"},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
