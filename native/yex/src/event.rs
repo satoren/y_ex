@@ -579,6 +579,7 @@ pub fn id_set_to_map(ids: &yrs::IdSet) -> HashMap<u64, Vec<(u32, u32)>> {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::{id_set_to_map, state_vector_to_map};
     use std::collections::HashMap;

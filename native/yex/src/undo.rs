@@ -677,6 +677,7 @@ pub fn undo_manager_put_meta<'a>(
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::{attach, defer_detach, try_release, StackMeta, YexUndoManager};
     use crate::deferred::Deferred;

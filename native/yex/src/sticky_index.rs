@@ -1,11 +1,8 @@
 use rustler::{Atom, Decoder, Encoder, Env, NifResult, NifStruct, NifUnitEnum, ResourceArc, Term};
 use serde::{Deserialize as _, Serialize as _};
-use yrs::updates::decoder::Decode;
 use yrs::updates::encoder::Encode;
 use yrs::{Assoc, IndexedSequence, StickyIndex};
 
-use crate::decode::catch_decode_v2;
-use crate::error::Error;
 use crate::{
     atoms, doc::NifDoc, shared_type::NifSharedType, transaction::TransactionResource,
     utils::normalize_index, wrap::SliceIntoBinary, yinput::NifSharedTypeInput,
@@ -204,7 +201,7 @@ fn sticky_index_decode_v1(
     binary: rustler::types::Binary<'_>,
 ) -> NifResult<NifStickyIndex> {
     let _ = env;
-    let sticky_index_ref = StickyIndex::decode_v1(binary.as_slice()).map_err(Error::from)?;
+    let sticky_index_ref = crate::wire::sticky_index_v1(binary.as_slice())?;
 
     Ok(NifStickyIndex {
         doc,
@@ -227,7 +224,7 @@ fn sticky_index_decode_v2(
     binary: rustler::types::Binary<'_>,
 ) -> NifResult<NifStickyIndex> {
     let _ = env;
-    let sticky_index_ref = catch_decode_v2(|| StickyIndex::decode_v2(binary.as_slice()))?;
+    let sticky_index_ref = crate::wire::sticky_index_v2(binary.as_slice())?;
 
     Ok(NifStickyIndex {
         doc,
