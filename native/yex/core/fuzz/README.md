@@ -1,8 +1,8 @@
 # yex-core fuzz targets
 
 Fuzzes `yex_core::wire`, the only place the NIF decodes and applies bytes from outside.
-A finding is a panic that escapes `wire` or an abort, since in the NIF either one reaches
-the Elixir caller.
+A finding is a panic that escapes `wire` or an abort. In the NIF an escaped panic raises
+in the Elixir caller, and an abort terminates the whole BEAM VM.
 
 ```sh
 cd native/yex/core

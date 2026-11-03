@@ -8,7 +8,8 @@
 //!    `{:error, {:encoding_exception, msg}}` instead of unwinding into the NIF caller;
 //! 2. applies the checks yrs 0.28 leaves out (trailing bytes for v1, the 53-bit client id
 //!    range for awareness);
-//! 3. maps every failure to [Error::Encoding].
+//! 3. maps decoding and panic failures to [Error::Encoding], and failures yrs reports
+//!    from `apply` on an update that decoded cleanly to [Error::Update].
 //!
 //! `clippy.toml` disallows the raw yrs entry points everywhere else, so a new NIF cannot
 //! skip this module by accident.

@@ -31,9 +31,10 @@ jobs:
       env:
         CARGO_PROFILE_RELEASE_LTO: 'false'
         ASAN_OPTIONS: allocator_may_return_null=1
+        FUZZ_SECONDS: ${{ github.event.inputs.seconds || '300' }}
       run: >
         cargo +nightly fuzz run -O ${{ matrix.target }} --
-        -max_total_time=${{ github.event.inputs.seconds || '300' }}
+        -max_total_time="$FUZZ_SECONDS"
         -malloc_limit_mb=65536 -rss_limit_mb=4096
     - name: Upload findings
       if: failure()
