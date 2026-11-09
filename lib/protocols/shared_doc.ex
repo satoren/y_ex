@@ -262,18 +262,34 @@ defmodule Yex.Sync.SharedDoc do
 
   def handle_info({@delayed_auto_exit, _stale_ref}, state), do: {:noreply, state}
 
-  def handle_info(@flush, state), do: {:noreply, assign(state, flush(state))}
+  # A failing flush, say a storage outage, must not stop the document: it is
+  # logged and retried after another interval.
+  def handle_info(@flush, state) do
+    case safe_flush(state) do
+      {:ok, persistence_state} ->
+        {:noreply, assign(state, %{persistence_state: persistence_state, flush_scheduled: false})}
+
+      :error ->
+        Process.send_after(self(), @flush, state.assigns.flush_interval)
+        {:noreply, state}
+    end
+  end
 
   # Exits are trapped with :flush_interval. The parent's exit is handled by
   # GenServer; other linked processes keep the effect of a plain link.
   def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
   def handle_info({:EXIT, _pid, reason}, state), do: {:stop, reason, state}
 
-  defp flush(%{assigns: assigns} = state) do
-    persistence_state =
-      assigns.persistence.flush(assigns.persistence_state, assigns.doc_name, state.doc)
+  defp safe_flush(%{assigns: assigns} = state) do
+    {:ok, assigns.persistence.flush(assigns.persistence_state, assigns.doc_name, state.doc)}
+  catch
+    kind, reason ->
+      Logger.error(
+        "Failed to flush #{inspect(assigns.doc_name)}: " <>
+          Exception.format(kind, reason, __STACKTRACE__)
+      )
 
-    %{persistence_state: persistence_state, flush_scheduled: false}
+      :error
   end
 
   # An exit already pending is kept: a duplicate departure does not restart it.
@@ -393,16 +409,11 @@ defmodule Yex.Sync.SharedDoc do
     # Changes still waiting for their flush are not lost on exit. A failing
     # flush must not prevent unbind/3.
     assigns =
-      if assigns.flush_scheduled do
-        try do
-          %{assigns | persistence_state: flush(state).persistence_state}
-        rescue
-          error ->
-            Logger.error("Failed to flush on terminate: #{Exception.message(error)}")
-            assigns
-        end
+      with true <- assigns.flush_scheduled,
+           {:ok, persistence_state} <- safe_flush(state) do
+        %{assigns | persistence_state: persistence_state}
       else
-        assigns
+        _ -> assigns
       end
 
     if function_exported?(assigns.persistence, :unbind, 3) do
@@ -480,6 +491,9 @@ defmodule Yex.Sync.SharedDoc do
     Use it to save the document regularly instead of only at `unbind/3`. Changes
     still waiting for their flush when the SharedDoc stops are flushed before
     `unbind/3`, which is still invoked on exit.
+
+    A flush that raises, throws or exits is logged and retried after another
+    interval; the SharedDoc keeps running.
 
     ## Examples save the state to the filesystem
         def flush(state, doc_name, doc) do

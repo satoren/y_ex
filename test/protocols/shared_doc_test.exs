@@ -519,14 +519,19 @@ defmodule Yex.Sync.SharedDocTest do
     defmodule FailingFlushPersistence do
       @behaviour Yex.Sync.SharedDoc.PersistenceBehaviour
 
-      def bind(test_pid, _doc_name, _doc), do: test_pid
+      def bind(arg, _doc_name, _doc), do: arg
 
-      def flush(test_pid, _doc_name, _doc) do
+      def flush({test_pid, kind}, _doc_name, _doc) do
         send(test_pid, :flush_called)
-        raise "flush failed"
+
+        case kind do
+          :error -> raise "flush failed"
+          :throw -> throw(:flush_failed)
+          :exit -> exit(:flush_failed)
+        end
       end
 
-      def unbind(test_pid, _doc_name, _doc), do: send(test_pid, :unbound)
+      def unbind({test_pid, _kind}, _doc_name, _doc), do: send(test_pid, :unbound)
     end
 
     defp start_flushing(flush_interval, start \\ :start_link) do
@@ -596,21 +601,41 @@ defmodule Yex.Sync.SharedDocTest do
     end
 
     @tag :capture_log
-    test "unbind is still called when flush fails" do
+    test "keeps running and retries when a flush fails" do
       {:ok, pid} =
         SharedDoc.start(
           doc_name: random_docname(),
-          persistence: {FailingFlushPersistence, self()},
+          persistence: {FailingFlushPersistence, {self(), :error}},
           flush_interval: 10
         )
 
-      ref = Process.monitor(pid)
       :ok = SharedDoc.observe(pid)
       push(pid, "a")
 
-      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 500
-      assert_received :flush_called
-      assert_received :unbound
+      assert_receive :flush_called, 500
+      assert_receive :flush_called, 500
+      assert Process.alive?(pid)
+    end
+
+    for kind <- [:error, :throw, :exit] do
+      @tag :capture_log
+      test "unbind is still called when the final flush fails with #{kind}" do
+        {:ok, pid} =
+          SharedDoc.start(
+            doc_name: random_docname(),
+            persistence: {FailingFlushPersistence, {self(), unquote(kind)}},
+            flush_interval: 10_000
+          )
+
+        ref = Process.monitor(pid)
+        :ok = SharedDoc.observe(pid)
+        push(pid, "a")
+        :ok = SharedDoc.unobserve(pid)
+
+        assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 500
+        assert_received :flush_called
+        assert_received :unbound
+      end
     end
 
     test "flushes pending changes when its supervisor shuts it down" do
