@@ -16,6 +16,7 @@ defmodule Yex.Sync.SharedDoc do
   @default_auto_exit_timeout 5_000
   @auto_exit_check {__MODULE__, :auto_exit_check}
   @delayed_auto_exit {__MODULE__, :delayed_auto_exit}
+  @flush {__MODULE__, :flush}
 
   @typedoc """
   Launch Parameters
@@ -25,6 +26,7 @@ defmodule Yex.Sync.SharedDoc do
     * `:auto_exit` - Automatically terminate the SharedDoc process when there is no longer a process to receive update notifications.
     * `:auto_exit_timeout` - With `:auto_exit`, how long (in milliseconds) to wait for the first observer after start before terminating. Defaults to 5000. `:infinity` disables this check.
     * `:auto_exit_delay` - With `:auto_exit`, how long (in milliseconds) to wait after the last observer left before terminating. An observer joining in the meantime cancels it, which avoids reloading the document when a client reconnects. Defaults to 0: terminate immediately.
+    * `:flush_interval` - With a persistence implementing `c:PersistenceBehaviour.flush/3`, how long (in milliseconds) a change to the document waits before `flush/3` is called. The changes made in the meantime are flushed together, and nothing is flushed while the document does not change. Changes still pending are flushed when the SharedDoc stops, including on a supervisor's shutdown: the process traps exits when this is set. Defaults to `nil`: `flush/3` is never called.
     * `:doc_option` - Options for the document.
 
   """
@@ -34,6 +36,7 @@ defmodule Yex.Sync.SharedDoc do
           | {:auto_exit, boolean()}
           | {:auto_exit_timeout, timeout()}
           | {:auto_exit_delay, non_neg_integer()}
+          | {:flush_interval, pos_integer() | nil}
           | {:doc_option, Yex.Doc.Options.t()}
 
   @doc """
@@ -149,10 +152,16 @@ defmodule Yex.Sync.SharedDoc do
           auto_exit: auto_exit,
           auto_exit_delay: Keyword.get(option, :auto_exit_delay, 0),
           delayed_auto_exit: nil,
+          flush_interval: Keyword.get(option, :flush_interval),
+          flush_scheduled: false,
           observer_process: %{},
           origin_client_map: %{}
         }
       )
+
+    # A supervisor's shutdown only reaches terminate/2, which flushes pending
+    # changes, when exits are trapped.
+    if is_integer(state.assigns.flush_interval), do: Process.flag(:trap_exit, true)
 
     # With auto_exit, stop if no process has observed the document by the timeout.
     case Keyword.get(option, :auto_exit_timeout, @default_auto_exit_timeout) do
@@ -253,6 +262,36 @@ defmodule Yex.Sync.SharedDoc do
 
   def handle_info({@delayed_auto_exit, _stale_ref}, state), do: {:noreply, state}
 
+  # A failing flush, say a storage outage, must not stop the document: it is
+  # logged and retried after another interval.
+  def handle_info(@flush, state) do
+    case safe_flush(state) do
+      {:ok, persistence_state} ->
+        {:noreply, assign(state, %{persistence_state: persistence_state, flush_scheduled: false})}
+
+      :error ->
+        Process.send_after(self(), @flush, state.assigns.flush_interval)
+        {:noreply, state}
+    end
+  end
+
+  # Exits are trapped with :flush_interval. The parent's exit is handled by
+  # GenServer; other linked processes keep the effect of a plain link.
+  def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
+  def handle_info({:EXIT, _pid, reason}, state), do: {:stop, reason, state}
+
+  defp safe_flush(%{assigns: assigns} = state) do
+    {:ok, assigns.persistence.flush(assigns.persistence_state, assigns.doc_name, state.doc)}
+  catch
+    kind, reason ->
+      Logger.error(
+        "Failed to flush #{inspect(assigns.doc_name)}: " <>
+          Exception.format(kind, reason, __STACKTRACE__)
+      )
+
+      :error
+  end
+
   # An exit already pending is kept: a duplicate departure does not restart it.
   defp delay_auto_exit(%{assigns: %{delayed_auto_exit: ref}} = state) when ref != nil, do: state
 
@@ -339,6 +378,8 @@ defmodule Yex.Sync.SharedDoc do
         state
       end
 
+    state = schedule_flush(state)
+
     with {:ok, s} <- Sync.get_update(update),
          {:ok, message} <- Sync.message_encode({:sync, s}) do
       broadcast_to_users(message, origin, state)
@@ -350,8 +391,31 @@ defmodule Yex.Sync.SharedDoc do
     {:noreply, state}
   end
 
+  # Flushes once per interval at most, and only after a change.
+  defp schedule_flush(%{assigns: %{flush_interval: interval, flush_scheduled: false}} = state)
+       when is_integer(interval) do
+    if function_exported?(state.assigns.persistence, :flush, 3) do
+      Process.send_after(self(), @flush, interval)
+      assign(state, :flush_scheduled, true)
+    else
+      state
+    end
+  end
+
+  defp schedule_flush(state), do: state
+
   @impl true
   def terminate(_reason, %{assigns: assigns} = state) do
+    # Changes still waiting for their flush are not lost on exit. A failing
+    # flush must not prevent unbind/3.
+    assigns =
+      with true <- assigns.flush_scheduled,
+           {:ok, persistence_state} <- safe_flush(state) do
+        %{assigns | persistence_state: persistence_state}
+      else
+        _ -> assigns
+      end
+
     if function_exported?(assigns.persistence, :unbind, 3) do
       state.assigns.persistence.unbind(assigns.persistence_state, assigns.doc_name, state.doc)
     end
@@ -419,6 +483,26 @@ defmodule Yex.Sync.SharedDoc do
                 doc :: Doc.t()
               ) :: term()
 
-    @optional_callbacks update_v1: 4, unbind: 3
+    @doc """
+    Invoked periodically while the document changes, with the `:flush_interval`
+    launch parameter: at most once per interval, and only if the document
+    changed since the previous call.
+
+    Use it to save the document regularly instead of only at `unbind/3`. Changes
+    still waiting for their flush when the SharedDoc stops are flushed before
+    `unbind/3`, which is still invoked on exit.
+
+    A flush that raises, throws or exits is logged and retried after another
+    interval; the SharedDoc keeps running.
+
+    ## Examples save the state to the filesystem
+        def flush(state, doc_name, doc) do
+          File.write!("path/to/" <> doc_name, Yex.encode_state_as_update!(doc))
+          state
+        end
+    """
+    @callback flush(state :: term(), doc_name :: String.t(), doc :: Doc.t()) :: term()
+
+    @optional_callbacks update_v1: 4, unbind: 3, flush: 3
   end
 end
