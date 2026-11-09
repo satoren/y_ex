@@ -508,16 +508,15 @@ defmodule Yex.Sync.SharedDocTest do
     # Sends `count` awareness updates of one client from another process, so
     # that the calling process, observing, receives the broadcasts.
     defp send_awareness_updates(pid, count) do
-      Task.async(fn ->
-        {:ok, awareness} = Awareness.new(Doc.new())
-
-        # The updates all reach the mailbox before the first one opens the
-        # window, so they fall in it however slow the machine is.
-        while_suspended(pid, fn ->
-          for n <- 1..count, do: send_awareness_update(pid, awareness, "#{n}")
-        end)
-      end)
+      # The updates all reach the mailbox before the first one opens the
+      # window, so they fall in it however slow the machine is.
+      Task.async(fn -> while_suspended(pid, fn -> send_cursors(pid, count) end) end)
       |> Task.await()
+    end
+
+    defp send_cursors(pid, count) do
+      {:ok, awareness} = Awareness.new(Doc.new())
+      for n <- 1..count, do: send_awareness_update(pid, awareness, "#{n}")
     end
 
     defp send_awareness_update(pid, awareness, cursor) do
