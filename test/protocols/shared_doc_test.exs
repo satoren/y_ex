@@ -529,13 +529,15 @@ defmodule Yex.Sync.SharedDocTest do
       def unbind(test_pid, _doc_name, _doc), do: send(test_pid, :unbound)
     end
 
-    defp start_flushing(flush_interval) do
+    defp start_flushing(flush_interval, start \\ :start_link) do
       {:ok, pid} =
-        SharedDoc.start_link(
-          doc_name: random_docname(),
-          persistence: {FlushPersistence, self()},
-          flush_interval: flush_interval
-        )
+        apply(SharedDoc, start, [
+          [
+            doc_name: random_docname(),
+            persistence: {FlushPersistence, self()},
+            flush_interval: flush_interval
+          ]
+        ])
 
       :ok = SharedDoc.observe(pid)
       pid
@@ -609,6 +611,54 @@ defmodule Yex.Sync.SharedDocTest do
       assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 500
       assert_received :flush_called
       assert_received :unbound
+    end
+
+    test "flushes pending changes when its supervisor shuts it down" do
+      test_pid = self()
+      {:ok, sup} = DynamicSupervisor.start_link(strategy: :one_for_one)
+
+      {:ok, pid} =
+        DynamicSupervisor.start_child(
+          sup,
+          {SharedDoc,
+           [
+             doc_name: random_docname(),
+             persistence: {FlushPersistence, test_pid},
+             flush_interval: 10_000,
+             auto_exit: false
+           ]}
+        )
+
+      push(pid, "a")
+      _ = :sys.get_state(pid)
+      :ok = DynamicSupervisor.terminate_child(sup, pid)
+
+      assert_received {:flushed, ["a"]}
+    end
+
+    @tag :capture_log
+    test "still stops when a linked process crashes" do
+      pid = start_flushing(10_000, :start)
+      ref = Process.monitor(pid)
+      linked = spawn(fn -> receive(do: (:crash -> exit(:crashed))) end)
+      :sys.replace_state(pid, fn state -> Process.link(linked) && state end)
+
+      send(linked, :crash)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :crashed}, 500
+    end
+
+    test "keeps running when a linked process exits normally" do
+      pid = start_flushing(10_000)
+      linked = spawn(fn -> receive(do: (:stop -> :ok)) end)
+      :sys.replace_state(pid, fn state -> Process.link(linked) && state end)
+      linked_ref = Process.monitor(linked)
+
+      send(linked, :stop)
+      assert_receive {:DOWN, ^linked_ref, :process, ^linked, :normal}, 500
+
+      _ = :sys.get_state(pid)
+      assert Process.alive?(pid)
     end
 
     test "never flushes without flush_interval" do
