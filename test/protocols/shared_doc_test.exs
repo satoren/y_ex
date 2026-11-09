@@ -511,13 +511,35 @@ defmodule Yex.Sync.SharedDocTest do
       Task.async(fn ->
         {:ok, awareness} = Awareness.new(Doc.new())
 
-        for n <- 1..count do
-          Awareness.set_local_state(awareness, %{"cursor" => "#{n}"})
-          {:ok, update} = Awareness.encode_update(awareness, [Awareness.client_id(awareness)])
-          SharedDoc.send_yjs_message(pid, Sync.message_encode!({:awareness, update}))
-        end
+        # The updates all reach the mailbox before the first one opens the
+        # window, so they fall in it however slow the machine is.
+        while_suspended(pid, fn ->
+          for n <- 1..count, do: send_awareness_update(pid, awareness, "#{n}")
+        end)
       end)
       |> Task.await()
+    end
+
+    defp send_awareness_update(pid, awareness, cursor) do
+      Awareness.set_local_state(awareness, %{"cursor" => cursor})
+      {:ok, update} = Awareness.encode_update(awareness, [Awareness.client_id(awareness)])
+      SharedDoc.send_yjs_message(pid, Sync.message_encode!({:awareness, update}))
+    end
+
+    defp while_suspended(pid, fun) do
+      :sys.suspend(pid)
+
+      try do
+        fun.()
+      after
+        :sys.resume(pid)
+      end
+    end
+
+    defp cursors(message) do
+      {:ok, observer} = Awareness.new(Doc.new())
+      Awareness.apply_update(observer, elem(Sync.message_decode!(message), 1))
+      observer |> Awareness.get_states() |> Map.values() |> Enum.map(& &1["cursor"])
     end
 
     defp receive_awareness_broadcasts(timeout) do
@@ -540,9 +562,7 @@ defmodule Yex.Sync.SharedDocTest do
       [first, _last] = receive_awareness_broadcasts(300)
 
       # The first broadcast carries only the first update.
-      {:ok, observer} = Awareness.new(Doc.new())
-      Awareness.apply_update(observer, elem(Sync.message_decode!(first), 1))
-      assert [%{"cursor" => "1"}] = Map.values(Awareness.get_states(observer))
+      assert cursors(first) == ["1"]
     end
 
     test "broadcasts the latest state at the end of the window" do
@@ -552,39 +572,49 @@ defmodule Yex.Sync.SharedDocTest do
       send_awareness_updates(pid, 3)
       [_first, last] = receive_awareness_broadcasts(300)
 
-      {:ok, observer} = Awareness.new(Doc.new())
-      Awareness.apply_update(observer, elem(Sync.message_decode!(last), 1))
-      assert [%{"cursor" => "3"}] = Map.values(Awareness.get_states(observer))
+      assert cursors(last) == ["3"]
     end
 
     test "the window's only origin does not receive its own updates back" do
       {:ok, pid} = SharedDoc.start_link(doc_name: random_docname(), awareness_throttle: 100)
       :ok = SharedDoc.observe(pid)
 
-      send_own_awareness_update = fn awareness, cursor ->
-        Awareness.set_local_state(awareness, %{"cursor" => cursor})
-        {:ok, update} = Awareness.encode_update(awareness, [Awareness.client_id(awareness)])
-        SharedDoc.send_yjs_message(pid, Sync.message_encode!({:awareness, update}))
-      end
+      test_pid = self()
 
-      # Opens the window from the test process.
-      {:ok, awareness} = Awareness.new(Doc.new())
-      send_own_awareness_update.(awareness, "0")
-
-      # Another observer is the only origin of the window's updates.
-      received =
+      # Another observer, the only origin of the window's updates.
+      task =
         Task.async(fn ->
           :ok = SharedDoc.observe(pid)
+          send(test_pid, :observing)
           {:ok, awareness} = Awareness.new(Doc.new())
-          send_own_awareness_update.(awareness, "1")
-          send_own_awareness_update.(awareness, "2")
+
+          receive do
+            :go ->
+              send_awareness_update(pid, awareness, "1")
+              send_awareness_update(pid, awareness, "2")
+              send(test_pid, :sent)
+          end
+
           receive_awareness_broadcasts(300)
         end)
-        |> Task.await()
 
-      assert received == []
-      # The test process got the window's updates (then the task's removal).
-      assert [_ | _] = receive_awareness_broadcasts(100)
+      assert_receive :observing, 1_000
+
+      # The test process opens the window, and the task's updates reach the
+      # mailbox before it is processed, so they fall in the window.
+      {:ok, awareness} = Awareness.new(Doc.new())
+
+      while_suspended(pid, fn ->
+        send_awareness_update(pid, awareness, "0")
+        send(task.pid, :go)
+        assert_receive :sent, 1_000
+      end)
+
+      # The task only got the update opening the window, not its own back.
+      assert task |> Task.await() |> Enum.map(&cursors/1) == [["0"]]
+      # The test process got the window's updates.
+      assert [window | _] = receive_awareness_broadcasts(100)
+      assert cursors(window) == ["2"]
     end
 
     test "broadcasts every update without awareness_throttle" do
