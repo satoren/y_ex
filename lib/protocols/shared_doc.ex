@@ -16,6 +16,7 @@ defmodule Yex.Sync.SharedDoc do
   @default_auto_exit_timeout 5_000
   @auto_exit_check {__MODULE__, :auto_exit_check}
   @delayed_auto_exit {__MODULE__, :delayed_auto_exit}
+  @awareness_flush {__MODULE__, :awareness_flush}
 
   @typedoc """
   Launch Parameters
@@ -25,6 +26,7 @@ defmodule Yex.Sync.SharedDoc do
     * `:auto_exit` - Automatically terminate the SharedDoc process when there is no longer a process to receive update notifications.
     * `:auto_exit_timeout` - With `:auto_exit`, how long (in milliseconds) to wait for the first observer after start before terminating. Defaults to 5000. `:infinity` disables this check.
     * `:auto_exit_delay` - With `:auto_exit`, how long (in milliseconds) to wait after the last observer left before terminating. An observer joining in the meantime cancels it, which avoids reloading the document when a client reconnects. Defaults to 0: terminate immediately.
+    * `:awareness_throttle` - Window (in milliseconds) in which awareness updates are batched. The first update is broadcast immediately; the clients updated during the following window are then broadcast together in a single message. This bounds the number of messages when clients move their cursor quickly. Defaults to 0: every update is broadcast immediately.
     * `:doc_option` - Options for the document.
 
   """
@@ -34,6 +36,7 @@ defmodule Yex.Sync.SharedDoc do
           | {:auto_exit, boolean()}
           | {:auto_exit_timeout, timeout()}
           | {:auto_exit_delay, non_neg_integer()}
+          | {:awareness_throttle, non_neg_integer()}
           | {:doc_option, Yex.Doc.Options.t()}
 
   @doc """
@@ -149,6 +152,8 @@ defmodule Yex.Sync.SharedDoc do
           auto_exit: auto_exit,
           auto_exit_delay: Keyword.get(option, :auto_exit_delay, 0),
           delayed_auto_exit: nil,
+          awareness_throttle: Keyword.get(option, :awareness_throttle, 0),
+          awareness_pending: nil,
           observer_process: %{},
           origin_client_map: %{}
         }
@@ -253,6 +258,17 @@ defmodule Yex.Sync.SharedDoc do
 
   def handle_info({@delayed_auto_exit, _stale_ref}, state), do: {:noreply, state}
 
+  # End of an awareness window: broadcasts the clients updated during it, in a
+  # single message. Updates from different origins are sent to every observer.
+  def handle_info(@awareness_flush, %{assigns: %{awareness_pending: {clients, origin}}} = state) do
+    if MapSet.size(clients) > 0 do
+      origin = if origin in [:mixed, :none], do: nil, else: origin
+      broadcast_awareness(state.awareness, MapSet.to_list(clients), origin, state)
+    end
+
+    {:noreply, assign(state, :awareness_pending, nil)}
+  end
+
   # An exit already pending is kept: a duplicate departure does not restart it.
   defp delay_auto_exit(%{assigns: %{delayed_auto_exit: ref}} = state) when ref != nil, do: state
 
@@ -277,23 +293,42 @@ defmodule Yex.Sync.SharedDoc do
   @impl true
   def handle_awareness_update(
         awareness,
-        %{removed: removed, added: added, updated: updated},
+        %{removed: removed, added: added, updated: updated} = event,
         origin,
         state
       ) do
     updated_clients = added ++ updated ++ removed
+    state = update_origin_client_map(state, origin, event)
 
-    with {:ok, update} <- Awareness.encode_update(awareness, updated_clients),
+    case state.assigns do
+      %{awareness_throttle: 0} ->
+        broadcast_awareness(awareness, updated_clients, origin, state)
+        {:noreply, state}
+
+      # A window is open: the update waits for its end.
+      %{awareness_pending: {clients, pending_origin}} ->
+        pending = {
+          MapSet.union(clients, MapSet.new(updated_clients)),
+          if(pending_origin in [:none, origin], do: origin, else: :mixed)
+        }
+
+        {:noreply, assign(state, :awareness_pending, pending)}
+
+      %{awareness_throttle: throttle} ->
+        broadcast_awareness(awareness, updated_clients, origin, state)
+        Process.send_after(self(), @awareness_flush, throttle)
+        # The window starts empty: the update above was already broadcast, so
+        # its origin does not count.
+        {:noreply, assign(state, :awareness_pending, {MapSet.new(), :none})}
+    end
+  end
+
+  defp broadcast_awareness(awareness, clients, origin, state) do
+    with {:ok, update} <- Awareness.encode_update(awareness, clients),
          {:ok, message} <- Sync.message_encode({:awareness, update}) do
       broadcast_to_users(message, origin, state)
-
-      {:noreply,
-       state
-       |> update_origin_client_map(origin, %{removed: removed, added: added, updated: updated})}
     else
-      error ->
-        Logger.log(:warning, error)
-        {:noreply, state}
+      error -> Logger.log(:warning, error)
     end
   end
 
