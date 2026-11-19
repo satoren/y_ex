@@ -21,7 +21,71 @@ defmodule Yex.MixProject do
       deps: deps(),
       source_url: @repo,
       homepage_url: @repo,
+      docs: docs(),
       test_coverage: [tool: ExCoveralls]
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_ref: "v#{@version}",
+      extras: ["README.md", "LICENSE"],
+      groups_for_modules: [
+        Document: [
+          Yex,
+          Yex.Doc,
+          Yex.Doc.Options,
+          Yex.Snapshot,
+          Yex.StickyIndex,
+          Yex.Subscription
+        ],
+        "Shared types": [
+          Yex.SharedType,
+          Yex.PrelimType,
+          Yex.Output,
+          Yex.Text,
+          Yex.TextPrelim,
+          Yex.Array,
+          Yex.ArrayPrelim,
+          Yex.Map,
+          Yex.MapPrelim,
+          Yex.WeakLink,
+          Yex.WeakPrelim,
+          Yex.Buffer
+        ],
+        XML: [
+          Yex.Xml,
+          Yex.XmlFragment,
+          Yex.XmlFragmentPrelim,
+          Yex.XmlElement,
+          Yex.XmlElementPrelim,
+          Yex.XmlText,
+          Yex.XmlTextPrelim
+        ],
+        Events: [
+          Yex.ArrayEvent,
+          Yex.MapEvent,
+          Yex.TextEvent,
+          Yex.XmlEvent,
+          Yex.XmlTextEvent,
+          Yex.TransactionCleanupEvent
+        ],
+        "Undo manager": [
+          Yex.UndoManager,
+          Yex.UndoManager.Options,
+          Yex.UndoManager.StackItemEvent,
+          Yex.UndoManager.StackClearedEvent
+        ],
+        Protocols: [
+          Yex.Sync,
+          Yex.Sync.SharedDoc,
+          Yex.Sync.SharedDoc.PersistenceBehaviour,
+          Yex.Awareness
+        ],
+        Server: [Yex.DocServer, Yex.DocServer.State],
+        Errors: [Yex.DeletedSharedTypeError, Yex.TransactionAcqError]
+      ]
     ]
   end
 

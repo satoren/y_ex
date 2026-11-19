@@ -1,11 +1,11 @@
 # Yex
 
 [![CI](https://github.com/satoren/y_ex/actions/workflows/elixir.yml/badge.svg)](https://github.com/satoren/y_ex/actions/workflows/elixir.yml)
-[![Coverage Status](https://coveralls.io/repos/satoren/y_ex/badge.svg?branch=main)](https://coveralls.io/r/satoren/y_ex?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/satoren/y_ex/badge.svg?branch=main)](https://coveralls.io/github/satoren/y_ex?branch=main)
 [![hex.pm version](https://img.shields.io/hexpm/v/y_ex.svg)](https://hex.pm/packages/y_ex)
 [![hex.pm downloads](https://img.shields.io/hexpm/dt/y_ex.svg)](https://hex.pm/packages/y_ex)
-[![hex.pm license](https://img.shields.io/hexpm/l/y_ex.svg)](https://github.com/satoren/y_ex/blob/master/LICENSE)
-[![Last Updated](https://img.shields.io/github/last-commit/satoren/y_ex.svg)](https://github.com/satoren/y_ex/commits/master)
+[![hex.pm license](https://img.shields.io/hexpm/l/y_ex.svg)](https://github.com/satoren/y_ex/blob/main/LICENSE)
+[![Last Updated](https://img.shields.io/github/last-commit/satoren/y_ex.svg)](https://github.com/satoren/y_ex/commits/main)
 
 [Yjs](https://yjs.dev/) port for Elixir using [y-crdt](https://github.com/y-crdt/y-crdt)
 
@@ -17,7 +17,7 @@ A demo using the phoenix framework can be found [here](https://github.com/satore
 ```elixir
 def deps do
   [
-    {:y_ex, "~> 0.6.0"}
+    {:y_ex, "~> 0.13.0"}
   ]
 end
 ```
@@ -26,7 +26,7 @@ end
 ## Feature parity
 
 
-|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.18)               |                y_ex<br/>(0.10.2)               | 
+|                                         |                  yjs <br/>(13.6)                  |               yrs<br/>(0.28)               |                y_ex<br/>(0.13)               | 
 |-----------------------------------------|:-------------------------------------------------:|:------------------------------------------:|:------------------------------------------:|
 | YText: insert/delete                    |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
 | YText: formatting attributes and deltas |                     &#x2705;                      |                  &#x2705;                  |                  &#x2705;                  |
