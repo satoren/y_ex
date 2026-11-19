@@ -16,7 +16,11 @@ defmodule Yex.Nif do
         otp_app: :y_ex,
         crate: "yex",
         base_url: "https://github.com/satoren/y_ex/releases/download/v#{version}",
-        version: version
+        version: version,
+        # Set explicitly so the release does not depend on the rustler_precompiled default
+        # (2.15 and 2.16 before 0.7.0). Keep in sync with the release workflow's matrix.
+        # 2.15 loads on OTP 22 and later.
+        nif_versions: ["2.15"]
       ] ++ force_build
 
   # Inputs above this take the DirtyCpu twins. Dirty CPU schedulers are a fixed pool

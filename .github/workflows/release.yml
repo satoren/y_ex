@@ -18,8 +18,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Keep in sync with the :nif_versions of Yex.Nif (the rustler_precompiled default,
-        # ["2.15"]). Builds for versions not listed there are never downloaded.
+        # Keep in sync with the :nif_versions of Yex.Nif. Builds for versions not listed
+        # there are never downloaded.
         nif: ["2.15"]
         job:
           - {
