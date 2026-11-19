@@ -16,10 +16,7 @@ defmodule Yex.Nif do
         otp_app: :y_ex,
         crate: "yex",
         base_url: "https://github.com/satoren/y_ex/releases/download/v#{version}",
-        version: version,
-        # Keep in sync with the release workflow's matrix. 2.16 covers OTP 24-25 (the
-        # oldest OTP that Elixir 1.16 supports), 2.17 OTP 26-28 and 2.18 OTP 29+.
-        nif_versions: ["2.16", "2.17", "2.18"]
+        version: version
       ] ++ force_build
 
   # Inputs above this take the DirtyCpu twins. Dirty CPU schedulers are a fixed pool
