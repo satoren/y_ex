@@ -27,6 +27,7 @@ defmodule Yex.Sync.SharedDoc do
     * `:auto_exit_timeout` - With `:auto_exit`, how long (in milliseconds) to wait for the first observer after start before terminating. Defaults to 5000. `:infinity` disables this check.
     * `:auto_exit_delay` - With `:auto_exit`, how long (in milliseconds) to wait after the last observer left before terminating. An observer joining in the meantime cancels it, which avoids reloading the document when a client reconnects. Defaults to 0: terminate immediately.
     * `:awareness_throttle` - Window (in milliseconds) in which awareness updates are batched. The first update is broadcast immediately; the clients updated during the following window are then broadcast together in a single message. This bounds the number of messages when clients move their cursor quickly. Defaults to 0: every update is broadcast immediately.
+    * `:trap_exit` - Trap exit signals, so that `terminate/2`, and with it the persistence's `unbind/3`, also runs when the SharedDoc is shut down by its supervisor, for example when the application stops. Without it, the shutdown kills the process and `unbind/3` is not called. Exits of linked processes keep their usual effect: a normal exit is ignored, any other stops the SharedDoc with the same reason. However, a SharedDoc started with `start_link` then also stops when its parent process exits normally. Defaults to `false`.
     * `:doc_option` - Options for the document.
 
   """
@@ -37,6 +38,7 @@ defmodule Yex.Sync.SharedDoc do
           | {:auto_exit_timeout, timeout()}
           | {:auto_exit_delay, non_neg_integer()}
           | {:awareness_throttle, non_neg_integer()}
+          | {:trap_exit, boolean()}
           | {:doc_option, Yex.Doc.Options.t()}
 
   @doc """
@@ -135,9 +137,8 @@ defmodule Yex.Sync.SharedDoc do
 
     # Exit signals (e.g. `:shutdown` from the supervisor when the application
     # stops) kill a process that does not trap them, without `terminate/2`.
-    # Trap them so that `unbind/3` still persists the document. Only done when
-    # needed, see the `:EXIT` clause of `handle_info/2` for linked processes.
-    if function_exported?(persistence, :unbind, 3) do
+    # See the `:EXIT` clauses of `handle_info/2` for linked processes.
+    if Keyword.get(option, :trap_exit, false) do
       Process.flag(:trap_exit, true)
     end
 
@@ -249,7 +250,8 @@ defmodule Yex.Sync.SharedDoc do
     end
   end
 
-  # Exit signals are only trapped to persist on shutdown. Exits of linked
+  # With `:trap_exit`, exit signals are trapped to run `terminate/2` on
+  # shutdown. Exits of linked
   # processes keep their usual effect: a normal one is ignored, any other
   # stops the SharedDoc with the same reason. The parent's exit is handled by
   # GenServer itself.
@@ -443,16 +445,13 @@ defmodule Yex.Sync.SharedDoc do
     @doc """
     Invoked to handle SharedDoc terminate.
 
-    It is executed when SharedDoc stops on its own (e.g. with `:auto_exit`),
-    when a callback fails, and when it is shut down by its supervisor, for
-    example when the application stops. Make sure the child's `:shutdown`
-    timeout (5000ms by default) leaves enough time to persist the document.
-    It is not executed when the process is killed (`:brutal_kill`, or
+    It is executed when SharedDoc stops on its own (e.g. with `:auto_exit`)
+    or when a callback fails. To also run it when SharedDoc is shut down by
+    its supervisor, for example when the application stops, start SharedDoc
+    with `trap_exit: true`, and make sure the child's `:shutdown` timeout
+    (5000ms by default) leaves enough time to persist the document.
+    It is never executed when the process is killed (`:brutal_kill`, or
     `Process.exit(pid, :kill)`).
-
-    When this callback is implemented, SharedDoc traps exits so that it runs
-    on shutdown. As a consequence, a SharedDoc started with `start_link` also
-    stops (and persists) when its parent process exits, even normally.
 
     ## Examples save the state to the filesystem
         def unbind(state, doc_name, doc) do

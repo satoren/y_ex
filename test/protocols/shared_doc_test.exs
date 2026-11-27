@@ -347,7 +347,12 @@ defmodule Yex.Sync.SharedDocTest do
 
       opts =
         Keyword.merge(
-          [doc_name: docname, persistence: {PersistenceNotifyTest, self()}, auto_exit: false],
+          [
+            doc_name: docname,
+            persistence: {PersistenceNotifyTest, self()},
+            auto_exit: false,
+            trap_exit: true
+          ],
           opts
         )
 
@@ -406,9 +411,13 @@ defmodule Yex.Sync.SharedDocTest do
       assert_receive {:unbind, ^docname, _update}
     end
 
-    test "exits are not trapped without unbind" do
-      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname())
-      assert {:trap_exit, false} = Process.info(pid, :trap_exit)
+    test "without trap_exit, the supervisor shutdown does not call unbind" do
+      {docname, opts} = start_persisted(trap_exit: false)
+      {:ok, sup} = Supervisor.start_link([{SharedDoc, opts}], strategy: :one_for_one)
+
+      :ok = Supervisor.stop(sup)
+
+      refute_receive {:unbind, ^docname, _update}, 50
     end
   end
 
