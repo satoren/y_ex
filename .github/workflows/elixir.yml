@@ -14,11 +14,19 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request supersedes the running matrix. Pushes to main
+# always run to the end, so every main commit keeps its coverage report.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: Build and test (${{ matrix.os }}, OTP ${{ matrix.pair.otp }}, Elixir ${{ matrix.pair.elixir }})
     runs-on: ${{ matrix.os }}
     strategy:
+      # Let every combination finish, so one failing OTP or OS does not hide the others.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-2022, macos-latest]
         pair:
@@ -64,6 +72,13 @@ jobs:
           restore-keys: ${{ runner.os }}-mix-${{ matrix.pair.otp }}-${{ matrix.pair.elixir }}-
       - name: Install dependencies
         run: mix deps.get
+      # The tests always build the NIF (force_build in config/config.exs). Caching the
+      # compiled dependencies saves most of that build. Only main saves the cache, so
+      # pull requests reuse it without evicting each other's entries.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native/yex
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:

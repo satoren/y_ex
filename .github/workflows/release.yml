@@ -62,11 +62,14 @@ jobs:
         run: |
           # Get the project version from mix.exs
           echo "PROJECT_VERSION=$(sed -n 's/^  @version "\(.*\)"/\1/p' mix.exs | head -n1)" >> $GITHUB_ENV
+          # Build the released NIFs with the Rust version pinned in .tool-versions, the
+          # one the Rust lint job checks, rather than whatever is stable that day.
+          echo "RUST_VERSION=$(awk '$1 == "rust" { print $2 }' .tool-versions)" >> $GITHUB_ENV
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.job.target }}
 
       - name: Build the project
