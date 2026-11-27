@@ -198,8 +198,15 @@ defmodule Yex.Sync.SharedDoc do
     state = do_remove_observer_process(client, state)
 
     case state.assigns.auto_exit_delay do
-      0 -> {:reply, :ok, state, 0}
-      _delay -> {:reply, :ok, delay_auto_exit(state)}
+      0 ->
+        # An explicit check instead of a 0 timeout, which any other message
+        # (e.g. a trapped exit of a linked process) would cancel. A message
+        # already queued, such as a new observer, is still handled first.
+        send(self(), @auto_exit_check)
+        {:reply, :ok, state}
+
+      _delay ->
+        {:reply, :ok, delay_auto_exit(state)}
     end
   end
 
