@@ -195,9 +195,15 @@ defmodule Yex.Sync.SharedDoc do
 
   @impl true
   def handle_call({:unobserve, client}, _from, state) do
+    observed? = Map.has_key?(state.assigns.observer_process, client)
     state = do_remove_observer_process(client, state)
 
     case state.assigns.auto_exit_delay do
+      # A client that was not observing leaves no observer behind: the
+      # initial auto_exit_timeout check still waits for the first observer.
+      _delay when not observed? ->
+        {:reply, :ok, state}
+
       0 ->
         # An explicit check instead of a 0 timeout, which any other message
         # (e.g. a trapped exit of a linked process) would cancel. A message
@@ -264,8 +270,6 @@ defmodule Yex.Sync.SharedDoc do
   # GenServer itself.
   def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
   def handle_info({:EXIT, _pid, reason}, state), do: {:stop, reason, state}
-
-  def handle_info(:timeout, state), do: maybe_auto_exit(state)
 
   # Once observers have come and gone, the delayed exit decides, not the
   # initial check.
