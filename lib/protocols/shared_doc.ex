@@ -286,6 +286,9 @@ defmodule Yex.Sync.SharedDoc do
 
   def handle_info({@delayed_auto_exit, _stale_ref}, state), do: {:noreply, state}
 
+  # Nothing returns a callback timeout: a stray `:timeout` message is ignored.
+  def handle_info(:timeout, state), do: {:noreply, state}
+
   # End of an awareness window: broadcasts the clients updated during it, in a
   # single message. Updates from different origins are sent to every observer.
   def handle_info(@awareness_flush, %{assigns: %{awareness_pending: {clients, origin}}} = state) do

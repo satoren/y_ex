@@ -554,14 +554,14 @@ defmodule Yex.Sync.SharedDocTest do
       assert Process.alive?(pid)
     end
 
-    test "unobserve from a client that was not observing keeps waiting for the first observer" do
-      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_timeout: 200)
-      ref = Process.monitor(pid)
+    test "unobserve from a client that was not observing does not stop it" do
+      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_timeout: :infinity)
 
       :ok = SharedDoc.unobserve(pid)
 
-      refute_receive {:DOWN, ^ref, :process, ^pid, _}, 100
-      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1_000
+      # A queued auto exit check would be handled before this call.
+      _ = :sys.get_state(pid)
+      assert Process.alive?(pid)
     end
 
     test "with auto_exit_delay, unobserve from a client that was not observing schedules no exit" do
@@ -575,6 +575,15 @@ defmodule Yex.Sync.SharedDocTest do
       :ok = SharedDoc.unobserve(pid)
 
       assert delayed_auto_exit(pid) == nil
+    end
+
+    test "ignores a stray :timeout message" do
+      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_timeout: :infinity)
+
+      send(pid, :timeout)
+
+      _ = :sys.get_state(pid)
+      assert Process.alive?(pid)
     end
 
     test "keeps running without observers when auto_exit_timeout is :infinity" do
