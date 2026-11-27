@@ -3,6 +3,8 @@ name = "yex"
 version = "0.7.2"
 authors = []
 edition = "2021"
+# yrs 0.28 uses `if let` guards, stable since 1.95. CI checks this (rust.yml, msrv).
+rust-version = "1.95"
 
 [lib]
 name = "yex"

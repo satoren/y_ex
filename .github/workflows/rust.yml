@@ -4,11 +4,20 @@ on:
       - main
     paths:
       - 'native/**'
+      - '.tool-versions'
+      - '.github/workflows/rust.yml'
   pull_request:
     paths:
       - 'native/**'
+      - '.tool-versions'
+      - '.github/workflows/rust.yml'
   workflow_dispatch:
 
+# A newer push to the same pull request supersedes the running checks. Any other run
+# gets a group of its own, so every push to main is checked.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   lint:
@@ -17,6 +26,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+    # Use the Rust version pinned in .tool-versions (kept current by Renovate), not
+    # whatever the runner image ships, so new lints arrive with a reviewed bump.
+    - name: Read the Rust version
+      run: echo "RUST_VERSION=$(awk '$1 == "rust" { print $2 }' .tool-versions)" >> "$GITHUB_ENV"
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.RUST_VERSION }}
+        components: clippy, rustfmt
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: native/yex
     - name: Run clippy
       run: cargo clippy -- -D warnings
       working-directory: native/yex
@@ -31,3 +52,22 @@ jobs:
       working-directory: native/yex
       env:
         RUSTFLAGS: -C target-feature=+crt-static -C link-arg=-Wl,--unresolved-symbols=ignore-all
+
+  msrv:
+    name: Minimum supported Rust version
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Read rust-version from Cargo.toml
+      run: echo "MSRV=$(sed -n 's/^rust-version = "\(.*\)"/\1/p' native/yex/Cargo.toml)" >> "$GITHUB_ENV"
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.MSRV }}
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: native/yex
+    - name: Check
+      run: cargo check --locked
+      working-directory: native/yex

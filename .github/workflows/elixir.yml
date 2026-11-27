@@ -14,11 +14,20 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request supersedes the running matrix. Any other run
+# (a push to main) gets a group of its own, so every main commit is tested and keeps
+# its coverage report.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build and test (${{ matrix.os }}, OTP ${{ matrix.pair.otp }}, Elixir ${{ matrix.pair.elixir }})
     runs-on: ${{ matrix.os }}
     strategy:
+      # Let every combination finish, so one failing OTP or OS does not hide the others.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-2022, macos-latest]
         pair:
@@ -64,6 +73,21 @@ jobs:
           restore-keys: ${{ runner.os }}-mix-${{ matrix.pair.otp }}-${{ matrix.pair.elixir }}-
       - name: Install dependencies
         run: mix deps.get
+      # The tests always build the NIF (force_build in config/config.exs). Build it with
+      # the Rust version in .tool-versions, which the release uses too.
+      - name: Read the Rust version
+        shell: bash
+        run: echo "RUST_VERSION=$(awk '$1 == "rust" { print $2 }' .tool-versions)" >> "$GITHUB_ENV"
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      # Caching the compiled dependencies saves most of the NIF build. Only main saves
+      # the cache, so pull requests reuse it without evicting each other's entries.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native/yex
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
@@ -105,6 +129,17 @@ jobs:
           restore-keys: ${{ runner.os }}-mix-lint-
       - name: Install dependencies
         run: mix deps.get
+      # dialyzer and docs compile the project, which builds the NIF.
+      - name: Read the Rust version
+        run: echo "RUST_VERSION=$(awk '$1 == "rust" { print $2 }' .tool-versions)" >> "$GITHUB_ENV"
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native/yex
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: format check
         run: mix format --check-formatted
       - name: Run credo
