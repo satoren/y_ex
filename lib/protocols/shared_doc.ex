@@ -133,6 +133,14 @@ defmodule Yex.Sync.SharedDoc do
 
     Code.ensure_loaded(persistence)
 
+    # Exit signals (e.g. `:shutdown` from the supervisor when the application
+    # stops) kill a process that does not trap them, without `terminate/2`.
+    # Trap them so that `unbind/3` still persists the document. Only done when
+    # needed, see the `:EXIT` clause of `handle_info/2` for linked processes.
+    if function_exported?(persistence, :unbind, 3) do
+      Process.flag(:trap_exit, true)
+    end
+
     Awareness.clean_local_state(awareness)
 
     persistence_state =
@@ -240,6 +248,13 @@ defmodule Yex.Sync.SharedDoc do
       _delay -> {:noreply, delay_auto_exit(state)}
     end
   end
+
+  # Exit signals are only trapped to persist on shutdown. Exits of linked
+  # processes keep their usual effect: a normal one is ignored, any other
+  # stops the SharedDoc with the same reason. The parent's exit is handled by
+  # GenServer itself.
+  def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
+  def handle_info({:EXIT, _pid, reason}, state), do: {:stop, reason, state}
 
   def handle_info(:timeout, state), do: maybe_auto_exit(state)
 
@@ -428,7 +443,16 @@ defmodule Yex.Sync.SharedDoc do
     @doc """
     Invoked to handle SharedDoc terminate.
 
-    This is only executed when SharedDoc exits successfully.
+    It is executed when SharedDoc stops on its own (e.g. with `:auto_exit`),
+    when a callback fails, and when it is shut down by its supervisor, for
+    example when the application stops. Make sure the child's `:shutdown`
+    timeout (5000ms by default) leaves enough time to persist the document.
+    It is not executed when the process is killed (`:brutal_kill`, or
+    `Process.exit(pid, :kill)`).
+
+    When this callback is implemented, SharedDoc traps exits so that it runs
+    on shutdown. As a consequence, a SharedDoc started with `start_link` also
+    stops (and persists) when its parent process exits, even normally.
 
     ## Examples save the state to the filesystem
         def unbind(state, doc_name, doc) do

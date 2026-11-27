@@ -326,6 +326,92 @@ defmodule Yex.Sync.SharedDocTest do
     end
   end
 
+  describe "Persistence on shutdown" do
+    defmodule PersistenceNotifyTest do
+      @behaviour Yex.Sync.SharedDoc.PersistenceBehaviour
+
+      def bind(test_pid, _doc_name, doc) do
+        Doc.get_array(doc, "array") |> Array.insert(0, "data")
+        test_pid
+      end
+
+      def unbind(test_pid, doc_name, doc) do
+        {:ok, update} = Yex.encode_state_as_update(doc)
+        send(test_pid, {:unbind, doc_name, update})
+        :ok
+      end
+    end
+
+    defp start_persisted(opts \\ []) do
+      docname = random_docname()
+
+      opts =
+        Keyword.merge(
+          [doc_name: docname, persistence: {PersistenceNotifyTest, self()}, auto_exit: false],
+          opts
+        )
+
+      {docname, opts}
+    end
+
+    test "unbind is called when the supervisor shuts down" do
+      {docname, opts} = start_persisted()
+      {:ok, sup} = Supervisor.start_link([{SharedDoc, opts}], strategy: :one_for_one)
+
+      :ok = Supervisor.stop(sup)
+
+      assert_receive {:unbind, ^docname, update}
+      doc = Doc.new()
+      :ok = Yex.apply_update(doc, update)
+      assert Doc.get_array(doc, "array") |> Array.to_json() == ["data"]
+    end
+
+    test "unbind is called when the child is terminated by a DynamicSupervisor" do
+      {docname, opts} = start_persisted()
+      {:ok, sup} = DynamicSupervisor.start_link(strategy: :one_for_one)
+      {:ok, pid} = DynamicSupervisor.start_child(sup, {SharedDoc, opts})
+
+      :ok = DynamicSupervisor.terminate_child(sup, pid)
+
+      assert_receive {:unbind, ^docname, _update}
+    end
+
+    @tag :capture_log
+    test "a linked process exiting abnormally still stops it, and unbind is called" do
+      {docname, opts} = start_persisted()
+      {:ok, pid} = SharedDoc.start(opts)
+      ref = Process.monitor(pid)
+
+      spawn(fn ->
+        Process.link(pid)
+        exit(:crash)
+      end)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :crash}
+      assert_receive {:unbind, ^docname, _update}
+    end
+
+    test "a linked process exiting normally does not stop it" do
+      {docname, opts} = start_persisted()
+      {:ok, pid} = SharedDoc.start(opts)
+
+      spawn(fn -> Process.link(pid) end)
+      Process.exit(pid, :normal)
+
+      _ = :sys.get_state(pid)
+      assert Process.alive?(pid)
+      refute_received {:unbind, ^docname, _}
+
+      GenServer.stop(pid)
+      assert_receive {:unbind, ^docname, _update}
+    end
+
+    test "exits are not trapped without unbind" do
+      {:ok, pid} = SharedDoc.start_link(doc_name: random_docname())
+      assert {:trap_exit, false} = Process.info(pid, :trap_exit)
+    end
+  end
+
   describe "Document operations" do
     test "get_doc returns the current document state" do
       docname = random_docname()
