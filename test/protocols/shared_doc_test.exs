@@ -35,10 +35,22 @@ defmodule Yex.Sync.SharedDocTest do
     :crypto.strong_rand_bytes(10)
   end
 
-  defp wait_until(fun) do
-    unless fun.() do
-      Process.sleep(1)
-      wait_until(fun)
+  defp wait_until(fun, timeout \\ 1_000) do
+    deadline = System.monotonic_time(:millisecond) + timeout
+    do_wait_until(fun, deadline)
+  end
+
+  defp do_wait_until(fun, deadline) do
+    cond do
+      fun.() ->
+        :ok
+
+      System.monotonic_time(:millisecond) > deadline ->
+        flunk("condition not met before the deadline")
+
+      true ->
+        Process.sleep(1)
+        do_wait_until(fun, deadline)
     end
   end
 
@@ -108,7 +120,7 @@ defmodule Yex.Sync.SharedDocTest do
     end)
     |> Task.await()
 
-    assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}
+    assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}, 1_000
   end
 
   describe "observe/unobserve" do
@@ -322,7 +334,7 @@ defmodule Yex.Sync.SharedDocTest do
 
       Process.monitor(remote_shared_doc)
 
-      assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}
+      assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}, 1_000
       data = File.read!("tmp/test/test_output_file")
       assert byte_size(data) > 0
 
@@ -405,7 +417,9 @@ defmodule Yex.Sync.SharedDocTest do
     end
 
     test "with auto_exit, a linked observer exiting normally after unobserve does not cancel the exit" do
-      {_docname, opts} = start_persisted(auto_exit: true)
+      # No initial check: only the departure decides, and no timer message
+      # lands in the mailbox of the suspended process.
+      {_docname, opts} = start_persisted(auto_exit: true, auto_exit_timeout: :infinity)
       {:ok, pid} = SharedDoc.start(opts)
       ref = Process.monitor(pid)
       :ok = SharedDoc.observe(pid)
@@ -427,7 +441,10 @@ defmodule Yex.Sync.SharedDocTest do
       {docname, opts} = start_persisted()
       {:ok, pid} = SharedDoc.start(opts)
 
-      spawn(fn -> Process.link(pid) end)
+      {linked, linked_ref} = spawn_monitor(fn -> Process.link(pid) end)
+      assert_receive {:DOWN, ^linked_ref, :process, ^linked, :normal}, 1_000
+      # The link is gone once the exit is queued, before the call below.
+      wait_until(fn -> linked not in elem(Process.info(pid, :links), 1) end)
       Process.exit(pid, :normal)
 
       _ = :sys.get_state(pid)
@@ -534,6 +551,38 @@ defmodule Yex.Sync.SharedDocTest do
       :ok = SharedDoc.observe(pid)
 
       Process.sleep(300)
+      assert Process.alive?(pid)
+    end
+
+    test "unobserve from a client that was not observing does not stop it" do
+      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_timeout: :infinity)
+
+      :ok = SharedDoc.unobserve(pid)
+
+      # A queued auto exit check would be handled before this call.
+      _ = :sys.get_state(pid)
+      assert Process.alive?(pid)
+    end
+
+    test "with auto_exit_delay, unobserve from a client that was not observing schedules no exit" do
+      {:ok, pid} =
+        SharedDoc.start(
+          doc_name: random_docname(),
+          auto_exit_timeout: :infinity,
+          auto_exit_delay: 10
+        )
+
+      :ok = SharedDoc.unobserve(pid)
+
+      assert delayed_auto_exit(pid) == nil
+    end
+
+    test "ignores a stray :timeout message" do
+      {:ok, pid} = SharedDoc.start(doc_name: random_docname(), auto_exit_timeout: :infinity)
+
+      send(pid, :timeout)
+
+      _ = :sys.get_state(pid)
       assert Process.alive?(pid)
     end
 

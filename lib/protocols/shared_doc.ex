@@ -195,9 +195,15 @@ defmodule Yex.Sync.SharedDoc do
 
   @impl true
   def handle_call({:unobserve, client}, _from, state) do
+    observed? = Map.has_key?(state.assigns.observer_process, client)
     state = do_remove_observer_process(client, state)
 
     case state.assigns.auto_exit_delay do
+      # A client that was not observing leaves no observer behind: the
+      # initial auto_exit_timeout check still waits for the first observer.
+      _delay when not observed? ->
+        {:reply, :ok, state}
+
       0 ->
         # An explicit check instead of a 0 timeout, which any other message
         # (e.g. a trapped exit of a linked process) would cancel. A message
@@ -265,8 +271,6 @@ defmodule Yex.Sync.SharedDoc do
   def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
   def handle_info({:EXIT, _pid, reason}, state), do: {:stop, reason, state}
 
-  def handle_info(:timeout, state), do: maybe_auto_exit(state)
-
   # Once observers have come and gone, the delayed exit decides, not the
   # initial check.
   def handle_info(@auto_exit_check, %{assigns: %{delayed_auto_exit: ref}} = state)
@@ -281,6 +285,9 @@ defmodule Yex.Sync.SharedDoc do
     do: maybe_auto_exit(state)
 
   def handle_info({@delayed_auto_exit, _stale_ref}, state), do: {:noreply, state}
+
+  # Nothing returns a callback timeout: a stray `:timeout` message is ignored.
+  def handle_info(:timeout, state), do: {:noreply, state}
 
   # End of an awareness window: broadcasts the clients updated during it, in a
   # single message. Updates from different origins are sent to every observer.
