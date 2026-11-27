@@ -13,10 +13,11 @@ on:
       - '.github/workflows/rust.yml'
   workflow_dispatch:
 
-# A newer push to the same pull request supersedes the running checks.
+# A newer push to the same pull request supersedes the running checks. Any other run
+# gets a group of its own, so every push to main is checked.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   lint:
