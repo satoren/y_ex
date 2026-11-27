@@ -35,6 +35,13 @@ defmodule Yex.Sync.SharedDocTest do
     :crypto.strong_rand_bytes(10)
   end
 
+  defp wait_until(fun) do
+    unless fun.() do
+      Process.sleep(1)
+      wait_until(fun)
+    end
+  end
+
   defp delayed_auto_exit(pid), do: :sys.get_state(pid).assigns.delayed_auto_exit
 
   test "Observe SharedDoc on multiple clients, each of which will be synchronized" do
@@ -326,6 +333,121 @@ defmodule Yex.Sync.SharedDocTest do
     end
   end
 
+  describe "Persistence on shutdown" do
+    defmodule PersistenceNotifyTest do
+      @behaviour Yex.Sync.SharedDoc.PersistenceBehaviour
+
+      def bind(test_pid, _doc_name, doc) do
+        Doc.get_array(doc, "array") |> Array.insert(0, "data")
+        test_pid
+      end
+
+      def unbind(test_pid, doc_name, doc) do
+        {:ok, update} = Yex.encode_state_as_update(doc)
+        send(test_pid, {:unbind, doc_name, update})
+        :ok
+      end
+    end
+
+    defp start_persisted(opts \\ []) do
+      docname = random_docname()
+
+      opts =
+        Keyword.merge(
+          [
+            doc_name: docname,
+            persistence: {PersistenceNotifyTest, self()},
+            auto_exit: false,
+            trap_exit: true
+          ],
+          opts
+        )
+
+      {docname, opts}
+    end
+
+    test "unbind is called when the supervisor shuts down" do
+      {docname, opts} = start_persisted()
+      {:ok, sup} = Supervisor.start_link([{SharedDoc, opts}], strategy: :one_for_one)
+
+      :ok = Supervisor.stop(sup)
+
+      assert_receive {:unbind, ^docname, update}, 1_000
+      doc = Doc.new()
+      :ok = Yex.apply_update(doc, update)
+      assert Doc.get_array(doc, "array") |> Array.to_json() == ["data"]
+    end
+
+    test "unbind is called when the child is terminated by a DynamicSupervisor" do
+      {docname, opts} = start_persisted()
+      {:ok, sup} = DynamicSupervisor.start_link(strategy: :one_for_one)
+      {:ok, pid} = DynamicSupervisor.start_child(sup, {SharedDoc, opts})
+
+      :ok = DynamicSupervisor.terminate_child(sup, pid)
+
+      assert_receive {:unbind, ^docname, _update}, 1_000
+    end
+
+    @tag :capture_log
+    test "a linked process exiting abnormally still stops it, and unbind is called" do
+      {docname, opts} = start_persisted()
+      {:ok, pid} = SharedDoc.start(opts)
+      ref = Process.monitor(pid)
+
+      spawn(fn ->
+        Process.link(pid)
+        exit(:crash)
+      end)
+
+      assert_receive {:unbind, ^docname, _update}, 1_000
+      # The crash report is logged before the process exits.
+      assert_receive {:DOWN, ^ref, :process, ^pid, :crash}, 5_000
+    end
+
+    test "with auto_exit, a linked observer exiting normally after unobserve does not cancel the exit" do
+      {_docname, opts} = start_persisted(auto_exit: true)
+      {:ok, pid} = SharedDoc.start(opts)
+      ref = Process.monitor(pid)
+      :ok = SharedDoc.observe(pid)
+      test_pid = self()
+
+      # The linked process exits normally right after the last observer left,
+      # before the SharedDoc checks whether to exit.
+      :sys.suspend(pid)
+      Task.start(fn -> GenServer.call(pid, {:unobserve, test_pid}) end)
+      wait_until(fn -> Process.info(pid, :message_queue_len) == {:message_queue_len, 1} end)
+      spawn(fn -> Process.link(pid) end)
+      wait_until(fn -> Process.info(pid, :message_queue_len) == {:message_queue_len, 2} end)
+      :sys.resume(pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}, 1_000
+    end
+
+    test "a linked process exiting normally does not stop it" do
+      {docname, opts} = start_persisted()
+      {:ok, pid} = SharedDoc.start(opts)
+
+      spawn(fn -> Process.link(pid) end)
+      Process.exit(pid, :normal)
+
+      _ = :sys.get_state(pid)
+      assert Process.alive?(pid)
+      refute_received {:unbind, ^docname, _}
+
+      GenServer.stop(pid)
+      assert_receive {:unbind, ^docname, _update}, 1_000
+    end
+
+    test "without trap_exit, the supervisor shutdown does not call unbind" do
+      {docname, opts} = start_persisted(trap_exit: false)
+      {:ok, sup} = Supervisor.start_link([{SharedDoc, opts}], strategy: :one_for_one)
+
+      :ok = Supervisor.stop(sup)
+
+      refute_receive {:unbind, ^docname, _update}, 50
+    end
+  end
+
   describe "Document operations" do
     test "get_doc returns the current document state" do
       docname = random_docname()
@@ -553,12 +675,27 @@ defmodule Yex.Sync.SharedDocTest do
       end
     end
 
+    # Waits for the next awareness broadcast, however slow the machine is.
+    defp receive_awareness_broadcast(timeout \\ 1_000) do
+      receive do
+        {:yjs, message, _proc} ->
+          case Sync.message_decode(message) do
+            {:ok, {:awareness, _}} -> message
+            _ -> receive_awareness_broadcast(timeout)
+          end
+      after
+        timeout -> flunk("no awareness broadcast received")
+      end
+    end
+
     test "broadcasts the first update, then the updates of the window together" do
       {:ok, pid} = SharedDoc.start_link(doc_name: random_docname(), awareness_throttle: 100)
       :ok = SharedDoc.observe(pid)
 
       send_awareness_updates(pid, 3)
-      [first, _last] = receive_awareness_broadcasts(300)
+      first = receive_awareness_broadcast()
+      _last = receive_awareness_broadcast()
+      assert receive_awareness_broadcasts(100) == []
 
       # The first broadcast carries only the first update.
       assert cursors(first) == ["1"]
@@ -569,7 +706,9 @@ defmodule Yex.Sync.SharedDocTest do
       :ok = SharedDoc.observe(pid)
 
       send_awareness_updates(pid, 3)
-      [_first, last] = receive_awareness_broadcasts(300)
+      _first = receive_awareness_broadcast()
+      last = receive_awareness_broadcast()
+      assert receive_awareness_broadcasts(100) == []
 
       assert cursors(last) == ["3"]
     end
@@ -612,8 +751,7 @@ defmodule Yex.Sync.SharedDocTest do
       # The task only got the update opening the window, not its own back.
       assert task |> Task.await() |> Enum.map(&cursors/1) == [["0"]]
       # The test process got the window's updates.
-      assert [window | _] = receive_awareness_broadcasts(100)
-      assert cursors(window) == ["2"]
+      assert cursors(receive_awareness_broadcast()) == ["2"]
     end
 
     test "broadcasts every update without awareness_throttle" do
@@ -622,7 +760,8 @@ defmodule Yex.Sync.SharedDocTest do
 
       send_awareness_updates(pid, 3)
 
-      assert length(receive_awareness_broadcasts(100)) == 3
+      for _ <- 1..3, do: receive_awareness_broadcast()
+      assert receive_awareness_broadcasts(100) == []
     end
   end
 end

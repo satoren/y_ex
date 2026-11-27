@@ -27,6 +27,7 @@ defmodule Yex.Sync.SharedDoc do
     * `:auto_exit_timeout` - With `:auto_exit`, how long (in milliseconds) to wait for the first observer after start before terminating. Defaults to 5000. `:infinity` disables this check.
     * `:auto_exit_delay` - With `:auto_exit`, how long (in milliseconds) to wait after the last observer left before terminating. An observer joining in the meantime cancels it, which avoids reloading the document when a client reconnects. Defaults to 0: terminate immediately.
     * `:awareness_throttle` - Window (in milliseconds) in which awareness updates are batched. The first update is broadcast immediately; the clients updated during the following window are then broadcast together in a single message. This bounds the number of messages when clients move their cursor quickly. Defaults to 0: every update is broadcast immediately.
+    * `:trap_exit` - Trap exit signals, so that `terminate/2`, and with it the persistence's `unbind/3`, also runs when the SharedDoc is shut down by its supervisor, for example when the application stops. Without it, the shutdown kills the process and `unbind/3` is not called. Exits of linked processes keep their usual effect: a normal exit is ignored, any other stops the SharedDoc with the same reason. However, a SharedDoc started with `start_link` then also stops when its parent process exits normally. Defaults to `false`.
     * `:doc_option` - Options for the document.
 
   """
@@ -37,6 +38,7 @@ defmodule Yex.Sync.SharedDoc do
           | {:auto_exit_timeout, timeout()}
           | {:auto_exit_delay, non_neg_integer()}
           | {:awareness_throttle, non_neg_integer()}
+          | {:trap_exit, boolean()}
           | {:doc_option, Yex.Doc.Options.t()}
 
   @doc """
@@ -133,6 +135,13 @@ defmodule Yex.Sync.SharedDoc do
 
     Code.ensure_loaded(persistence)
 
+    # Exit signals (e.g. `:shutdown` from the supervisor when the application
+    # stops) kill a process that does not trap them, without `terminate/2`.
+    # See the `:EXIT` clauses of `handle_info/2` for linked processes.
+    if Keyword.get(option, :trap_exit, false) do
+      Process.flag(:trap_exit, true)
+    end
+
     Awareness.clean_local_state(awareness)
 
     persistence_state =
@@ -189,8 +198,15 @@ defmodule Yex.Sync.SharedDoc do
     state = do_remove_observer_process(client, state)
 
     case state.assigns.auto_exit_delay do
-      0 -> {:reply, :ok, state, 0}
-      _delay -> {:reply, :ok, delay_auto_exit(state)}
+      0 ->
+        # An explicit check instead of a 0 timeout, which any other message
+        # (e.g. a trapped exit of a linked process) would cancel. A message
+        # already queued, such as a new observer, is still handled first.
+        send(self(), @auto_exit_check)
+        {:reply, :ok, state}
+
+      _delay ->
+        {:reply, :ok, delay_auto_exit(state)}
     end
   end
 
@@ -240,6 +256,14 @@ defmodule Yex.Sync.SharedDoc do
       _delay -> {:noreply, delay_auto_exit(state)}
     end
   end
+
+  # With `:trap_exit`, exit signals are trapped to run `terminate/2` on
+  # shutdown. Exits of linked
+  # processes keep their usual effect: a normal one is ignored, any other
+  # stops the SharedDoc with the same reason. The parent's exit is handled by
+  # GenServer itself.
+  def handle_info({:EXIT, _pid, :normal}, state), do: {:noreply, state}
+  def handle_info({:EXIT, _pid, reason}, state), do: {:stop, reason, state}
 
   def handle_info(:timeout, state), do: maybe_auto_exit(state)
 
@@ -428,7 +452,13 @@ defmodule Yex.Sync.SharedDoc do
     @doc """
     Invoked to handle SharedDoc terminate.
 
-    This is only executed when SharedDoc exits successfully.
+    It is executed when SharedDoc stops on its own (e.g. with `:auto_exit`)
+    or when a callback fails. To also run it when SharedDoc is shut down by
+    its supervisor, for example when the application stops, start SharedDoc
+    with `trap_exit: true`, and make sure the child's `:shutdown` timeout
+    (5000ms by default) leaves enough time to persist the document.
+    It is never executed when the process is killed (`:brutal_kill`, or
+    `Process.exit(pid, :kill)`).
 
     ## Examples save the state to the filesystem
         def unbind(state, doc_name, doc) do
