@@ -120,7 +120,7 @@ defmodule Yex.Sync.SharedDocTest do
     end)
     |> Task.await()
 
-    assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}
+    assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}, 1_000
   end
 
   describe "observe/unobserve" do
@@ -334,7 +334,7 @@ defmodule Yex.Sync.SharedDocTest do
 
       Process.monitor(remote_shared_doc)
 
-      assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}
+      assert_receive {:DOWN, _, :process, ^remote_shared_doc, _}, 1_000
       data = File.read!("tmp/test/test_output_file")
       assert byte_size(data) > 0
 
