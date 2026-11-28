@@ -110,6 +110,7 @@ defmodule Yex.Nif do
 
   def doc_begin_transaction(_doc, _origin), do: :erlang.nif_error(:nif_not_loaded)
   def commit_transaction(_doc), do: :erlang.nif_error(:nif_not_loaded)
+  def commit_transaction_capture(_txn, _subs), do: :erlang.nif_error(:nif_not_loaded)
 
   def text_insert(_text, _cur_txn, _index, _content), do: :erlang.nif_error(:nif_not_loaded)
 
@@ -453,6 +454,9 @@ defmodule Yex.Nif do
   def awareness_encode_update_v1(_awareness, _clients), do: :erlang.nif_error(:nif_not_loaded)
 
   def awareness_apply_update_v1(_awareness, _update, _origin),
+    do: :erlang.nif_error(:nif_not_loaded)
+
+  def awareness_apply_update_v1_capture(_awareness, _update, _origin, _subs),
     do: :erlang.nif_error(:nif_not_loaded)
 
   def awareness_remove_states(_awareness, _clients), do: :erlang.nif_error(:nif_not_loaded)

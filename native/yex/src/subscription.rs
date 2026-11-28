@@ -273,6 +273,15 @@ impl NifSubscription {
             doc,
         }
     }
+
+    /// The key its observer is registered under.
+    pub fn key(&self) -> Origin {
+        self.reference
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .key
+            .clone()
+    }
 }
 
 #[rustler::nif]

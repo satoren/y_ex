@@ -466,6 +466,39 @@ defmodule Yex.Doc do
     end
   end
 
+  # `transaction/3` run by the doc's worker, returning `{result, messages}`: `messages` are
+  # those the observers of `subs` (`Yex.Subscription` structs) send on commit, in order,
+  # and they are not sent. A process handling the events its own update caused gets them
+  # here instead of picking them out of its mailbox with a selective receive, which scans
+  # every message queued before them. When `exec` raises, throws or exits, the commit
+  # sends them as usual.
+  @doc false
+  @spec transaction_capture(t, term(), [Yex.Subscription.t()], (-> result)) ::
+          {result, [tuple()]}
+        when result: term()
+  def transaction_capture(%__MODULE__{reference: ref, worker_pid: pid} = doc, origin, subs, exec)
+      when pid == self() do
+    if cur_txn(doc) do
+      raise Yex.TransactionAcqError
+    end
+
+    txn = Yex.Nif.doc_begin_transaction(doc, origin)
+    Process.put(ref, txn)
+
+    result =
+      try do
+        exec.()
+      catch
+        kind, reason ->
+          Process.delete(ref)
+          Yex.Nif.commit_transaction(txn)
+          :erlang.raise(kind, reason, __STACKTRACE__)
+      end
+
+    Process.delete(ref)
+    {result, Yex.Nif.commit_transaction_capture(txn, subs)}
+  end
+
   @doc """
   Monitor document updates.
    You can pass metadata as an option. This value is passed as the fourth element of the message.If omitted, it will be passed as a structure of Doc itself.
