@@ -359,7 +359,7 @@ defmodule Yex.Sync.SharedDoc do
          {:ok, message} <- Sync.message_encode({:awareness, update}) do
       broadcast_to_users(message, origin, state)
     else
-      error -> Logger.log(:warning, error)
+      error -> Logger.warning("Failed to broadcast awareness update: #{inspect(error)}")
     end
   end
 
