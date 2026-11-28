@@ -151,6 +151,54 @@ defmodule DocServerWithCustomHandleUpdateModule do
   end
 end
 
+defmodule DocServerEventOrderModule do
+  use Yex.DocServer
+
+  # Reports every callback to the test process, in the order they run.
+  @impl true
+  def init(_arg, state), do: {:ok, state}
+
+  @impl true
+  def handle_update_v1(_doc, _update, origin, state) do
+    send(state.assigns.test_process, {:update_v1, origin})
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_awareness_change(_awareness, _change, origin, state) do
+    send(state.assigns.test_process, {:awareness_change, origin})
+    # Anything but a plain `{:noreply, state}`: the events left must still be handled.
+    Map.get(state.assigns, :awareness_change_reply, {:noreply, state})
+    |> case do
+      :hibernate -> {:noreply, state, :hibernate}
+      reply -> reply
+    end
+  end
+
+  @impl true
+  def handle_awareness_update(_awareness, _change, origin, state) do
+    send(state.assigns.test_process, {:awareness_update, origin})
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast({:ping, ref}, state) do
+    send(state.assigns.test_process, {:ping, ref})
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:update_v1, _update, origin, :own_monitor}, state) do
+    send(state.assigns.test_process, {:own_monitor, origin})
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_call({:monitor_own, doc}, _from, state) do
+    {:reply, Yex.Doc.monitor_update_v1(doc, metadata: :own_monitor), state}
+  end
+end
+
 defmodule Yex.DocServerTest do
   use ExUnit.Case, async: true
   alias Yex.{Array, Doc, Sync}
@@ -578,6 +626,113 @@ defmodule Yex.DocServerTest do
       assert_receive {:awareness_change_result, returned_result}
       assert {:noreply, _state} = returned_result
       assert Process.alive?(pid)
+    end
+  end
+
+  describe "events caused by a message" do
+    defp update_message(text) do
+      doc = Doc.new()
+      Array.insert(Doc.get_array(doc, "array"), 0, text)
+      {:ok, update} = Yex.encode_state_as_update(doc)
+      update
+    end
+
+    @awareness_update <<1, 210, 165, 202, 167, 8, 1, 2, 123, 125>>
+
+    # Queues `messages` on a suspended server, then a ping behind them, and resumes it.
+    defp queue_then_ping(pid, messages) do
+      :sys.suspend(pid)
+
+      for {message, origin} <- messages,
+          do: Yex.DocServer.Worker.process_message_v1(pid, message, origin)
+
+      ref = make_ref()
+      GenServer.cast(pid, {:ping, ref})
+      :sys.resume(pid)
+      ref
+    end
+
+    test "are handled right after it, before messages queued behind it" do
+      {:ok, pid} = DocServerEventOrderModule.start_link(assigns: %{test_process: self()})
+
+      ref =
+        queue_then_ping(pid, [
+          {Sync.message_encode!({:sync, {:sync_update, update_message("a")}}), "update"},
+          {Sync.message_encode!({:sync, {:sync_step2, update_message("b")}}), "step2"},
+          {Sync.message_encode!({:awareness, @awareness_update}), "awareness"}
+        ])
+
+      assert_receive {:update_v1, "update"}
+      assert_receive {:update_v1, "step2"}
+      assert_receive {:awareness_change, "awareness"}
+      assert_receive {:awareness_update, "awareness"}
+      assert_receive {:ping, ^ref}
+
+      # Each event is handled once: none is left in the mailbox for handle_info.
+      refute_receive {:update_v1, _}, 50
+      refute_receive {:awareness_update, _}
+    end
+
+    test "are handled in order across many queued messages" do
+      {:ok, pid} = DocServerEventOrderModule.start_link(assigns: %{test_process: self()})
+
+      ref =
+        queue_then_ping(
+          pid,
+          for i <- 1..200 do
+            {Sync.message_encode!({:sync, {:sync_update, update_message("#{i}")}}), i}
+          end
+        )
+
+      for i <- 1..200, do: assert_receive({:update_v1, ^i})
+      assert_receive {:ping, ^ref}
+      refute_receive {:update_v1, _}, 50
+    end
+
+    test "an update that changes nothing causes no event" do
+      {:ok, pid} = DocServerEventOrderModule.start_link(assigns: %{test_process: self()})
+      message = Sync.message_encode!({:sync, {:sync_update, update_message("a")}})
+
+      ref = queue_then_ping(pid, [{message, "first"}, {message, "again"}])
+
+      assert_receive {:update_v1, "first"}
+      assert_receive {:ping, ^ref}
+      refute_receive {:update_v1, "again"}, 50
+    end
+
+    test "left after a callback returns more than {:noreply, state} are still handled" do
+      {:ok, pid} =
+        DocServerEventOrderModule.start_link(
+          assigns: %{test_process: self(), awareness_change_reply: :hibernate}
+        )
+
+      Yex.DocServer.Worker.process_message_v1(
+        pid,
+        Sync.message_encode!({:awareness, @awareness_update}),
+        "awareness"
+      )
+
+      assert_receive {:awareness_change, "awareness"}
+      assert_receive {:awareness_update, "awareness"}
+      refute_receive {:awareness_update, _}, 50
+    end
+
+    test "other monitors of the server's doc still get messages" do
+      {:ok, pid} = DocServerEventOrderModule.start_link(assigns: %{test_process: self()})
+      doc = :sys.get_state(pid).doc
+      {:ok, _} = GenServer.call(pid, {:monitor_own, doc})
+      # From this process: the server runs it and the messages come here.
+      {:ok, _} = Doc.monitor_update_v1(doc, metadata: :test_monitor)
+
+      Yex.DocServer.Worker.process_message_v1(
+        pid,
+        Sync.message_encode!({:sync, {:sync_update, update_message("a")}}),
+        "origin"
+      )
+
+      assert_receive {:update_v1, "origin"}
+      assert_receive {:own_monitor, "origin"}
+      assert_receive {:update_v1, _update, "origin", :test_monitor}
     end
   end
 end

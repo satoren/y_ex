@@ -14,7 +14,7 @@ use yrs::*;
 use crate::event::{NifSubdocsEvent, NifTransactionCleanupEvent};
 // Internal imports
 use crate::{
-    atoms,
+    atoms, capture,
     deferred::Deferred,
     error::Error,
     snapshot::{encode_state_from_snapshot, write_snapshot},
@@ -473,6 +473,23 @@ fn commit_transaction(env: Env<'_>, current_transaction: ResourceArc<Transaction
     })
 }
 
+/// `commit_transaction`, returning the messages the observers of `subs` send on commit
+/// instead of sending them.
+#[rustler::nif]
+fn commit_transaction_capture<'a>(
+    env: Env<'a>,
+    current_transaction: ResourceArc<TransactionResource>,
+    subs: Vec<NifSubscription>,
+) -> Vec<Term<'a>> {
+    let ((), messages) = capture::collect(env, &subs, || {
+        ENV.set(&mut env.clone(), || {
+            take_then_drop(&current_transaction.0);
+            current_transaction.1.deferred.release_undo_managers();
+        })
+    });
+    messages
+}
+
 #[rustler::nif]
 fn doc_monitor_update_v1(
     env: Env<'_>,
@@ -486,22 +503,21 @@ fn doc_monitor_update_v1(
     let key = sub_key.key.clone();
 
     doc.mutably(env, current_transaction, move |txn| {
-        txn.observe_update_v1(key, move |txn, event| {
+        txn.observe_update_v1(key.clone(), move |txn, event| {
             let Some(state) = state.get() else {
                 return;
             };
             let (pid, metadata) = &*state;
             ENV.with(|env| {
-                let metadata = metadata.get(*env);
-                let _ = env.send(
-                    pid,
+                capture::send_or_capture(*env, &key, pid, |mut env| {
                     (
                         atoms::update_v1(),
                         SliceIntoBinary::new(event.update.as_slice()),
-                        origin_to_term(env, txn.origin()),
-                        metadata,
-                    ),
-                );
+                        origin_to_term(&mut env, txn.origin()),
+                        metadata.get(env),
+                    )
+                        .encode(env)
+                })
             })
         });
         Ok(())
@@ -525,22 +541,21 @@ fn doc_monitor_update_v2(
     let key = sub_key.key.clone();
 
     doc.mutably(env, current_transaction, move |txn| {
-        txn.observe_update_v2(key, move |txn, event| {
+        txn.observe_update_v2(key.clone(), move |txn, event| {
             let Some(state) = state.get() else {
                 return;
             };
             let (pid, metadata) = &*state;
             ENV.with(|env| {
-                let metadata = metadata.get(*env);
-                let _ = env.send(
-                    pid,
+                capture::send_or_capture(*env, &key, pid, |mut env| {
                     (
                         atoms::update_v2(),
                         SliceIntoBinary::new(event.update.as_slice()),
-                        origin_to_term(env, txn.origin()),
-                        metadata,
-                    ),
-                );
+                        origin_to_term(&mut env, txn.origin()),
+                        metadata.get(env),
+                    )
+                        .encode(env)
+                })
             })
         });
         Ok(())

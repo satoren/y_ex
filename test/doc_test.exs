@@ -302,6 +302,48 @@ defmodule Yex.DocTest do
     Doc.demonitor_update(monitor_ref)
   end
 
+  describe "transaction_capture" do
+    test "returns the listed subscriptions' messages instead of sending them" do
+      doc = Doc.new()
+      {:ok, captured} = Doc.monitor_update_v1(doc, metadata: :captured)
+      {:ok, _sent} = Doc.monitor_update_v1(doc, metadata: :sent)
+      array = Doc.get_array(doc, "array")
+
+      assert {:result, [{:update_v1, update, "origin", :captured}]} =
+               Doc.transaction_capture(doc, "origin", [Process.get(captured)], fn ->
+                 Array.push(array, 1)
+                 :result
+               end)
+
+      assert_receive {:update_v1, ^update, "origin", :sent}
+      refute_receive {:update_v1, _, _, :captured}
+    end
+
+    test "returns nothing for a transaction that changes nothing" do
+      doc = Doc.new()
+      {:ok, captured} = Doc.monitor_update_v1(doc)
+      assert {:ok, []} = Doc.transaction_capture(doc, nil, [Process.get(captured)], fn -> :ok end)
+    end
+
+    test "sends the messages when exec raises" do
+      doc = Doc.new()
+      {:ok, captured} = Doc.monitor_update_v1(doc, metadata: :captured)
+      array = Doc.get_array(doc, "array")
+
+      assert_raise RuntimeError, fn ->
+        Doc.transaction_capture(doc, nil, [Process.get(captured)], fn ->
+          Array.push(array, 1)
+          raise "boom"
+        end)
+      end
+
+      assert_receive {:update_v1, _, nil, :captured}
+      # The transaction was committed: the doc is usable again.
+      assert :ok = Doc.transaction(doc, fn -> :ok end)
+      assert Array.to_list(array) == [1]
+    end
+  end
+
   describe "json_path" do
     test "returns matched values from nested structures" do
       doc = Doc.new()

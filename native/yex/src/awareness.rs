@@ -5,7 +5,7 @@ use crate::subscription::{AwarenessEvent, NifSubscription, SubscriptionKey};
 use crate::term_box::TermBox;
 use crate::utils::{client_id, origin_to_term, term_to_origin_binary};
 use crate::{
-    atoms,
+    atoms, capture,
     wrap::{NifWrap, SliceIntoBinary},
     NifAny, NifDoc, ENV,
 };
@@ -128,9 +128,10 @@ fn awareness_monitor_update(
     metadata: Term<'_>,
 ) -> NifSubscription {
     let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
+    let key = sub_key.key.clone();
     awareness
         .lock()
-        .on_update(sub_key.key.clone(), move |_awareness, event, origin| {
+        .on_update(key.clone(), move |_awareness, event, origin| {
             let Some(state) = state.get() else {
                 return;
             };
@@ -141,16 +142,15 @@ fn awareness_monitor_update(
                 removed: client_ids_to_u64(event.removed()),
             };
             ENV.with(|env| {
-                let metadata = metadata.get(*env);
-                let _ = env.send(
-                    pid,
+                capture::send_or_capture(*env, &key, pid, |mut env| {
                     (
                         atoms::awareness_update(),
                         summary,
-                        origin_to_term(env, origin),
-                        metadata,
-                    ),
-                );
+                        origin_to_term(&mut env, origin),
+                        metadata.get(env),
+                    )
+                        .encode(env)
+                })
             })
         });
     NifSubscription::new(
@@ -166,9 +166,10 @@ fn awareness_monitor_change(
     metadata: Term<'_>,
 ) -> NifSubscription {
     let (sub_key, state) = SubscriptionKey::new((pid, TermBox::new(metadata)));
+    let key = sub_key.key.clone();
     awareness
         .lock()
-        .on_change(sub_key.key.clone(), move |_awareness, event, origin| {
+        .on_change(key.clone(), move |_awareness, event, origin| {
             let Some(state) = state.get() else {
                 return;
             };
@@ -179,16 +180,15 @@ fn awareness_monitor_change(
                 removed: client_ids_to_u64(event.removed()),
             };
             ENV.with(|env| {
-                let metadata = metadata.get(*env);
-                let _ = env.send(
-                    pid,
+                capture::send_or_capture(*env, &key, pid, |mut env| {
                     (
                         atoms::awareness_change(),
                         summary,
-                        origin_to_term(env, origin),
-                        metadata,
-                    ),
-                );
+                        origin_to_term(&mut env, origin),
+                        metadata.get(env),
+                    )
+                        .encode(env)
+                })
             })
         });
     NifSubscription::new(
@@ -224,6 +224,32 @@ pub fn awareness_encode_update_v1(
 }
 #[rustler::nif]
 pub fn awareness_apply_update_v1(
+    env: Env<'_>,
+    awareness: NifAwareness,
+    update: Binary,
+    origin: Term<'_>,
+) -> NifResult<Atom> {
+    apply_update_v1(env, awareness, update, origin)
+}
+
+/// `awareness_apply_update_v1`, returning with its result the messages the observers of
+/// `subs` send instead of sending them. Events are only emitted once the update applied,
+/// so an error has none to return.
+#[rustler::nif]
+pub fn awareness_apply_update_v1_capture<'a>(
+    env: Env<'a>,
+    awareness: NifAwareness,
+    update: Binary,
+    origin: Term<'_>,
+    subs: Vec<NifSubscription>,
+) -> NifResult<(Atom, Vec<Term<'a>>)> {
+    let (result, messages) = capture::collect(env, &subs, || {
+        apply_update_v1(env, awareness, update, origin)
+    });
+    result.map(|ok| (ok, messages))
+}
+
+fn apply_update_v1(
     env: Env<'_>,
     awareness: NifAwareness,
     update: Binary,

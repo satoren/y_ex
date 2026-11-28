@@ -13,6 +13,11 @@ defmodule Yex.DocServer.Worker do
   @sync_step1_raw_call :__yex_sync_step1_raw
   @sync_update_raw_cast :__yex_sync_update_raw
 
+  # Process dictionary keys of the subscriptions whose events the worker handles right
+  # after the update that caused them (see `dispatch_captured/2`).
+  @update_subs {__MODULE__, :update_subs}
+  @awareness_subs {__MODULE__, :awareness_subs}
+
   @query_awareness_message <<3>>
   def process_message_v1(server, @query_awareness_message, _origin) do
     GenServer.call(server, @query_awareness_call)
@@ -60,7 +65,8 @@ defmodule Yex.DocServer.Worker do
     doc = if option, do: Doc.with_options(option), else: Doc.new()
 
     if function_exported?(module, :handle_update_v1, 4) do
-      Doc.monitor_update_v1(doc, metadata: __MODULE__)
+      {:ok, ref} = Doc.monitor_update_v1(doc, metadata: __MODULE__)
+      Process.put(@update_subs, [Process.get(ref)])
     end
 
     awareness = setup_awareness(doc, module)
@@ -86,13 +92,16 @@ defmodule Yex.DocServer.Worker do
   end
 
   defp monitor_awareness_events(awareness, module) do
-    if function_exported?(module, :handle_awareness_change, 4) do
-      Awareness.monitor_change(awareness, metadata: __MODULE__)
-    end
+    refs = [
+      if(function_exported?(module, :handle_awareness_change, 4),
+        do: Awareness.monitor_change(awareness, metadata: __MODULE__)
+      ),
+      if(function_exported?(module, :handle_awareness_update, 4),
+        do: Awareness.monitor_update(awareness, metadata: __MODULE__)
+      )
+    ]
 
-    if function_exported?(module, :handle_awareness_update, 4) do
-      Awareness.monitor_update(awareness, metadata: __MODULE__)
-    end
+    Process.put(@awareness_subs, for(ref <- refs, ref != nil, do: Process.get(ref)))
   end
 
   @impl true
@@ -153,23 +162,24 @@ defmodule Yex.DocServer.Worker do
         {@sync_update_raw_cast, update_payload, origin},
         %{doc: doc} = state
       ) do
-    Yex.Doc.transaction(doc, origin, fn ->
-      result =
-        if byte_size(update_payload) > Yex.Nif.dirty_cutoff(),
-          do: Yex.Nif.apply_sync_update_payload_v1_dirty(doc, cur_txn(doc), update_payload),
-          else: Yex.Nif.apply_sync_update_payload_v1(doc, cur_txn(doc), update_payload)
+    {_, messages} =
+      Doc.transaction_capture(doc, origin, Process.get(@update_subs, []), fn ->
+        result =
+          if byte_size(update_payload) > Yex.Nif.dirty_cutoff(),
+            do: Yex.Nif.apply_sync_update_payload_v1_dirty(doc, cur_txn(doc), update_payload),
+            else: Yex.Nif.apply_sync_update_payload_v1(doc, cur_txn(doc), update_payload)
 
-      case result do
-        :ok ->
-          :ok
+        case result do
+          :ok ->
+            :ok
 
-        {:error, reason} ->
-          Logger.log(:warning, inspect(reason))
-          :ok
-      end
-    end)
+          {:error, reason} ->
+            Logger.log(:warning, inspect(reason))
+            :ok
+        end
+      end)
 
-    handle_update_v1_immediately(state)
+    dispatch_captured(messages, state)
   end
 
   @impl true
@@ -177,19 +187,19 @@ defmodule Yex.DocServer.Worker do
         {__MODULE__, :document_update, update, origin},
         %{doc: doc} = state
       ) do
-    Yex.Doc.transaction(doc, origin, fn ->
-      case Yex.apply_update(doc, update) do
-        :ok ->
-          :ok
+    {_, messages} =
+      Doc.transaction_capture(doc, origin, Process.get(@update_subs, []), fn ->
+        case Yex.apply_update(doc, update) do
+          :ok ->
+            :ok
 
-        {:error, reason} ->
-          Logger.log(:warning, inspect(reason))
-          :ok
-      end
-    end)
+          {:error, reason} ->
+            Logger.log(:warning, inspect(reason))
+            :ok
+        end
+      end)
 
-    # Process update messages immediately
-    handle_update_v1_immediately(state)
+    dispatch_captured(messages, state)
   end
 
   @impl true
@@ -206,10 +216,15 @@ defmodule Yex.DocServer.Worker do
         {__MODULE__, :awareness_update, message, origin},
         %{awareness: awareness} = state
       ) do
-    Awareness.apply_update(awareness, message, origin)
+    subs = Process.get(@awareness_subs, [])
 
-    # Process update messages immediately
-    handle_awareness_event_immediately(state)
+    messages =
+      case Yex.Nif.awareness_apply_update_v1_capture(awareness, message, origin, subs) do
+        {:ok, messages} -> messages
+        {:error, _reason} -> []
+      end
+
+    dispatch_captured(messages, state)
   end
 
   @impl true
@@ -252,44 +267,22 @@ defmodule Yex.DocServer.Worker do
     end
   end
 
-  defp handle_update_v1_immediately(%{doc: doc, module: module} = state) do
-    receive do
-      {:update_v1, update, origin, __MODULE__} ->
-        case module.handle_update_v1(doc, update, origin, state) do
-          {:noreply, state} ->
-            handle_update_v1_immediately(state)
+  # Handles the events an update applied by the worker caused, right after it and before
+  # anything queued meanwhile. They come from the commit itself rather than the mailbox,
+  # where they would land behind every queued message: picking them out with a selective
+  # receive costs a scan of the whole queue per update, quadratic under backlog.
+  # If a callback returns anything but `{:noreply, state}`, the events left are sent to
+  # the worker, to be handled like any other message.
+  defp dispatch_captured([], state), do: {:noreply, state}
 
-          result ->
-            result
-        end
-    after
-      0 ->
-        {:noreply, state}
-    end
-  end
+  defp dispatch_captured([message | rest], state) do
+    case handle_info(message, state) do
+      {:noreply, state} ->
+        dispatch_captured(rest, state)
 
-  defp handle_awareness_event_immediately(%{awareness: awareness, module: module} = state) do
-    receive do
-      {:awareness_change, change, origin, __MODULE__} ->
-        case module.handle_awareness_change(awareness, change, origin, state) do
-          {:noreply, state} ->
-            handle_awareness_event_immediately(state)
-
-          result ->
-            result
-        end
-
-      {:awareness_update, change, origin, __MODULE__} ->
-        case module.handle_awareness_update(awareness, change, origin, state) do
-          {:noreply, state} ->
-            handle_awareness_event_immediately(state)
-
-          result ->
-            result
-        end
-    after
-      0 ->
-        {:noreply, state}
+      result ->
+        Enum.each(rest, &send(self(), &1))
+        result
     end
   end
 end
