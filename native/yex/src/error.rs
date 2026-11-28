@@ -54,8 +54,26 @@ impl rustler::Encoder for Error {
             Error::Update(error) => (atoms::error(), error.to_string()).encode(env),
             Error::Awareness(error) => (atoms::error(), error.to_string()).encode(env),
             Error::Message(error) => (atoms::error(), error).encode(env),
-            Error::Rustler(_) => panic!("RustlerError not supported"),
+            Error::Rustler(error) => encode_rustler_error(error, env),
         }
+    }
+}
+
+/// Encodes a `rustler::Error` as `{:error, term}` instead of panicking, so a
+/// `Error::Rustler` that reaches the `Encoder` never crashes the NIF.
+fn encode_rustler_error<'a>(error: &rustler::Error, env: rustler::Env<'a>) -> rustler::Term<'a> {
+    use rustler::Encoder;
+
+    match error {
+        rustler::Error::Term(term) => (atoms::error(), term.encode(env)).encode(env),
+        rustler::Error::Atom(name) | rustler::Error::RaiseAtom(name) => {
+            match rustler::types::atom::Atom::from_str(env, name) {
+                Ok(atom) => (atoms::error(), atom).encode(env),
+                Err(_) => (atoms::error(), *name).encode(env),
+            }
+        }
+        rustler::Error::RaiseTerm(term) => (atoms::error(), term.encode(env)).encode(env),
+        rustler::Error::BadArg => (atoms::error(), "bad argument").encode(env),
     }
 }
 

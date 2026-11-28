@@ -377,12 +377,13 @@ defmodule Yex.Sync.SharedDoc do
          %{removed: removed, added: added, updated: _updated}
        ) do
     # state.assigns.origin_client_map
+    removed = MapSet.new(removed)
+
     origin_client_map =
       Map.update(state.assigns.origin_client_map, origin, added, fn prev ->
         (added ++ prev)
         |> Enum.uniq()
-        |> Enum.reject(fn id -> Enum.member?(removed, id) end)
-        |> Enum.to_list()
+        |> Enum.reject(&MapSet.member?(removed, &1))
       end)
 
     assign(state, :origin_client_map, origin_client_map)
