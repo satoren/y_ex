@@ -73,6 +73,19 @@ defmodule Yex.DocServer.Worker do
     })
   end
 
+  defp log_update_failure(reason, origin, %{module: module, assigns: assigns}) do
+    doc_name = Map.get(assigns, :doc_name)
+
+    Logger.warning(
+      "Failed to apply document update: #{inspect(reason)} " <>
+        "(module: #{inspect(module)}, doc_name: #{inspect(doc_name)}, " <>
+        "origin: #{inspect(origin)})",
+      yex_module: module,
+      doc_name: doc_name,
+      origin: origin
+    )
+  end
+
   defp setup_awareness(doc, module) do
     if function_exported?(module, :handle_awareness_change, 4) or
          function_exported?(module, :handle_awareness_update, 4) do
@@ -164,7 +177,7 @@ defmodule Yex.DocServer.Worker do
           :ok
 
         {:error, reason} ->
-          Logger.log(:warning, inspect(reason))
+          log_update_failure(reason, origin, state)
           :ok
       end
     end)
@@ -183,7 +196,7 @@ defmodule Yex.DocServer.Worker do
           :ok
 
         {:error, reason} ->
-          Logger.log(:warning, inspect(reason))
+          log_update_failure(reason, origin, state)
           :ok
       end
     end)

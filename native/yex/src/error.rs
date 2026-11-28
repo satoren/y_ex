@@ -32,6 +32,9 @@ impl ArgumentError {
     }
 }
 
+/// Internal error type. It has no `Encoder` impl on purpose: return it from a
+/// NIF as `NifResult` (via `From<Error> for rustler::Error`) so that raising
+/// variants actually raise instead of being encoded as plain values.
 #[derive(Debug)]
 pub enum Error {
     Transaction,
@@ -40,23 +43,6 @@ pub enum Error {
     Awareness(yrs::sync::awareness::Error),
     Rustler(rustler::Error),
     Message(String),
-}
-
-impl rustler::Encoder for Error {
-    fn encode<'a>(&self, env: rustler::Env<'a>) -> rustler::Term<'a> {
-        match self {
-            Error::Transaction => TransactionAcqError::new().encode(env),
-            Error::Encoding(error) => (
-                atoms::error(),
-                (atoms::encoding_exception(), error.to_string()),
-            )
-                .encode(env),
-            Error::Update(error) => (atoms::error(), error.to_string()).encode(env),
-            Error::Awareness(error) => (atoms::error(), error.to_string()).encode(env),
-            Error::Message(error) => (atoms::error(), error).encode(env),
-            Error::Rustler(_) => panic!("RustlerError not supported"),
-        }
-    }
 }
 
 impl From<yrs::error::UpdateError> for Error {

@@ -359,7 +359,7 @@ defmodule Yex.Sync.SharedDoc do
          {:ok, message} <- Sync.message_encode({:awareness, update}) do
       broadcast_to_users(message, origin, state)
     else
-      error -> Logger.log(:warning, error)
+      error -> Logger.warning("Failed to broadcast awareness update: #{inspect(error)}")
     end
   end
 
@@ -377,12 +377,13 @@ defmodule Yex.Sync.SharedDoc do
          %{removed: removed, added: added, updated: _updated}
        ) do
     # state.assigns.origin_client_map
+    removed = MapSet.new(removed)
+
     origin_client_map =
       Map.update(state.assigns.origin_client_map, origin, added, fn prev ->
         (added ++ prev)
         |> Enum.uniq()
-        |> Enum.reject(fn id -> Enum.member?(removed, id) end)
-        |> Enum.to_list()
+        |> Enum.reject(&MapSet.member?(removed, &1))
       end)
 
     assign(state, :origin_client_map, origin_client_map)
